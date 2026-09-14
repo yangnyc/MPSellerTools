@@ -8,6 +8,7 @@ using MPSellerTools.Core.Notifications;
 using MPSellerTools.Core.Tenancy;
 using MPSellerTools.Infrastructure.Tenants;
 using MPSellerTools.TenantHost.Contracts;
+using MPSellerTools.TenantHost.Services;
 
 namespace MPSellerTools.TenantHost.Controllers;
 
@@ -17,7 +18,8 @@ public class InvitationsController(
     TenantDbContext db,
     UserManager<TenantUser> userManager,
     IDevOutbox outbox,
-    IWebHostEnvironment environment) : ControllerBase
+    IWebHostEnvironment environment,
+    AuditLogger audit) : ControllerBase
 {
     [HttpPost]
     [Authorize(Policy = Roles.TenantAdmin)]
@@ -44,6 +46,7 @@ public class InvitationsController(
         };
 
         db.Invitations.Add(invitation);
+        audit.Log("UserInvited", $"email={request.Email}; role={request.Role}");
         await db.SaveChangesAsync();
 
         var acceptLink = $"/accept-invitation?token={Uri.EscapeDataString(rawToken)}";

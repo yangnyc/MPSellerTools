@@ -62,4 +62,22 @@ public class AuthController(
         var roles = await userManager.GetRolesAsync(user);
         return Ok(new CurrentUserResponse(user.Id, user.Email!, user.DisplayName, roles.ToList()));
     }
+
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var user = await userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return Unauthorized();
+        }
+
+        var result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            return Problem(string.Join(" ", result.Errors.Select(e => e.Description)), statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        return NoContent();
+    }
 }

@@ -121,6 +121,17 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(Roles.Employee, policy => policy.RequireRole(Roles.TenantAdmin, Roles.Employee));
 });
 
+// Role changes and blocking must revoke access immediately rather than
+// waiting for the cookie's next scheduled revalidation (brief §5). The
+// default AddIdentity() wiring only re-checks each user's security stamp
+// every 30 minutes; forcing it to every request means a security-stamp bump
+// (done by UsersController on role change / block) invalidates that user's
+// existing session on their very next call.
+builder.Services.Configure<SecurityStampValidatorOptions>(options =>
+{
+    options.ValidationInterval = TimeSpan.Zero;
+});
+
 var devSpaOrigins = builder.Configuration.GetSection("Hosting:DevSpaOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options =>
 {
@@ -134,6 +145,8 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<MPSellerTools.TenantHost.Services.AuditLogger>();
 
 var app = builder.Build();
 
