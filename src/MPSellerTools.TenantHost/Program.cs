@@ -4,18 +4,47 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MPSellerTools.Core.Notifications;
 using MPSellerTools.Core.Tenancy;
+using MPSellerTools.Infrastructure.Hosting;
 using MPSellerTools.Infrastructure.Notifications;
 using MPSellerTools.Infrastructure.Tenants;
 using Serilog;
 
-var builder = WebApplication.CreateBuilder(args);
+// Content root must be pinned to the directory containing this assembly, not
+// the process's current working directory: the provisioning worker launches
+// this exact same compiled binary as a child process (brief §4/§10) and its
+// working directory is not guaranteed to be this project's output folder.
+// Without this, ASP.NET Core's default WebRootPath resolution (which looks
+// for "wwwroot" under the content root) silently returns null and static
+// file / SPA-fallback serving breaks — reproduced and fixed during Increment 3.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory,
+});
+
+// Each running instance of this compiled binary is bound to exactly one
+// tenant via a per-instance config file living outside source control and
+// outside wwwroot (brief §4/§10) — written by the provisioning worker for a
+// provisioned tenant, or by scripts/Setup-Dev.ps1 for the two demo
+// companies. Falls back to appsettings.json's placeholder "dev" tenant when
+// no instance file is given, purely so `dotnet run` works out of the box.
+var instanceConfigPath = builder.Configuration["MPST_INSTANCE_CONFIG_FILE"]
+    ?? Environment.GetEnvironmentVariable("MPST_INSTANCE_CONFIG_FILE");
+if (!string.IsNullOrEmpty(instanceConfigPath))
+{
+    if (!File.Exists(instanceConfigPath))
+    {
+        throw new InvalidOperationException($"MPST_INSTANCE_CONFIG_FILE was set to '{instanceConfigPath}' but that file does not exist.");
+    }
+    builder.Configuration.AddJsonFile(instanceConfigPath, optional: false, reloadOnChange: false);
+}
 
 var tenantOptions = builder.Configuration.GetSection(TenantOptions.SectionName).Get<TenantOptions>()
     ?? throw new InvalidOperationException("Missing required 'Tenant' configuration section.");
 builder.Services.AddSingleton(tenantOptions);
 
-var localDataDirectory = Path.GetFullPath(
-    Path.Combine(builder.Environment.ContentRootPath, builder.Configuration["Hosting:LocalDataDirectory"] ?? "../../.local"));
+var localDataDirectory = LocalDataPaths.Resolve(
+    builder.Configuration["Hosting:LocalDataDirectory"], builder.Environment.ContentRootPath);
 var keysDirectory = Path.Combine(localDataDirectory, "tenants", tenantOptions.Slug, "keys");
 var logsDirectory = Path.Combine(localDataDirectory, "tenants", tenantOptions.Slug, "logs");
 var outboxDirectory = Path.Combine(localDataDirectory, "tenants", tenantOptions.Slug, "outbox");

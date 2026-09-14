@@ -3,14 +3,22 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MPSellerTools.Core.Notifications;
+using MPSellerTools.Infrastructure.Hosting;
 using MPSellerTools.Infrastructure.Notifications;
 using MPSellerTools.Infrastructure.Platform;
 using Serilog;
 
-var builder = WebApplication.CreateBuilder(args);
+// Content root must be pinned to the directory containing this assembly, not
+// the process's current working directory — see the identical comment and
+// bug writeup in MPSellerTools.TenantHost/Program.cs (Increment 3).
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory,
+});
 
-var localDataDirectory = Path.GetFullPath(
-    Path.Combine(builder.Environment.ContentRootPath, builder.Configuration["Hosting:LocalDataDirectory"] ?? "../../.local"));
+var localDataDirectory = LocalDataPaths.Resolve(
+    builder.Configuration["Hosting:LocalDataDirectory"], builder.Environment.ContentRootPath);
 var keysDirectory = Path.Combine(localDataDirectory, "platform", "keys");
 var logsDirectory = Path.Combine(localDataDirectory, "platform", "logs");
 var outboxDirectory = Path.Combine(localDataDirectory, "platform", "outbox");

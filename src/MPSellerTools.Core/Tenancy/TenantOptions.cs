@@ -13,7 +13,12 @@ public class TenantOptions
 
     public required Guid TenantId { get; set; }
 
+    public required Guid ApplicationInstanceId { get; set; }
+
     public required string Slug { get; set; }
 
     public required string DisplayName { get; set; }
+
+    /// <summary>This instance's own base URL, e.g. https://localhost:7201.</summary>
+    public required string Url { get; set; }
 }
