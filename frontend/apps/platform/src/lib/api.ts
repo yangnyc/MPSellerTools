@@ -1,0 +1,55 @@
+// Minimal cookie-session + antiforgery-aware fetch client (brief §7). No
+// bearer tokens, nothing in localStorage — the browser handles the session
+// cookie automatically via `credentials: "include"`.
+
+let cachedAntiforgeryToken: string | null = null;
+
+async function getAntiforgeryToken(): Promise<string> {
+  if (cachedAntiforgeryToken) {
+    return cachedAntiforgeryToken;
+  }
+  const response = await fetch("/api/antiforgery/token", { credentials: "include" });
+  const data = (await response.json()) as { token: string };
+  cachedAntiforgeryToken = data.token;
+  return cachedAntiforgeryToken;
+}
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
+
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const method = (init.method ?? "GET").toUpperCase();
+  const headers = new Headers(init.headers);
+
+  if (!SAFE_METHODS.has(method)) {
+    headers.set("X-CSRF-TOKEN", await getAntiforgeryToken());
+  }
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(path, { ...init, method, headers, credentials: "include" });
+
+  if (response.status === 401) {
+    throw new ApiError(401, "Not authenticated");
+  }
+
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null);
+    throw new ApiError(response.status, problem?.title ?? problem?.detail ?? "Request failed");
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return (await response.json()) as T;
+}

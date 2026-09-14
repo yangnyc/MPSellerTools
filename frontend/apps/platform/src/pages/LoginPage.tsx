@@ -1,17 +1,32 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Card from "@mui/material/Card";
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
+import { useAuth } from "../auth/useAuth";
 
 export default function LoginPage() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    // Wired to POST /api/auth/login with cookie session + antiforgery in Increment 2.
+    setError(null);
+    setSubmitting(true);
+    try {
+      await login(email, password);
+      navigate("/dashboard", { replace: true });
+    } catch {
+      setError("Invalid email or password.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -32,6 +47,13 @@ export default function LoginPage() {
           </MDTypography>
         </MDBox>
         <MDBox component="form" role="form" onSubmit={handleSubmit}>
+          {error && (
+            <MDBox mb={2}>
+              <MDTypography variant="caption" color="error">
+                {error}
+              </MDTypography>
+            </MDBox>
+          )}
           <MDBox mb={2}>
             <MDInput
               type="email"
@@ -55,7 +77,7 @@ export default function LoginPage() {
             />
           </MDBox>
           <MDBox mt={3}>
-            <MDButton type="submit" variant="gradient" color="info" fullWidth>
+            <MDButton type="submit" variant="gradient" color="info" fullWidth disabled={submitting}>
               Sign in
             </MDButton>
           </MDBox>

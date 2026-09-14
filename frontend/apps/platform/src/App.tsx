@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
@@ -11,17 +11,37 @@ import themeDark from "assets/theme-dark";
 import { useMaterialUIController, setOpenConfigurator } from "context";
 import routes, { type AppRoute } from "./routes";
 import LoginPage from "./pages/LoginPage";
+import { useAuth } from "./auth/useAuth";
 
-function renderRoutes(allRoutes: AppRoute[]) {
+function renderProtectedRoutes(allRoutes: AppRoute[]) {
   return allRoutes
     .filter((route) => route.type === "collapse" && route.route)
-    .map((route) => <Route path={route.route} element={route.component} key={route.key} />);
+    .map((route) => (
+      <Route
+        path={route.route}
+        element={<RequireAuth>{route.component}</RequireAuth>}
+        key={route.key}
+      />
+    ));
+}
+
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { status } = useAuth();
+
+  if (status === "loading") {
+    return null;
+  }
+  if (status === "anonymous") {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
 }
 
 export default function App() {
   const [controller, dispatch] = useMaterialUIController();
   const { layout, openConfigurator, sidenavColor, darkMode } = controller;
   const { pathname } = useLocation();
+  const { status } = useAuth();
 
   useEffect(() => {
     document.documentElement.scrollTop = 0;
@@ -53,10 +73,12 @@ export default function App() {
     </MDBox>
   );
 
+  const showChrome = layout === "dashboard" && pathname !== "/login" && status === "authenticated";
+
   return (
     <ThemeProvider theme={darkMode ? themeDark : theme}>
       <CssBaseline />
-      {layout === "dashboard" && pathname !== "/login" && (
+      {showChrome && (
         <>
           <Sidenav color={sidenavColor} brandName="MPSellerTools" routes={routes} />
           <Configurator />
@@ -65,7 +87,7 @@ export default function App() {
       )}
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        {renderRoutes(routes)}
+        {renderProtectedRoutes(routes)}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </ThemeProvider>
