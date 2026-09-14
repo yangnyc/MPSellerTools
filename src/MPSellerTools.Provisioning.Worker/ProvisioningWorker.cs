@@ -23,6 +23,13 @@ public class ProvisioningWorker(
     {
         logger.LogInformation("Provisioning worker {WorkerId} starting", _workerId);
 
+        // Supervision state (Tenant.ProcessId/ProcessStartTimeUtc) lives in the
+        // platform database, not in this process's memory, so a worker that
+        // restarts (or a machine that reboots) can always tell which Active
+        // tenants are no longer actually running and bring them back — brief
+        // §10's "recovery of supervision or restart of managed instances."
+        await ReconcileActiveTenantsAsync(stoppingToken);
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -41,6 +48,39 @@ public class ProvisioningWorker(
             }
 
             await Task.Delay(TimeSpan.FromSeconds(options.Value.PollIntervalSeconds), stoppingToken);
+        }
+    }
+
+    private async Task ReconcileActiveTenantsAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<PlatformDbContext>();
+        var supervisor = scope.ServiceProvider.GetRequiredService<TenantProcessSupervisor>();
+        var provisioningService = scope.ServiceProvider.GetRequiredService<TenantProvisioningService>();
+
+        var activeTenants = await db.Tenants.Where(t => t.Status == TenantStatus.Active).ToListAsync(cancellationToken);
+        foreach (var tenant in activeTenants)
+        {
+            if (supervisor.IsRunning(tenant))
+            {
+                continue;
+            }
+
+            logger.LogWarning(
+                "Tenant {Slug} is Active but its process is not running (crashed or manually stopped) — restarting it", tenant.Slug);
+            try
+            {
+                await provisioningService.ResumeAsync(tenant, cancellationToken);
+                tenant.UpdatedAtUtc = DateTime.UtcNow;
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // Leave it Active but unreachable rather than guessing at a new
+                // state — an operator can see it's unhealthy via /api/health
+                // on that tenant's URL and retry manually if this keeps failing.
+                logger.LogError(ex, "Failed to restart tenant {Slug} during startup reconciliation", tenant.Slug);
+            }
         }
     }
 

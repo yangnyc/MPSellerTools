@@ -39,7 +39,39 @@ builder.Services.AddSingleton<TenantProcessSupervisor>();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped(_ => localDataDirectory);
 builder.Services.AddScoped<TenantProvisioningService>();
-builder.Services.AddHostedService<ProvisioningWorker>();
+
+// `--stop-all` is a one-shot mode used by scripts/Stop-Dev.ps1: rather than
+// have PowerShell reach into the platform database itself, it asks this
+// same worker binary to gracefully stop every tenant process it can verify
+// is genuinely running, then exit — reusing the exact verified-PID logic
+// the worker already uses everywhere else, instead of a second
+// implementation in PowerShell.
+var stopAllMode = args.Contains("--stop-all");
+if (!stopAllMode)
+{
+    builder.Services.AddHostedService<ProvisioningWorker>();
+}
 
 var host = builder.Build();
+
+if (stopAllMode)
+{
+    using var scope = host.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<PlatformDbContext>();
+    var supervisor = scope.ServiceProvider.GetRequiredService<TenantProcessSupervisor>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<MPSellerTools.Provisioning.Worker.ProvisioningWorker>>();
+
+    var tenants = await db.Tenants.Where(t => t.ProcessId != null).ToListAsync();
+    foreach (var tenant in tenants)
+    {
+        if (supervisor.IsRunning(tenant))
+        {
+            logger.LogInformation("Stopping verified tenant process for {Slug}", tenant.Slug);
+            supervisor.Stop(tenant);
+        }
+    }
+
+    return;
+}
+
 host.Run();

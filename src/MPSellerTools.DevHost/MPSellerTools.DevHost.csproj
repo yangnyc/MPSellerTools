@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -6,5 +6,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <!--
+    DevHost never calls into these projects' code (it only launches their
+    published binaries as child processes, per brief §4/§10) — these
+    references exist purely so that selecting DevHost as the Visual Studio
+    startup project and pressing F5 also builds PlatformHost, TenantHost, and
+    Provisioning.Worker first (brief §12: "Implement this workflow rather
+    than only describing it in the README"). ReferenceOutputAssembly=false
+    keeps DevHost.dll itself from actually depending on their assemblies.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\MPSellerTools.PlatformHost\MPSellerTools.PlatformHost.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\MPSellerTools.TenantHost\MPSellerTools.TenantHost.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\MPSellerTools.Provisioning.Worker\MPSellerTools.Provisioning.Worker.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
 
 </Project>
