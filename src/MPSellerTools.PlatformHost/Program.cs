@@ -209,3 +209,9 @@ app.MapFallback(context =>
 });
 
 app.Run();
+
+// Lets MPSellerTools.Tests use WebApplicationFactory<Program> against this
+// host's real pipeline instead of a hand-rolled test double — a
+// top-level-statements Program is internal by default and otherwise
+// inaccessible outside this assembly.
+public partial class Program;

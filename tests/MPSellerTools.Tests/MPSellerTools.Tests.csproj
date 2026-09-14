@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MPSellerTools.Core\MPSellerTools.Core.csproj" />
+    <ProjectReference Include="..\..\src\MPSellerTools.Infrastructure\MPSellerTools.Infrastructure.csproj" />
+    <!--
+      Both hosts compile their top-level-statements Program.cs into an
+      implicit `Program` class in the global namespace (a hard C# rule — it
+      cannot be namespaced), so referencing both assemblies normally would
+      make `Program` ambiguous. The alias on PlatformHost lets test code that
+      needs both (e.g. proving a platform session doesn't grant tenant
+      access, brief §13 check #6) disambiguate via `extern alias PlatformHost;`.
+    -->
+    <ProjectReference Include="..\..\src\MPSellerTools.PlatformHost\MPSellerTools.PlatformHost.csproj" Aliases="PlatformHost" />
+    <ProjectReference Include="..\..\src\MPSellerTools.TenantHost\MPSellerTools.TenantHost.csproj" />
+  </ItemGroup>
+
+</Project>
