@@ -26,6 +26,7 @@ public class PlatformDbContext(DbContextOptions<PlatformDbContext> options)
         builder.Entity<Tenant>(entity =>
         {
             entity.HasIndex(t => t.Slug).IsUnique();
+            entity.HasIndex(t => t.Port).IsUnique();
             entity.Property(t => t.RowVersion).IsRowVersion();
         });
 

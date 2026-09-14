@@ -122,6 +122,39 @@ if (app.Environment.IsDevelopment())
     {
         await roleManager.CreateAsync(new IdentityRole<Guid>(MPSellerTools.Core.Tenancy.Roles.PlatformAdmin));
     }
+
+    // Idempotent dev-only bootstrap: scripts/Setup-Dev.ps1 (brief §12) triggers
+    // this simply by starting PlatformHost once. Never runs if a PlatformAdmin
+    // already exists, and the generated password is written only to a local,
+    // Git-ignored file — never logged, never a hardcoded default (brief §7/§12).
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<PlatformUser>>();
+    if (!userManager.Users.Any())
+    {
+        const string devAdminEmail = "admin@mpsellertools.local";
+        var devAdmin = new PlatformUser
+        {
+            Id = Guid.NewGuid(),
+            UserName = devAdminEmail,
+            Email = devAdminEmail,
+            DisplayName = "Platform Administrator",
+            EmailConfirmed = true,
+        };
+        var password = GenerateDevPassword();
+        var result = await userManager.CreateAsync(devAdmin, password);
+        if (result.Succeeded)
+        {
+            await userManager.AddToRoleAsync(devAdmin, MPSellerTools.Core.Tenancy.Roles.PlatformAdmin);
+            var credentialsPath = Path.Combine(localDataDirectory, "platform", "dev-admin-credentials.txt");
+            await File.WriteAllTextAsync(credentialsPath,
+                $"Email: {devAdminEmail}\nPassword: {password}\nGenerated: {DateTime.UtcNow:O}\n");
+        }
+    }
+}
+
+static string GenerateDevPassword()
+{
+    var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(18);
+    return "Dev-" + Convert.ToBase64String(bytes).Replace('+', '-').Replace('/', '_').TrimEnd('=');
 }
 
 app.UseExceptionHandler();

@@ -1,0 +1,235 @@
+using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using MPSellerTools.Core.Business;
+using MPSellerTools.Core.Notifications;
+using MPSellerTools.Core.Platform;
+using MPSellerTools.Core.Tenancy;
+using MPSellerTools.Infrastructure.Hosting;
+using MPSellerTools.Infrastructure.Notifications;
+using MPSellerTools.Infrastructure.Tenants;
+using Microsoft.AspNetCore.Identity;
+
+namespace MPSellerTools.Provisioning.Worker;
+
+/// <summary>
+/// Implements the CreateTenant/Suspend/Resume job handlers (brief §10). Every
+/// step is written to be safely re-run: a retried CreateTenant job that
+/// failed partway through does not create a second database, a second
+/// invitation, or a second OS process.
+/// </summary>
+public class TenantProvisioningService(
+    ProvisioningOptions options,
+    TenantProcessSupervisor supervisor,
+    IHttpClientFactory httpClientFactory,
+    string localDataDirectory,
+    ILogger<TenantProvisioningService> logger)
+{
+    public async Task CreateTenantAsync(Tenant tenant, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Provisioning tenant {Slug} ({TenantId})", tenant.Slug, tenant.Id);
+
+        if (!SlugValidator.IsValid(tenant.Slug))
+        {
+            // Defense in depth: this should be unreachable, since the slug was
+            // already validated by TenantsController before the Tenant row
+            // was ever created, but a slug is about to be interpolated into a
+            // database name and a set of file-system paths, so re-validate
+            // its character set here too rather than trusting the stored value.
+            throw new InvalidOperationException($"Tenant {tenant.Id} has an invalid stored slug '{tenant.Slug}'.");
+        }
+
+        var databaseName = tenant.DatabaseName ?? $"MPSellerTools_Tenant_{tenant.Slug.Replace('-', '_')}";
+        var connectionString =
+            $"Server=(localdb)\\MSSQLLocalDB;Database={databaseName};Trusted_Connection=True;TrustServerCertificate=True";
+
+        await using var tenantDb = CreateTenantDbContext(connectionString);
+        await tenantDb.Database.MigrateAsync(cancellationToken);
+
+        await EnsureRolesAsync(tenantDb, cancellationToken);
+        await EnsureCompanySettingsAsync(tenantDb, tenant, cancellationToken);
+        var applicationInstanceId = tenant.ApplicationInstanceId ?? Guid.NewGuid();
+        await EnsureInitialInvitationAsync(tenantDb, tenant, cancellationToken);
+
+        var url = $"https://localhost:{tenant.Port}";
+        var instanceConfigPath = WriteInstanceConfig(tenant, applicationInstanceId, url, connectionString);
+
+        if (!supervisor.IsRunning(tenant))
+        {
+            var launched = supervisor.Start(instanceConfigPath, url, options.TenantHostPublishDirectory);
+            tenant.ProcessId = launched.ProcessId;
+            tenant.ProcessStartTimeUtc = launched.StartTimeUtc;
+        }
+
+        await WaitForReadinessAsync(url, tenant.Id, applicationInstanceId, cancellationToken);
+
+        tenant.DatabaseName = databaseName;
+        tenant.ApplicationInstanceId = applicationInstanceId;
+        tenant.Url = url;
+        tenant.Status = TenantStatus.Active;
+        tenant.FailureReason = null;
+        tenant.UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public async Task SuspendAsync(Tenant tenant, CancellationToken cancellationToken)
+    {
+        supervisor.Stop(tenant);
+        tenant.ProcessId = null;
+        tenant.ProcessStartTimeUtc = null;
+        tenant.Status = TenantStatus.Suspended;
+        tenant.UpdatedAtUtc = DateTime.UtcNow;
+        await Task.CompletedTask;
+    }
+
+    public async Task ResumeAsync(Tenant tenant, CancellationToken cancellationToken)
+    {
+        if (tenant.DatabaseName is null || tenant.ApplicationInstanceId is null || tenant.Url is null)
+        {
+            throw new InvalidOperationException($"Tenant {tenant.Id} cannot be resumed: missing prior provisioning state.");
+        }
+
+        var connectionString =
+            $"Server=(localdb)\\MSSQLLocalDB;Database={tenant.DatabaseName};Trusted_Connection=True;TrustServerCertificate=True";
+
+        await using var tenantDb = CreateTenantDbContext(connectionString);
+        if (!await tenantDb.Database.CanConnectAsync(cancellationToken))
+        {
+            throw new InvalidOperationException($"Tenant {tenant.Id}'s database '{tenant.DatabaseName}' is not reachable.");
+        }
+
+        var instanceConfigPath = WriteInstanceConfig(tenant, tenant.ApplicationInstanceId.Value, tenant.Url, connectionString);
+
+        if (!supervisor.IsRunning(tenant))
+        {
+            var launched = supervisor.Start(instanceConfigPath, tenant.Url, options.TenantHostPublishDirectory);
+            tenant.ProcessId = launched.ProcessId;
+            tenant.ProcessStartTimeUtc = launched.StartTimeUtc;
+        }
+
+        await WaitForReadinessAsync(tenant.Url, tenant.Id, tenant.ApplicationInstanceId.Value, cancellationToken);
+
+        tenant.Status = TenantStatus.Active;
+        tenant.UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    private static TenantDbContext CreateTenantDbContext(string connectionString)
+    {
+        var dbOptions = new DbContextOptionsBuilder<TenantDbContext>().UseSqlServer(connectionString).Options;
+        return new TenantDbContext(dbOptions);
+    }
+
+    private static async Task EnsureRolesAsync(TenantDbContext db, CancellationToken cancellationToken)
+    {
+        foreach (var role in new[] { Roles.TenantAdmin, Roles.Employee })
+        {
+            var normalized = role.ToUpperInvariant();
+            if (!await db.Roles.AnyAsync(r => r.NormalizedName == normalized, cancellationToken))
+            {
+                db.Roles.Add(new IdentityRole<Guid>(role) { Id = Guid.NewGuid(), NormalizedName = normalized });
+            }
+        }
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task EnsureCompanySettingsAsync(TenantDbContext db, Tenant tenant, CancellationToken cancellationToken)
+    {
+        if (!await db.CompanySettings.AnyAsync(cancellationToken))
+        {
+            db.CompanySettings.Add(new CompanySettings
+            {
+                Id = Guid.NewGuid(),
+                CompanyName = tenant.Name,
+                UpdatedAtUtc = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private async Task EnsureInitialInvitationAsync(TenantDbContext db, Tenant tenant, CancellationToken cancellationToken)
+    {
+        var alreadyInvited = await db.Invitations.AnyAsync(
+            i => i.Email == tenant.InitialAdminEmail && i.AcceptedAtUtc == null, cancellationToken);
+        if (alreadyInvited)
+        {
+            return;
+        }
+
+        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .Replace('+', '-').Replace('/', '_').TrimEnd('=');
+        var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
+
+        db.Invitations.Add(new Invitation
+        {
+            Id = Guid.NewGuid(),
+            Email = tenant.InitialAdminEmail,
+            Role = Roles.TenantAdmin,
+            TokenHash = tokenHash,
+            ExpiresAtUtc = DateTime.UtcNow.AddDays(7),
+            CreatedByUserId = Guid.Empty,
+            CreatedAtUtc = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync(cancellationToken);
+
+        var outboxDirectory = Path.Combine(localDataDirectory, "tenants", tenant.Slug, "outbox");
+        var outbox = new FileDevOutbox(outboxDirectory);
+        var acceptLink = $"https://localhost:{tenant.Port}/accept-invitation?token={Uri.EscapeDataString(rawToken)}";
+        await outbox.WriteAsync(
+            tenant.InitialAdminEmail,
+            "You've been invited to MPSellerTools",
+            $"Accept your invitation as the initial administrator of {tenant.Name}: {acceptLink}",
+            cancellationToken);
+    }
+
+    private string WriteInstanceConfig(Tenant tenant, Guid applicationInstanceId, string url, string connectionString)
+    {
+        var instanceDirectory = Path.Combine(localDataDirectory, "tenants", tenant.Slug);
+        Directory.CreateDirectory(instanceDirectory);
+        var path = Path.Combine(instanceDirectory, "instance-config.json");
+
+        var config = new
+        {
+            ConnectionStrings = new { TenantDatabase = connectionString },
+            Tenant = new
+            {
+                TenantId = tenant.Id,
+                ApplicationInstanceId = applicationInstanceId,
+                Slug = tenant.Slug,
+                DisplayName = tenant.Name,
+                Url = url,
+            },
+        };
+        File.WriteAllText(path, JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
+        return path;
+    }
+
+    private async Task WaitForReadinessAsync(string url, Guid expectedTenantId, Guid expectedInstanceId, CancellationToken cancellationToken)
+    {
+        var client = httpClientFactory.CreateClient(nameof(TenantProvisioningService));
+        var deadline = DateTime.UtcNow.AddSeconds(options.ReadinessTimeoutSeconds);
+
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                var health = await client.GetFromJsonAsync<HealthCheckResult>($"{url}/api/health", cancellationToken);
+                if (health is { DatabaseReachable: true, MigrationsApplied: true } &&
+                    health.TenantId == expectedTenantId && health.ApplicationInstanceId == expectedInstanceId)
+                {
+                    return;
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                // Not up yet — keep polling until the deadline.
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+
+        throw new InvalidOperationException($"Tenant instance at {url} did not become ready within {options.ReadinessTimeoutSeconds}s.");
+    }
+
+    private record HealthCheckResult(Guid TenantId, Guid ApplicationInstanceId, bool DatabaseReachable, bool MigrationsApplied);
+}

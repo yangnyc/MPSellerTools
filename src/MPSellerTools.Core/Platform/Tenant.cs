@@ -28,6 +28,19 @@ public class Tenant
     /// <summary>Local dev/base URL once Active (e.g. https://localhost:7203).</summary>
     public string? Url { get; set; }
 
+    /// <summary>Distinct from TenantId — identifies this particular running instance (brief §4).</summary>
+    public Guid? ApplicationInstanceId { get; set; }
+
+    /// <summary>
+    /// The OS process currently serving this tenant, if any. Combined with
+    /// <see cref="ProcessStartTimeUtc"/> so the worker can verify it is still
+    /// its own process before treating it as running or stopping it — a bare
+    /// PID is not sufficient because the OS may reuse it (brief §10).
+    /// </summary>
+    public int? ProcessId { get; set; }
+
+    public DateTime? ProcessStartTimeUtc { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
 
     public DateTime UpdatedAtUtc { get; set; }
