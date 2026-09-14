@@ -1,0 +1,25 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+
+# Node / frontend
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Generated frontend output copied into host wwwroot
+src/MPSellerTools.PlatformHost/wwwroot/
+src/MPSellerTools.TenantHost/wwwroot/
+
+# Local runtime state: secrets, per-tenant config, keys, logs, LocalDB files,
+# dev outbox. Never committed (brief §11/§7).
+.local/
+
+# Visual Studio
+.vs/
+
+# OS
+Thumbs.db
+.DS_Store

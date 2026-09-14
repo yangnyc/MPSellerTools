@@ -1,0 +1,22 @@
+{
+  "name": "@mpsellertools/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.6"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^5.18.0",
+    "@mui/material": "^5.18.0",
+    "chart.js": "^4.5.1",
+    "chroma-js": "^2.6.0",
+    "prop-types": "^15.8.1",
+    "react-chartjs-2": "^5.3.1",
+    "react-table": "^7.8.0"
+  }
+}
