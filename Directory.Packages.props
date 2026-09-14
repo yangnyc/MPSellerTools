@@ -1,0 +1,17 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!--
+    All NuGet package versions are pinned here (brief §2/§11) rather than left
+    as floating ranges in individual .csproj files. Versions are chosen to
+    match the installed .NET 10 SDK/runtime (10.0.12) — see README.md for the
+    exact SDK/runtime versions detected in this environment.
+  -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+  </ItemGroup>
+
+</Project>
