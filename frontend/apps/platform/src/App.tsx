@@ -74,13 +74,14 @@ export default function App() {
   );
 
   const showChrome = layout === "dashboard" && pathname !== "/login" && status === "authenticated";
+  const sidenavRoutes = routes.filter((route) => !route.hideFromSidenav);
 
   return (
     <ThemeProvider theme={darkMode ? themeDark : theme}>
       <CssBaseline />
       {showChrome && (
         <>
-          <Sidenav color={sidenavColor} brandName="MPSellerTools" routes={routes} />
+          <Sidenav color={sidenavColor} brandName="MPSellerTools" routes={sidenavRoutes} />
           <Configurator />
           {configsButton}
         </>

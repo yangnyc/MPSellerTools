@@ -66,6 +66,17 @@ and the ported JS" below.
 - **`examples/Footer`**: replaced the default "made with ❤ by Creative Tim &
   UPDIVISION" copy and its promotional link list (Creative Tim, UPDIVISION,
   blog, license, etc.) with a plain "© {year} MPSellerTools" default.
+- **`examples/Tables/DataTable`**: fixed a pre-existing bug — the manual
+  pagination-jump `<MDInput>` (shown once a table has more than 6 pages) had
+  `onChange={(handleInputPagination, handleInputPaginationValue)}`, a JS
+  comma expression that silently evaluated to just the second function under
+  Babel/CRA but is rejected outright by Vite's stricter Rolldown/oxc parser
+  ("JSX expressions may not use the comma operator"), breaking the
+  production build the moment any list page in this app grows past ~120
+  rows. Fixed to `onChange={handleInputPaginationValue}` and removed the
+  now-fully-unused `handleInputPagination` function. Discovered while
+  building Increment 5's Products/Orders/Tasks/Users list pages, all of
+  which use this component for search + pagination.
 
 ## What was removed entirely
 

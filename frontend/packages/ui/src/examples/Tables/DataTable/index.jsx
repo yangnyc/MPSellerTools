@@ -98,10 +98,6 @@ function DataTable({
     </MDPagination>
   ));
 
-  // Handler for the input to set the pagination index
-  const handleInputPagination = ({ target: { value } }) =>
-    value > pageOptions.length || value < 0 ? gotoPage(0) : gotoPage(Number(value));
-
   // Customized page options starting from 1
   const customizedPageOptions = pageOptions.map((option) => option + 1);
 
@@ -249,7 +245,7 @@ function DataTable({
                 <MDInput
                   inputProps={{ type: "number", min: 1, max: customizedPageOptions.length }}
                   value={customizedPageOptions[pageIndex]}
-                  onChange={(handleInputPagination, handleInputPaginationValue)}
+                  onChange={handleInputPaginationValue}
                 />
               </MDBox>
             ) : (

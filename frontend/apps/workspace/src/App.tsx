@@ -13,14 +13,21 @@ import routes, { type AppRoute } from "./routes";
 import LoginPage from "./pages/LoginPage";
 import { useAuth } from "./auth/useAuth";
 
-function RequireAuth({ children }: { children: ReactNode }) {
-  const { status } = useAuth();
+function RequireAuth({ children, allowedRoles }: { children: ReactNode; allowedRoles?: string[] }) {
+  const { status, user } = useAuth();
 
   if (status === "loading") {
     return null;
   }
   if (status === "anonymous") {
     return <Navigate to="/login" replace />;
+  }
+  // Menu items for restricted pages are already hidden for the wrong role
+  // (brief §8), but a direct URL visit must also be denied client-side —
+  // the actual enforcement is server-side (brief §5), this is just so the
+  // Employee doesn't land on a page that only errors out.
+  if (allowedRoles && !allowedRoles.some((role) => user?.roles.includes(role))) {
+    return <Navigate to="/dashboard" replace />;
   }
   return <>{children}</>;
 }
@@ -31,7 +38,7 @@ function renderProtectedRoutes(allRoutes: AppRoute[]) {
     .map((route) => (
       <Route
         path={route.route}
-        element={<RequireAuth>{route.component}</RequireAuth>}
+        element={<RequireAuth allowedRoles={route.roles}>{route.component}</RequireAuth>}
         key={route.key}
       />
     ));
@@ -41,7 +48,7 @@ export default function App() {
   const [controller, dispatch] = useMaterialUIController();
   const { layout, openConfigurator, sidenavColor, darkMode } = controller;
   const { pathname } = useLocation();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
 
   useEffect(() => {
     document.documentElement.scrollTop = 0;
@@ -74,13 +81,14 @@ export default function App() {
   );
 
   const showChrome = layout === "dashboard" && pathname !== "/login" && status === "authenticated";
+  const visibleRoutes = routes.filter((route) => !route.roles || route.roles.some((role) => user?.roles.includes(role)));
 
   return (
     <ThemeProvider theme={darkMode ? themeDark : theme}>
       <CssBaseline />
       {showChrome && (
         <>
-          <Sidenav color={sidenavColor} brandName="MPSellerTools" routes={routes} />
+          <Sidenav color={sidenavColor} brandName="MPSellerTools" routes={visibleRoutes} />
           <Configurator />
           {configsButton}
         </>
