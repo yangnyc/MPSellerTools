@@ -9,6 +9,22 @@
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
+# On ARM64 Windows, LocalDB's native components are x64-only — an ARM64 dotnet
+# process fails every LocalDB connection with a SqlUserInstance.dll load error
+# (see README.md's "ARM64 Windows" section). Prefer the side-by-side x64 SDK
+# so DevHost and the processes it spawns (PlatformHost/TenantHost/Worker) can
+# actually reach LocalDB regardless of which dotnet is first on PATH.
+if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq "Arm64") {
+    $x64Dotnet = "$HOME\.dotnet-x64"
+    if (Test-Path "$x64Dotnet\dotnet.exe") {
+        Write-Host "ARM64 Windows detected — using the x64 .NET SDK at $x64Dotnet for LocalDB compatibility." -ForegroundColor Yellow
+        $env:PATH = "$x64Dotnet;$env:PATH"
+        $env:DOTNET_ROOT = $x64Dotnet
+    } else {
+        Write-Host "WARNING: ARM64 Windows detected but no x64 .NET SDK found at $x64Dotnet. LocalDB connections will fail — see README.md's 'ARM64 Windows' section." -ForegroundColor Red
+    }
+}
+
 function Test-PortInUse($port) {
     $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     return $null -ne $listener

@@ -11,6 +11,22 @@ $ErrorActionPreference = "Continue"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $results = [ordered]@{}
 
+# On ARM64 Windows, LocalDB's native components are x64-only — an ARM64 dotnet
+# process fails every LocalDB connection with a SqlUserInstance.dll load error
+# (see README.md's "ARM64 Windows" section). Prefer the side-by-side x64 SDK
+# so the backend test step (which hits real LocalDB) doesn't produce false
+# failures just because of which dotnet happened to be first on PATH.
+if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq "Arm64") {
+    $x64Dotnet = "$HOME\.dotnet-x64"
+    if (Test-Path "$x64Dotnet\dotnet.exe") {
+        Write-Host "ARM64 Windows detected — using the x64 .NET SDK at $x64Dotnet for LocalDB compatibility." -ForegroundColor Yellow
+        $env:PATH = "$x64Dotnet;$env:PATH"
+        $env:DOTNET_ROOT = $x64Dotnet
+    } else {
+        Write-Host "WARNING: ARM64 Windows detected but no x64 .NET SDK found at $x64Dotnet. The backend test step will fail to reach LocalDB — see README.md's 'ARM64 Windows' section." -ForegroundColor Red
+    }
+}
+
 function Invoke-Check($name, [scriptblock]$action) {
     Write-Host ""
     Write-Host "==> $name" -ForegroundColor Cyan
