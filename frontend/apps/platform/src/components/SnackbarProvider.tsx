@@ -1,13 +1,7 @@
-import { createContext, useCallback, useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import MDSnackbar from "components/MDSnackbar";
 
-type Severity = "success" | "error" | "warning" | "info";
-
-export type SnackbarState = {
-  notify: (message: string, severity?: Severity) => void;
-};
-
-export const SnackbarContext = createContext<SnackbarState | null>(null);
+import { SnackbarContext, type Severity } from "./snackbarState";
 
 export function SnackbarProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);

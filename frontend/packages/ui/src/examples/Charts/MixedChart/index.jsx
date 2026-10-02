@@ -39,7 +39,13 @@ import configs from "examples/Charts/MixedChart/configs";
 // Material Dashboard 2 React base styles
 import colors from "assets/theme/base/colors";
 
-function MixedChart({ icon, title, description, height, chart }) {
+function MixedChart({
+  icon = { color: "info", component: "" },
+  title = "",
+  description = "",
+  height = "19.125rem",
+  chart,
+}) {
   const chartRef = useRef(null);
   const [chartData, setChartData] = useState({});
   const { data, options } = chartData;
@@ -169,14 +175,6 @@ function MixedChart({ icon, title, description, height, chart }) {
 
   return title || description ? <Card>{renderChart}</Card> : renderChart;
 }
-
-// Setting default values for the props of MixedChart
-MixedChart.defaultProps = {
-  icon: { color: "info", component: "" },
-  title: "",
-  description: "",
-  height: "19.125rem",
-};
 
 // Typechecking props for the MixedChart
 MixedChart.propTypes = {

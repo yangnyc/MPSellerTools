@@ -36,7 +36,13 @@ import configs from "examples/Charts/LineCharts/DefaultLineChart/configs";
 // Material Dashboard 2 React base styles
 import colors from "assets/theme/base/colors";
 
-function DefaultLineChart({ icon, title, description, height, chart }) {
+function DefaultLineChart({
+  icon = { color: "info", component: "" },
+  title = "",
+  description = "",
+  height = "19.125rem",
+  chart,
+}) {
   const chartDatasets = chart.datasets
     ? chart.datasets.map((dataset) => ({
         ...dataset,
@@ -102,14 +108,6 @@ function DefaultLineChart({ icon, title, description, height, chart }) {
 
   return title || description ? <Card>{renderChart}</Card> : renderChart;
 }
-
-// Setting default values for the props of DefaultLineChart
-DefaultLineChart.defaultProps = {
-  icon: { color: "info", component: "" },
-  title: "",
-  description: "",
-  height: "19.125rem",
-};
 
 // Typechecking props for the DefaultLineChart
 DefaultLineChart.propTypes = {

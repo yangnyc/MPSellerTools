@@ -19,6 +19,10 @@ import colors from "assets/theme/base/colors";
 const { transparent } = colors;
 
 const textField = {
+  defaultProps: {
+    variant: "outlined",
+  },
+
   styleOverrides: {
     root: {
       backgroundColor: transparent.main,

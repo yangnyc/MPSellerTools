@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
 import Dialog from "@mui/material/Dialog";
@@ -11,7 +11,7 @@ import MDButton from "components/MDButton";
 import MDInput from "components/MDInput";
 import DataTable from "examples/Tables/DataTable";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import DashboardNavbar from "examples/Navbars/DashboardNavbar";
+import WorkspaceNavbar from "../components/WorkspaceNavbar";
 import Footer from "examples/Footer";
 import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
@@ -36,16 +36,20 @@ export default function UsersPage() {
 
   const [blockTarget, setBlockTarget] = useState<UserSummary | null>(null);
 
-  const load = () => {
-    setLoading(true);
-    setError(null);
+  const fetchData = useCallback(() => {
     UsersApi.list()
       .then(setUsers)
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load users."))
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  useEffect(load, []);
+  useEffect(fetchData, [fetchData]);
+
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    fetchData();
+  };
 
   const openInvite = () => {
     setInviteEmail("");
@@ -136,7 +140,7 @@ export default function UsersPage() {
 
   return (
     <DashboardLayout>
-      <DashboardNavbar onLogout={logout} />
+      <WorkspaceNavbar onLogout={logout} />
       <MDBox py={3}>
         <Card>
           <MDBox display="flex" justifyContent="space-between" alignItems="center" p={3}>

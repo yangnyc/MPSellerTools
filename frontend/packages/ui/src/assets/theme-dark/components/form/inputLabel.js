@@ -31,28 +31,17 @@ const inputLabel = {
         color: info.main,
       },
 
-      "&.MuiInputLabel-shrink": {
-        lineHeight: 1.5,
-        fontSize: size.md,
-
-        "~ .MuiInputBase-root .MuiOutlinedInput-notchedOutline legend": {
-          fontSize: "0.85em",
-        },
-      },
+      // Shrunk/floated label: font-size and line-height are intentionally
+      // left unset here so MUI's own default transform
+      // (translate(14px, -9px) scale(0.75) on .MuiInputLabel-shrink) does
+      // the resizing. Overriding fontSize/lineHeight per-state (as this used
+      // to) fights that transform's fixed offset and makes the floated
+      // label sit low enough to overlap the outlined input's border.
     },
 
     sizeSmall: {
       fontSize: size.xs,
       lineHeight: 1.625,
-
-      "&.MuiInputLabel-shrink": {
-        lineHeight: 1.6,
-        fontSize: size.sm,
-
-        "~ .MuiInputBase-root .MuiOutlinedInput-notchedOutline legend": {
-          fontSize: "0.72em",
-        },
-      },
     },
   },
 };

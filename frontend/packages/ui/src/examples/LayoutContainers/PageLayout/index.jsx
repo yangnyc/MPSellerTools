@@ -27,7 +27,7 @@ import MDBox from "components/MDBox";
 // Material Dashboard 2 React context
 import { useMaterialUIController, setLayout } from "context";
 
-function PageLayout({ background, children }) {
+function PageLayout({ background = "default", children }) {
   const [, dispatch] = useMaterialUIController();
   const { pathname } = useLocation();
 
@@ -47,11 +47,6 @@ function PageLayout({ background, children }) {
     </MDBox>
   );
 }
-
-// Setting default values for the props for PageLayout
-PageLayout.defaultProps = {
-  background: "default",
-};
 
 // Typechecking props for the PageLayout
 PageLayout.propTypes = {

@@ -16,7 +16,7 @@ Coded by www.creative-tim.com
 import { useState, useEffect } from "react";
 
 // react-router components
-import { useLocation, Link, useNavigate } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
 
 // prop-types is a library for typechecking of props.
 import PropTypes from "prop-types";
@@ -54,13 +54,18 @@ import {
 } from "context";
 import MDButton from "components/MDButton";
 
-function DashboardNavbar({ absolute, light, isMini, profileHref, onLogout }) {
+function DashboardNavbar({
+  absolute = false,
+  light = false,
+  isMini = false,
+  profileHref = "/profile",
+  onLogout = undefined,
+}) {
   const [navbarType, setNavbarType] = useState();
   const [controller, dispatch] = useMaterialUIController();
   const { miniSidenav, transparentNavbar, fixedNavbar, openConfigurator, darkMode } = controller;
   const [openMenu, setOpenMenu] = useState(false);
   const route = useLocation().pathname.split("/").slice(1);
-  let navigate = useNavigate();
 
   useEffect(() => {
     // Setting the navbar type
@@ -201,15 +206,6 @@ function DashboardNavbar({ absolute, light, isMini, profileHref, onLogout }) {
     </AppBar>
   );
 }
-
-// Setting default values for the props of DashboardNavbar
-DashboardNavbar.defaultProps = {
-  absolute: false,
-  light: false,
-  isMini: false,
-  profileHref: "/profile",
-  onLogout: undefined,
-};
 
 // Typechecking props for the DashboardNavbar
 DashboardNavbar.propTypes = {

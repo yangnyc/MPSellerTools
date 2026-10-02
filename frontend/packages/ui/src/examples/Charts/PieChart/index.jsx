@@ -33,7 +33,13 @@ import MDTypography from "components/MDTypography";
 // PieChart configurations
 import configs from "examples/Charts/PieChart/configs";
 
-function PieChart({ icon, title, description, height, chart }) {
+function PieChart({
+  icon = { color: "info", component: "" },
+  title = "",
+  description = "",
+  height = "19.125rem",
+  chart,
+}) {
   const { data, options } = configs(chart.labels || [], chart.datasets || {});
 
   const renderChart = (
@@ -81,14 +87,6 @@ function PieChart({ icon, title, description, height, chart }) {
 
   return title || description ? <Card>{renderChart}</Card> : renderChart;
 }
-
-// Setting default values for the props of PieChart
-PieChart.defaultProps = {
-  icon: { color: "info", component: "" },
-  title: "",
-  description: "",
-  height: "19.125rem",
-};
 
 // Typechecking props for the PieChart
 PieChart.propTypes = {

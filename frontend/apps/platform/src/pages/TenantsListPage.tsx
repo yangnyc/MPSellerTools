@@ -8,7 +8,7 @@ import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
 import DataTable from "examples/Tables/DataTable";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import DashboardNavbar from "examples/Navbars/DashboardNavbar";
+import PlatformNavbar from "../components/PlatformNavbar";
 import Footer from "examples/Footer";
 import { useAuth } from "../auth/useAuth";
 import { ApiError } from "../lib/api";
@@ -62,7 +62,7 @@ export default function TenantsListPage() {
 
   return (
     <DashboardLayout>
-      <DashboardNavbar onLogout={logout} />
+      <PlatformNavbar onLogout={logout} />
       <MDBox py={3}>
         <Card>
           <MDBox display="flex" justifyContent="space-between" alignItems="center" p={3}>

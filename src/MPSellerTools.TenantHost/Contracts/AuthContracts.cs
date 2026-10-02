@@ -8,6 +8,8 @@ public record AntiforgeryTokenResponse(string Token);
 
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
+public record UpdateProfileRequest(string DisplayName);
+
 public record ForgotPasswordRequest(string Email);
 
 public record ResetPasswordRequest(string Email, string Token, string NewPassword);

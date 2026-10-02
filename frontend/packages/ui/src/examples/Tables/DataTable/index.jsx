@@ -15,6 +15,10 @@ Coded by www.creative-tim.com
 
 import { useMemo, useEffect, useState } from "react";
 
+// react-table's useAsyncDebounce is compiled against a global regeneratorRuntime
+// that Vite's esbuild-based build doesn't provide (unlike webpack+babel-polyfill setups)
+import "regenerator-runtime/runtime";
+
 // prop-types is a library for typechecking of props
 import PropTypes from "prop-types";
 
@@ -40,13 +44,13 @@ import DataTableHeadCell from "examples/Tables/DataTable/DataTableHeadCell";
 import DataTableBodyCell from "examples/Tables/DataTable/DataTableBodyCell";
 
 function DataTable({
-  entriesPerPage,
-  canSearch,
-  showTotalEntries,
+  entriesPerPage = { defaultValue: 10, entries: [5, 10, 15, 20, 25] },
+  canSearch = false,
+  showTotalEntries = true,
   table,
-  pagination,
-  isSorted,
-  noEndBorder,
+  pagination = { variant: "gradient", color: "info" },
+  isSorted = true,
+  noEndBorder = false,
 }) {
   const defaultValue = entriesPerPage.defaultValue ? entriesPerPage.defaultValue : 10;
   const entries = entriesPerPage.entries
@@ -81,7 +85,7 @@ function DataTable({
   } = tableInstance;
 
   // Set the default value for the entries per page when component mounts
-  useEffect(() => setPageSize(defaultValue || 10), [defaultValue]);
+  useEffect(() => setPageSize(defaultValue || 10), [defaultValue, setPageSize]);
 
   // Set the entries per page value based on the select value
   const setEntriesPerPage = (value) => setPageSize(value);
@@ -102,10 +106,15 @@ function DataTable({
   const customizedPageOptions = pageOptions.map((option) => option + 1);
 
   // Setting value for the pagination input
-  const handleInputPaginationValue = ({ target: value }) => gotoPage(Number(value.value - 1));
+  const handleInputPaginationValue = ({ target }) => {
+    const requestedPage = Number(target.value);
+    if (Number.isInteger(requestedPage) && requestedPage >= 1 && requestedPage <= pageOptions.length) {
+      gotoPage(requestedPage - 1);
+    }
+  };
 
   // Search input value state
-  const [search, setSearch] = useState(globalFilter);
+  const [search, setSearch] = useState(globalFilter ?? "");
 
   // Search input state handle
   const onSearchChange = useAsyncDebounce((value) => {
@@ -127,19 +136,8 @@ function DataTable({
     return sortedValue;
   };
 
-  // Setting the entries starting point
-  const entriesStart = pageIndex === 0 ? pageIndex + 1 : pageIndex * pageSize + 1;
-
-  // Setting the entries ending point
-  let entriesEnd;
-
-  if (pageIndex === 0) {
-    entriesEnd = pageSize;
-  } else if (pageIndex === pageOptions.length - 1) {
-    entriesEnd = rows.length;
-  } else {
-    entriesEnd = pageSize * (pageIndex + 1);
-  }
+  const entriesStart = rows.length === 0 ? 0 : pageIndex * pageSize + 1;
+  const entriesEnd = Math.min((pageIndex + 1) * pageSize, rows.length);
 
   return (
     <TableContainer sx={{ boxShadow: "none" }}>
@@ -171,7 +169,7 @@ function DataTable({
                 size="small"
                 fullWidth
                 onChange={({ currentTarget }) => {
-                  setSearch(search);
+                  setSearch(currentTarget.value);
                   onSearchChange(currentTarget.value);
                 }}
               />
@@ -203,7 +201,7 @@ function DataTable({
               <TableRow {...row.getRowProps()}>
                 {row.cells.map((cell) => (
                   <DataTableBodyCell
-                    noBorder={noEndBorder && rows.length - 1 === key}
+                    noBorder={noEndBorder && page.length - 1 === key}
                     align={cell.column.align ? cell.column.align : "left"}
                     {...cell.getCellProps()}
                   >
@@ -262,16 +260,6 @@ function DataTable({
     </TableContainer>
   );
 }
-
-// Setting default values for the props of DataTable
-DataTable.defaultProps = {
-  entriesPerPage: { defaultValue: 10, entries: [5, 10, 15, 20, 25] },
-  canSearch: false,
-  showTotalEntries: true,
-  pagination: { variant: "gradient", color: "info" },
-  isSorted: true,
-  noEndBorder: false,
-};
 
 // Typechecking props for the DataTable
 DataTable.propTypes = {

@@ -13,6 +13,22 @@ $ErrorActionPreference = "Continue"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $statePath = Join-Path $repoRoot ".local/devhost-state.json"
 
+# On ARM64 Windows, LocalDB's native components are x64-only — an ARM64 dotnet
+# process fails every LocalDB connection with a SqlUserInstance.dll load error
+# (see README.md's "ARM64 Windows" section). Prefer the side-by-side x64 SDK
+# so the `--stop-all` worker invocation below can actually query the platform
+# DB for tenant processes instead of crashing before it stops any of them.
+if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq "Arm64") {
+    $x64Dotnet = "$HOME\.dotnet-x64"
+    if (Test-Path "$x64Dotnet\dotnet.exe") {
+        Write-Host "ARM64 Windows detected — using the x64 .NET SDK at $x64Dotnet for LocalDB compatibility." -ForegroundColor Yellow
+        $env:PATH = "$x64Dotnet;$env:PATH"
+        $env:DOTNET_ROOT = $x64Dotnet
+    } else {
+        Write-Host "WARNING: ARM64 Windows detected but no x64 .NET SDK found at $x64Dotnet. Tenant process cleanup will fail — see README.md's 'ARM64 Windows' section." -ForegroundColor Red
+    }
+}
+
 function Stop-VerifiedProcess($processId, $expectedStartTimeUtc, $label) {
     if (-not $processId) { return }
     $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
@@ -21,7 +37,12 @@ function Stop-VerifiedProcess($processId, $expectedStartTimeUtc, $label) {
         return
     }
     $actualStartTimeUtc = $proc.StartTime.ToUniversalTime()
-    $expected = [DateTime]::Parse($expectedStartTimeUtc).ToUniversalTime()
+    # $expectedStartTimeUtc arrives already parsed into a Kind=Utc [DateTime]
+    # (ConvertFrom-Json converts ISO 8601 "Z" strings automatically) — a
+    # further [DateTime]::Parse() here would stringify and reparse it as
+    # Kind=Unspecified, so ToUniversalTime() below would add the local UTC
+    # offset on top of an already-UTC value.
+    $expected = ([DateTime]$expectedStartTimeUtc).ToUniversalTime()
     if ([Math]::Abs(($actualStartTimeUtc - $expected).TotalSeconds) -gt 5) {
         Write-Host "$label (PID $processId) start time does not match — the OS has reused this PID for a different process. Not touching it." -ForegroundColor Yellow
         return

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Card from "@mui/material/Card";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -12,7 +12,7 @@ import MDButton from "components/MDButton";
 import MDInput from "components/MDInput";
 import DataTable from "examples/Tables/DataTable";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import DashboardNavbar from "examples/Navbars/DashboardNavbar";
+import WorkspaceNavbar from "../components/WorkspaceNavbar";
 import Footer from "examples/Footer";
 import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
@@ -40,16 +40,20 @@ export default function ProductsPage() {
 
   const [archiveTarget, setArchiveTarget] = useState<Product | null>(null);
 
-  const load = () => {
-    setLoading(true);
-    setError(null);
+  const fetchData = useCallback(() => {
     ProductsApi.list()
       .then(setProducts)
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load products."))
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  useEffect(load, []);
+  useEffect(fetchData, [fetchData]);
+
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    fetchData();
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -149,7 +153,7 @@ export default function ProductsPage() {
 
   return (
     <DashboardLayout>
-      <DashboardNavbar onLogout={logout} />
+      <WorkspaceNavbar onLogout={logout} />
       <MDBox py={3}>
         <Card>
           <MDBox display="flex" justifyContent="space-between" alignItems="center" p={3}>

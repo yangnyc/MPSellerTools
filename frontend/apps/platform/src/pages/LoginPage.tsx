@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "@mui/material/Card";
+import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
+import Icon from "@mui/material/Icon";
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDInput from "components/MDInput";
@@ -12,6 +15,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -35,9 +39,10 @@ export default function LoginPage() {
       display="flex"
       alignItems="center"
       justifyContent="center"
+      px={2}
       sx={{ backgroundColor: "grey.100" }}
     >
-      <Card sx={{ width: "100%", maxWidth: 420, p: 4 }}>
+      <Card sx={{ width: "100%", maxWidth: 420, p: { xs: 3, sm: 4 } }}>
         <MDBox textAlign="center" mb={3}>
           <MDTypography variant="h4" fontWeight="medium">
             MPSellerTools
@@ -59,6 +64,8 @@ export default function LoginPage() {
               type="email"
               label="Email"
               fullWidth
+              autoComplete="email"
+              spellCheck={false}
               value={email}
               onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
                 setEmail(event.target.value)
@@ -67,13 +74,28 @@ export default function LoginPage() {
           </MDBox>
           <MDBox mb={2}>
             <MDInput
-              type="password"
+              type={showPassword ? "text" : "password"}
               label="Password"
               fullWidth
+              autoComplete="current-password"
               value={password}
               onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
                 setPassword(event.target.value)
               }
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      onClick={() => setShowPassword((show) => !show)}
+                      edge="end"
+                      size="small"
+                    >
+                      <Icon>{showPassword ? "visibility_off" : "visibility"}</Icon>
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
             />
           </MDBox>
           <MDBox mt={3}>

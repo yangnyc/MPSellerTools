@@ -83,6 +83,12 @@ To run everything the automated checks can cover:
 .\scripts\Verify.ps1
 ```
 
+UI regression checks for table search/pagination and sidebar styling run with
+`npm run test:ui` from `tests/e2e`. They start Vite and mock API responses, so
+they do not require the backend or demo accounts. Install Playwright's Chromium
+with `npx playwright install chromium`, or use the installed Edge browser in
+PowerShell with `$env:PLAYWRIGHT_CHANNEL = "msedge"` before running the checks.
+
 ## Login URLs
 
 | User | Local login URL | Notes |

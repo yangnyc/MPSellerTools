@@ -6,7 +6,7 @@ import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
 import MDInput from "components/MDInput";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import DashboardNavbar from "examples/Navbars/DashboardNavbar";
+import PlatformNavbar from "../components/PlatformNavbar";
 import Footer from "examples/Footer";
 import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
@@ -48,7 +48,7 @@ export default function TenantNewPage() {
 
   return (
     <DashboardLayout>
-      <DashboardNavbar onLogout={logout} />
+      <PlatformNavbar onLogout={logout} />
       <MDBox py={3}>
         <Card sx={{ maxWidth: 480 }}>
           <MDBox p={3}>

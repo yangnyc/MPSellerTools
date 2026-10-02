@@ -36,7 +36,13 @@ import configs from "examples/Charts/BubbleChart/configs";
 // Material Dashboard 2 React base styles
 import colors from "assets/theme/base/colors";
 
-function BubbleChart({ icon, title, description, height, chart }) {
+function BubbleChart({
+  icon = { color: "info", component: "" },
+  title = "",
+  description = "",
+  height = "100%",
+  chart,
+}) {
   const chartDatasets = chart.datasets
     ? chart.datasets.map((dataset) => ({
         ...dataset,
@@ -100,14 +106,6 @@ function BubbleChart({ icon, title, description, height, chart }) {
 
   return title || description ? <Card>{renderChart}</Card> : renderChart;
 }
-
-// Setting default values for the props of BubbleChart
-BubbleChart.defaultProps = {
-  icon: { color: "info", component: "" },
-  title: "",
-  description: "",
-  height: "100%",
-};
 
 // Typechecking props for the BubbleChart
 BubbleChart.propTypes = {

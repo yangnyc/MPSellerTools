@@ -34,7 +34,15 @@ import MDProgress from "components/MDProgress";
 // ProgressLineChart configurations
 import configs from "examples/Charts/LineCharts/ProgressLineChart/config";
 
-function ProgressLineChart({ color, icon, title, count, progress, height, chart }) {
+function ProgressLineChart({
+  color = "info",
+  icon,
+  title,
+  count = 0,
+  progress,
+  height = "6.25rem",
+  chart,
+}) {
   const { data, options } = configs(color, chart.labels || [], title, chart.data || []);
 
   return (
@@ -89,13 +97,6 @@ function ProgressLineChart({ color, icon, title, count, progress, height, chart 
     </Card>
   );
 }
-
-// Setting default values for the props of ProgressLineChart
-ProgressLineChart.defaultProps = {
-  color: "info",
-  count: 0,
-  height: "6.25rem",
-};
 
 // Typechecking props for the ProgressLineChart
 ProgressLineChart.propTypes = {

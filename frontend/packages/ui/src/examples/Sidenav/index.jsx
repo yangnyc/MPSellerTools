@@ -37,28 +37,46 @@ import SidenavCollapse from "examples/Sidenav/SidenavCollapse";
 // Custom styles for the Sidenav
 import SidenavRoot from "examples/Sidenav/SidenavRoot";
 import sidenavLogoLabel from "examples/Sidenav/styles/sidenav";
+import sidenavTintsNeedingDarkText from "examples/Sidenav/sidenavTintContrast";
 
 // Material Dashboard 2 React context
 import {
   useMaterialUIController,
   setMiniSidenav,
-  setTransparentSidenav,
-  setWhiteSidenav,
 } from "context";
 
-function Sidenav({ color, brand, brandName, routes, ...rest }) {
+function Sidenav({ color: _color = "info", brand = "", brandName, routes, ...rest }) {
   const [controller, dispatch] = useMaterialUIController();
-  const { miniSidenav, transparentSidenav, whiteSidenav, darkMode, sidenavColor } = controller;
+  const { miniSidenav, whiteSidenav, sidenavTint, darkMode } = controller;
   const location = useLocation();
-  const collapseName = location.pathname.replace("/", "");
+  const collapseName = location.pathname.split("/")[1];
+  const tintIsLightBackground = sidenavTint && sidenavTintsNeedingDarkText.includes(sidenavTint);
 
+  // whiteSidenav is always a solid white background regardless of darkMode
+  // (see SidenavRoot), so its text must always be dark. A sidenavTint is a
+  // solid fill like whiteSidenav, but only some of the tint colors are light
+  // enough to need dark text (see sidenavTintContrast.js).
   let textColor = "white";
 
-  if (transparentSidenav || (whiteSidenav && !darkMode)) {
+  if (whiteSidenav || tintIsLightBackground) {
     textColor = "dark";
-  } else if (whiteSidenav && darkMode) {
-    textColor = "inherit";
   }
+
+  // MDTypographyRoot force-overrides color="dark" to white whenever the
+  // app's global darkMode is on (sensible for the rest of the app, which
+  // sits on a dark page background in dark mode) — but the sidenav can have
+  // its own light background (whiteSidenav, or a light sidenavTint) even
+  // while darkMode is on, so bypass that override with an explicit sx color
+  // here instead of relying on the color prop alone.
+  const textColorSx = textColor === "dark" ? { color: ({ palette }) => palette.dark.main } : undefined;
+
+  // Divider's `light` styleOverride draws a white-based line (for dark
+  // backgrounds); the default draws a dark-based line (for light
+  // backgrounds) — see assets/theme(-dark)/components/divider.js. Follows
+  // the same background reasoning as textColor above: whiteSidenav is
+  // always a light background, and the default sidenav style is always a
+  // dark background.
+  const lightDivider = !whiteSidenav && !tintIsLightBackground;
 
   const closeSidenav = () => setMiniSidenav(dispatch, true);
 
@@ -66,8 +84,6 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
     // A function that sets the mini state of the sidenav.
     function handleMiniSidenav() {
       setMiniSidenav(dispatch, window.innerWidth < 1200);
-      setTransparentSidenav(dispatch, window.innerWidth < 1200 ? false : transparentSidenav);
-      setWhiteSidenav(dispatch, window.innerWidth < 1200 ? false : whiteSidenav);
     }
 
     /**
@@ -112,6 +128,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
         <MDTypography
           key={key}
           color={textColor}
+          sx={textColorSx}
           display="block"
           variant="caption"
           fontWeight="bold"
@@ -125,15 +142,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
         </MDTypography>
       );
     } else if (type === "divider") {
-      returnValue = (
-        <Divider
-          key={key}
-          light={
-            (!darkMode && !whiteSidenav && !transparentSidenav) ||
-            (darkMode && !transparentSidenav && whiteSidenav)
-          }
-        />
-      );
+      returnValue = <Divider key={key} light={lightDivider} />;
     }
     return returnValue;
   });
@@ -142,7 +151,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
     <SidenavRoot
       {...rest}
       variant="permanent"
-      ownerState={{ transparentSidenav, whiteSidenav, miniSidenav, darkMode }}
+      ownerState={{ whiteSidenav, sidenavTint, miniSidenav, darkMode }}
     >
       <MDBox pt={3} pb={1} px={4} textAlign="center">
         <MDBox
@@ -164,32 +173,27 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
             width={!brandName && "100%"}
             sx={(theme) => sidenavLogoLabel(theme, { miniSidenav })}
           >
-            <MDTypography component="h6" variant="button" fontWeight="medium" color={textColor}>
+            <MDTypography
+              component="h6"
+              variant="button"
+              fontWeight="medium"
+              color={textColor}
+              sx={textColorSx}
+            >
               {brandName}
             </MDTypography>
           </MDBox>
         </MDBox>
       </MDBox>
-      <Divider
-        light={
-          (!darkMode && !whiteSidenav && !transparentSidenav) ||
-          (darkMode && !transparentSidenav && whiteSidenav)
-        }
-      />
+      <Divider light={lightDivider} />
       <List>{renderRoutes}</List>
     </SidenavRoot>
   );
 }
 
-// Setting default values for the props of Sidenav
-Sidenav.defaultProps = {
-  color: "info",
-  brand: "",
-};
-
 // Typechecking props for the Sidenav
 Sidenav.propTypes = {
-  color: PropTypes.oneOf(["primary", "secondary", "info", "success", "warning", "error", "dark"]),
+  color: PropTypes.string,
   brand: PropTypes.string,
   brandName: PropTypes.string.isRequired,
   routes: PropTypes.arrayOf(PropTypes.object).isRequired,

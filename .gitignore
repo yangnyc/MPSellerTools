@@ -8,6 +8,8 @@ obj/
 node_modules/
 dist/
 *.tsbuildinfo
+tests/e2e/test-results/
+tests/e2e/playwright-report/
 
 # Generated frontend output copied into host wwwroot
 src/MPSellerTools.PlatformHost/wwwroot/

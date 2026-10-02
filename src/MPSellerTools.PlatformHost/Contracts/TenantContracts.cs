@@ -4,6 +4,8 @@ namespace MPSellerTools.PlatformHost.Contracts;
 
 public record CreateTenantRequest(string Name, string Slug, string InitialAdminEmail);
 
+public record UpdateTenantRequest(string Name);
+
 public record CreateTenantResponse(Guid TenantId, Guid JobId);
 
 public record TenantSummaryResponse(

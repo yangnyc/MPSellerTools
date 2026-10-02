@@ -32,13 +32,20 @@ import {
   collapseIcon,
   collapseText,
 } from "examples/Sidenav/styles/sidenavCollapse";
+import sidenavTintsNeedingDarkText from "examples/Sidenav/sidenavTintContrast";
 
 // Material Dashboard 2 React context
 import { useMaterialUIController } from "context";
 
-function SidenavCollapse({ icon, name, active, ...rest }) {
+function SidenavCollapse({ icon, name, active = false, ...rest }) {
   const [controller] = useMaterialUIController();
-  const { miniSidenav, transparentSidenav, whiteSidenav, darkMode, sidenavColor } = controller;
+  const { miniSidenav, whiteSidenav, sidenavTint, darkMode, sidenavColor } = controller;
+  const tintIsLightBackground = sidenavTint && sidenavTintsNeedingDarkText.includes(sidenavTint);
+  // When the chosen "Sidenav Colors" accent is the same hue as the current
+  // "Sidenav Style" tint (e.g. both "steel"), the active pill's fill is
+  // identical to the sidenav's own background and the highlight all but
+  // disappears — collapseItem adds a visible edge in that case.
+  const accentMatchesTint = Boolean(sidenavTint) && sidenavTint === sidenavColor;
 
   return (
     <ListItem component="li">
@@ -47,16 +54,22 @@ function SidenavCollapse({ icon, name, active, ...rest }) {
         sx={(theme) =>
           collapseItem(theme, {
             active,
-            transparentSidenav,
             whiteSidenav,
+            tintIsLightBackground,
             darkMode,
             sidenavColor,
+            accentMatchesTint,
           })
         }
       >
         <ListItemIcon
           sx={(theme) =>
-            collapseIconBox(theme, { transparentSidenav, whiteSidenav, darkMode, active })
+            collapseIconBox(theme, {
+              whiteSidenav,
+              tintIsLightBackground,
+              darkMode,
+              active,
+            })
           }
         >
           {typeof icon === "string" ? (
@@ -71,7 +84,6 @@ function SidenavCollapse({ icon, name, active, ...rest }) {
           sx={(theme) =>
             collapseText(theme, {
               miniSidenav,
-              transparentSidenav,
               whiteSidenav,
               active,
             })
@@ -81,11 +93,6 @@ function SidenavCollapse({ icon, name, active, ...rest }) {
     </ListItem>
   );
 }
-
-// Setting default values for the props of SidenavCollapse
-SidenavCollapse.defaultProps = {
-  active: false,
-};
 
 // Typechecking props for the SidenavCollapse
 SidenavCollapse.propTypes = {

@@ -25,7 +25,7 @@ import MDBox from "components/MDBox";
 // Material Dashboard 2 React contexts
 import { useMaterialUIController } from "context";
 
-function DataTableHeadCell({ width, children, sorted, align, ...rest }) {
+function DataTableHeadCell({ width = "auto", children, sorted = "none", align = "left", ...rest }) {
   const [controller] = useMaterialUIController();
   const { darkMode } = controller;
 
@@ -86,13 +86,6 @@ function DataTableHeadCell({ width, children, sorted, align, ...rest }) {
     </MDBox>
   );
 }
-
-// Setting default values for the props of DataTableHeadCell
-DataTableHeadCell.defaultProps = {
-  width: "auto",
-  sorted: "none",
-  align: "left",
-};
 
 // Typechecking props for the DataTableHeadCell
 DataTableHeadCell.propTypes = {

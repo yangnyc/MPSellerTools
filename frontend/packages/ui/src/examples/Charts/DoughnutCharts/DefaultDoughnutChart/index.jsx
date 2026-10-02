@@ -33,7 +33,13 @@ import MDTypography from "components/MDTypography";
 // DefaultDoughnutChart configurations
 import configs from "examples/Charts/DoughnutCharts/DefaultDoughnutChart/configs";
 
-function DefaultDoughnutChart({ icon, title, description, height, chart }) {
+function DefaultDoughnutChart({
+  icon = { color: "info", component: "" },
+  title = "",
+  description = "",
+  height = "19.125rem",
+  chart,
+}) {
   const { data, options } = configs(chart.labels || [], chart.datasets || {}, chart.cutout);
 
   const renderChart = (
@@ -81,14 +87,6 @@ function DefaultDoughnutChart({ icon, title, description, height, chart }) {
 
   return title || description ? <Card>{renderChart}</Card> : renderChart;
 }
-
-// Setting default values for the props of DefaultDoughnutChart
-DefaultDoughnutChart.defaultProps = {
-  icon: { color: "info", component: "" },
-  title: "",
-  description: "",
-  height: "19.125rem",
-};
 
 // Typechecking props for the DefaultDoughnutChart
 DefaultDoughnutChart.propTypes = {

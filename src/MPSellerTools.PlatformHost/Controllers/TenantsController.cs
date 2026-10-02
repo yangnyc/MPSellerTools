@@ -39,6 +39,47 @@ public class TenantsController(PlatformDbContext db, UserManager<PlatformUser> u
             tenant.FailureReason, tenant.CreatedAtUtc, tenant.UpdatedAtUtc));
     }
 
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTenantRequest request)
+    {
+        var tenant = await db.Tenants.FindAsync(id);
+        if (tenant is null)
+        {
+            return NotFound();
+        }
+
+        var name = request.Name.Trim();
+        if (name.Length is 0 or > 200)
+        {
+            return Problem("Name is required and must be 200 characters or fewer.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (name != tenant.Name)
+        {
+            var actorId = userManager.GetUserId(User) is { } uid ? Guid.Parse(uid) : Guid.Empty;
+            var now = DateTime.UtcNow;
+
+            db.AuditEntries.Add(new PlatformAuditEntry
+            {
+                Id = Guid.NewGuid(),
+                OccurredAtUtc = now,
+                ActorUserId = actorId,
+                ActorEmail = User.Identity?.Name ?? "unknown",
+                Action = "TenantRenamed",
+                TenantId = tenant.Id,
+                Details = $"from=\"{tenant.Name}\" to=\"{name}\"",
+            });
+
+            tenant.Name = name;
+            tenant.UpdatedAtUtc = now;
+            await db.SaveChangesAsync();
+        }
+
+        return Ok(new TenantDetailResponse(
+            tenant.Id, tenant.Name, tenant.Slug, tenant.Status, tenant.Url,
+            tenant.FailureReason, tenant.CreatedAtUtc, tenant.UpdatedAtUtc));
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateTenantRequest request)
     {

@@ -1,0 +1,11 @@
+[
+  {
+    "Name": "MPSellerTools (full stack)",
+    "Projects": [
+      {
+        "Path": "src\\MPSellerTools.DevHost\\MPSellerTools.DevHost.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

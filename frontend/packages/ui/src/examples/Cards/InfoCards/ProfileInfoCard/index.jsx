@@ -33,7 +33,7 @@ import MDTypography from "components/MDTypography";
 import colors from "assets/theme/base/colors";
 import typography from "assets/theme/base/typography";
 
-function ProfileInfoCard({ title, description, info, social, action, shadow }) {
+function ProfileInfoCard({ title, description, info, social, action, shadow = true }) {
   const labels = [];
   const values = [];
   const { socialMediaColors } = colors;
@@ -118,11 +118,6 @@ function ProfileInfoCard({ title, description, info, social, action, shadow }) {
     </Card>
   );
 }
-
-// Setting default props for the ProfileInfoCard
-ProfileInfoCard.defaultProps = {
-  shadow: true,
-};
 
 // Typechecking props for the ProfileInfoCard
 ProfileInfoCard.propTypes = {

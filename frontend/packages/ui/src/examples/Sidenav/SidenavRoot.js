@@ -19,10 +19,10 @@ import { styled } from "@mui/material/styles";
 
 export default styled(Drawer)(({ theme, ownerState }) => {
   const { palette, boxShadows, transitions, breakpoints, functions } = theme;
-  const { transparentSidenav, whiteSidenav, miniSidenav, darkMode } = ownerState;
+  const { whiteSidenav, sidenavTint, miniSidenav, darkMode } = ownerState;
 
   const sidebarWidth = 250;
-  const { transparent, gradients, white, background } = palette;
+  const { gradients, white, background } = palette;
   const { xxl } = boxShadows;
   const { pxToRem, linearGradient } = functions;
 
@@ -30,8 +30,8 @@ export default styled(Drawer)(({ theme, ownerState }) => {
     ? background.sidenav
     : linearGradient(gradients.dark.main, gradients.dark.state);
 
-  if (transparentSidenav) {
-    backgroundValue = transparent.main;
+  if (sidenavTint) {
+    backgroundValue = linearGradient(gradients[sidenavTint].main, gradients[sidenavTint].state);
   } else if (whiteSidenav) {
     backgroundValue = white.main;
   }
@@ -46,8 +46,8 @@ export default styled(Drawer)(({ theme, ownerState }) => {
     }),
 
     [breakpoints.up("xl")]: {
-      boxShadow: transparentSidenav ? "none" : xxl,
-      marginBottom: transparentSidenav ? 0 : "inherit",
+      boxShadow: xxl,
+      marginBottom: "inherit",
       left: "0",
       width: sidebarWidth,
       transform: "translateX(0)",
@@ -68,8 +68,8 @@ export default styled(Drawer)(({ theme, ownerState }) => {
     }),
 
     [breakpoints.up("xl")]: {
-      boxShadow: transparentSidenav ? "none" : xxl,
-      marginBottom: transparentSidenav ? 0 : "inherit",
+      boxShadow: xxl,
+      marginBottom: "inherit",
       left: "0",
       width: pxToRem(96),
       overflowX: "hidden",

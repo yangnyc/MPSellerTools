@@ -29,7 +29,7 @@ import { useMaterialUIController } from "context";
 // Timeline context
 import { TimelineProvider } from "examples/Timeline/context";
 
-function TimelineList({ title, dark, children }) {
+function TimelineList({ title, dark = false, children }) {
   const [controller] = useMaterialUIController();
   const { darkMode } = controller;
 
@@ -53,11 +53,6 @@ function TimelineList({ title, dark, children }) {
     </TimelineProvider>
   );
 }
-
-// Setting default values for the props of TimelineList
-TimelineList.defaultProps = {
-  dark: false,
-};
 
 // Typechecking props for the TimelineList
 TimelineList.propTypes = {

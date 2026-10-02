@@ -18,7 +18,6 @@ declare module "context" {
   export const MaterialUIControllerProvider: any;
   export function useMaterialUIController(): [any, (action: any) => void];
   export function setMiniSidenav(dispatch: any, value: boolean): void;
-  export function setTransparentSidenav(dispatch: any, value: boolean): void;
   export function setWhiteSidenav(dispatch: any, value: boolean): void;
   export function setSidenavColor(dispatch: any, value: string): void;
   export function setTransparentNavbar(dispatch: any, value: boolean): void;

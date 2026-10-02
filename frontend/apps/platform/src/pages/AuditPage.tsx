@@ -4,7 +4,7 @@ import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import DataTable from "examples/Tables/DataTable";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import DashboardNavbar from "examples/Navbars/DashboardNavbar";
+import PlatformNavbar from "../components/PlatformNavbar";
 import Footer from "examples/Footer";
 import { useAuth } from "../auth/useAuth";
 import { ApiError } from "../lib/api";
@@ -39,7 +39,7 @@ export default function AuditPage() {
 
   return (
     <DashboardLayout>
-      <DashboardNavbar onLogout={logout} />
+      <PlatformNavbar onLogout={logout} />
       <MDBox py={3}>
         <Card>
           <MDBox p={3}>

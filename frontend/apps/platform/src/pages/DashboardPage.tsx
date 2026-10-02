@@ -5,7 +5,7 @@ import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import ComplexStatisticsCard from "examples/Cards/StatisticsCards/ComplexStatisticsCard";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import DashboardNavbar from "examples/Navbars/DashboardNavbar";
+import PlatformNavbar from "../components/PlatformNavbar";
 import Footer from "examples/Footer";
 import { useAuth } from "../auth/useAuth";
 import { DashboardApi } from "../api/resources";
@@ -23,7 +23,7 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <DashboardNavbar onLogout={logout} />
+      <PlatformNavbar onLogout={logout} />
       <MDBox py={3}>
         <Grid container spacing={3}>
           <Grid item xs={12}>

@@ -28,10 +28,10 @@ import MDTypography from "components/MDTypography";
 import pattern from "assets/images/illustrations/pattern-tree.svg";
 import masterCardLogo from "assets/images/logos/mastercard.png";
 
-function MasterCard({ color, number, holder, expires }) {
+function MasterCard({ color = "dark", number, holder, expires }) {
   const numbers = [...`${number}`];
 
-  if (numbers.length < 16 || numbers.length > 16) {
+  if (numbers.length !== 16) {
     throw new Error(
       "Invalid value for the prop number, the value for the number prop shouldn't be greater than or less than 16 digits"
     );
@@ -103,11 +103,6 @@ function MasterCard({ color, number, holder, expires }) {
     </Card>
   );
 }
-
-// Setting default values for the props of MasterCard
-MasterCard.defaultProps = {
-  color: "dark",
-};
 
 // Typechecking props for the MasterCard
 MasterCard.propTypes = {

@@ -34,7 +34,7 @@ import MDTypography from "components/MDTypography";
 // ReportsLineChart configurations
 import configs from "examples/Charts/LineCharts/ReportsLineChart/configs";
 
-function ReportsLineChart({ color, title, description, date, chart }) {
+function ReportsLineChart({ color = "dark", title, description = "", date, chart }) {
   const { data, options } = configs(chart.labels || [], chart.datasets || {});
 
   return (
@@ -78,12 +78,6 @@ function ReportsLineChart({ color, title, description, date, chart }) {
     </Card>
   );
 }
-
-// Setting default values for the props of ReportsLineChart
-ReportsLineChart.defaultProps = {
-  color: "dark",
-  description: "",
-};
 
 // Typechecking props for the ReportsLineChart
 ReportsLineChart.propTypes = {

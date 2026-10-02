@@ -7,3 +7,5 @@ public record CurrentUserResponse(Guid Id, string Email, string DisplayName, IRe
 public record AntiforgeryTokenResponse(string Token);
 
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+
+public record UpdateProfileRequest(string DisplayName);

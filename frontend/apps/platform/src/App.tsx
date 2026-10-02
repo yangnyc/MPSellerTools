@@ -1,13 +1,9 @@
 import { useEffect, type ReactNode } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { ThemeProvider } from "@mui/material/styles";
-import CssBaseline from "@mui/material/CssBaseline";
 import Icon from "@mui/material/Icon";
 import MDBox from "components/MDBox";
 import Sidenav from "examples/Sidenav";
 import Configurator from "examples/Configurator";
-import theme from "assets/theme";
-import themeDark from "assets/theme-dark";
 import { useMaterialUIController, setOpenConfigurator } from "context";
 import routes, { type AppRoute } from "./routes";
 import LoginPage from "./pages/LoginPage";
@@ -39,7 +35,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 export default function App() {
   const [controller, dispatch] = useMaterialUIController();
-  const { layout, openConfigurator, sidenavColor, darkMode } = controller;
+  const { layout, openConfigurator, sidenavColor } = controller;
   const { pathname } = useLocation();
   const { status } = useAuth();
 
@@ -77,8 +73,7 @@ export default function App() {
   const sidenavRoutes = routes.filter((route) => !route.hideFromSidenav);
 
   return (
-    <ThemeProvider theme={darkMode ? themeDark : theme}>
-      <CssBaseline />
+    <>
       {showChrome && (
         <>
           <Sidenav color={sidenavColor} brandName="MPSellerTools" routes={sidenavRoutes} />
@@ -91,6 +86,6 @@ export default function App() {
         {renderProtectedRoutes(routes)}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
-    </ThemeProvider>
+    </>
   );
 }

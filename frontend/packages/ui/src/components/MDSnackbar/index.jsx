@@ -33,7 +33,16 @@ import MDSnackbarIconRoot from "components/MDSnackbar/MDSnackbarIconRoot";
 // Material Dashboard 2 React context
 import { useMaterialUIController } from "context";
 
-function MDSnackbar({ color, icon, title, dateTime, content, close, bgWhite, ...rest }) {
+function MDSnackbar({
+  color = "info",
+  icon,
+  title,
+  dateTime,
+  content,
+  close,
+  bgWhite = false,
+  ...rest
+}) {
   const [controller] = useMaterialUIController();
   const { darkMode } = controller;
 
@@ -144,12 +153,6 @@ function MDSnackbar({ color, icon, title, dateTime, content, close, bgWhite, ...
     </Snackbar>
   );
 }
-
-// Setting default values for the props of MDSnackbar
-MDSnackbar.defaultProps = {
-  bgWhite: false,
-  color: "info",
-};
 
 // Typechecking props for MDSnackbar
 MDSnackbar.propTypes = {

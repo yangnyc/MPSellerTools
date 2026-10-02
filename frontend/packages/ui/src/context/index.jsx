@@ -38,11 +38,11 @@ function reducer(state, action) {
     case "MINI_SIDENAV": {
       return { ...state, miniSidenav: action.value };
     }
-    case "TRANSPARENT_SIDENAV": {
-      return { ...state, transparentSidenav: action.value };
-    }
     case "WHITE_SIDENAV": {
       return { ...state, whiteSidenav: action.value };
+    }
+    case "SIDENAV_TINT": {
+      return { ...state, sidenavTint: action.value };
     }
     case "SIDENAV_COLOR": {
       return { ...state, sidenavColor: action.value };
@@ -63,6 +63,11 @@ function reducer(state, action) {
       return { ...state, layout: action.value };
     }
     case "DARKMODE": {
+      try {
+        window.localStorage.setItem("darkMode", JSON.stringify(action.value));
+      } catch {
+        // localStorage unavailable (private mode, disabled storage, etc.) — darkMode just won't persist
+      }
       return { ...state, darkMode: action.value };
     }
     default: {
@@ -71,19 +76,30 @@ function reducer(state, action) {
   }
 }
 
+function getStoredDarkMode() {
+  try {
+    return JSON.parse(window.localStorage.getItem("darkMode")) === true;
+  } catch {
+    return false;
+  }
+}
+
 // Material Dashboard 2 React context provider
 function MaterialUIControllerProvider({ children }) {
   const initialState = {
     miniSidenav: false,
-    transparentSidenav: false,
     whiteSidenav: false,
-    sidenavColor: "info",
+    // Non-null when the sidenav background itself is tinted with one of the
+    // sidenavColors accent colors (see Configurator's "Sidenav Style" row),
+    // mutually exclusive with whiteSidenav.
+    sidenavTint: null,
+    sidenavColor: "steel",
     transparentNavbar: true,
     fixedNavbar: true,
     openConfigurator: false,
     direction: "ltr",
     layout: "dashboard",
-    darkMode: false,
+    darkMode: getStoredDarkMode(),
   };
 
   const [controller, dispatch] = useReducer(reducer, initialState);
@@ -113,8 +129,8 @@ MaterialUIControllerProvider.propTypes = {
 
 // Context module functions
 const setMiniSidenav = (dispatch, value) => dispatch({ type: "MINI_SIDENAV", value });
-const setTransparentSidenav = (dispatch, value) => dispatch({ type: "TRANSPARENT_SIDENAV", value });
 const setWhiteSidenav = (dispatch, value) => dispatch({ type: "WHITE_SIDENAV", value });
+const setSidenavTint = (dispatch, value) => dispatch({ type: "SIDENAV_TINT", value });
 const setSidenavColor = (dispatch, value) => dispatch({ type: "SIDENAV_COLOR", value });
 const setTransparentNavbar = (dispatch, value) => dispatch({ type: "TRANSPARENT_NAVBAR", value });
 const setFixedNavbar = (dispatch, value) => dispatch({ type: "FIXED_NAVBAR", value });
@@ -127,8 +143,8 @@ export {
   MaterialUIControllerProvider,
   useMaterialUIController,
   setMiniSidenav,
-  setTransparentSidenav,
   setWhiteSidenav,
+  setSidenavTint,
   setSidenavColor,
   setTransparentNavbar,
   setFixedNavbar,

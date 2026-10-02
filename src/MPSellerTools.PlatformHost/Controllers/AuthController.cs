@@ -63,6 +63,31 @@ public class AuthController(
         return Ok(new CurrentUserResponse(user.Id, user.Email!, user.DisplayName, roles.ToList()));
     }
 
+    [HttpPut("me")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
+    {
+        var user = await userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return Unauthorized();
+        }
+
+        var displayName = request.DisplayName.Trim();
+        if (displayName.Length is 0 or > 256)
+        {
+            return Problem("Display name must be between 1 and 256 characters.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        user.DisplayName = displayName;
+        var result = await userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            return Problem(string.Join(" ", result.Errors.Select(e => e.Description)), statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        return await Me();
+    }
+
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {

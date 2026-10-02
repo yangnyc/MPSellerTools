@@ -22,7 +22,20 @@ import PropTypes from "prop-types";
 import MDBadgeRoot from "components/MDBadge/MDBadgeRoot";
 
 const MDBadge = forwardRef(
-  ({ color, variant, size, circular, indicator, border, container, children, ...rest }, ref) => (
+  (
+    {
+      color = "info",
+      variant = "gradient",
+      size = "sm",
+      circular = false,
+      indicator = false,
+      border = false,
+      container = false,
+      children = false,
+      ...rest
+    },
+    ref
+  ) => (
     <MDBadgeRoot
       {...rest}
       ownerState={{ color, variant, size, circular, indicator, border, container, children }}
@@ -33,18 +46,6 @@ const MDBadge = forwardRef(
     </MDBadgeRoot>
   )
 );
-
-// Setting default values for the props of MDBadge
-MDBadge.defaultProps = {
-  color: "info",
-  variant: "gradient",
-  size: "sm",
-  circular: false,
-  indicator: false,
-  border: false,
-  children: false,
-  container: false,
-};
 
 // Typechecking props of the MDBadge
 MDBadge.propTypes = {

@@ -29,7 +29,14 @@ import { useTimeline } from "examples/Timeline/context";
 // Custom styles for the TimelineItem
 import timelineItem from "examples/Timeline/TimelineItem/styles";
 
-function TimelineItem({ color, icon, title, dateTime, description, lastItem }) {
+function TimelineItem({
+  color = "info",
+  icon,
+  title,
+  dateTime,
+  description = "",
+  lastItem = false,
+}) {
   const isDark = useTimeline();
 
   return (
@@ -71,13 +78,6 @@ function TimelineItem({ color, icon, title, dateTime, description, lastItem }) {
     </MDBox>
   );
 }
-
-// Setting default values for the props of TimelineItem
-TimelineItem.defaultProps = {
-  color: "info",
-  lastItem: false,
-  description: "",
-};
 
 // Typechecking props for the TimelineItem
 TimelineItem.propTypes = {

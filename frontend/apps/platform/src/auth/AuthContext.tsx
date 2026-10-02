@@ -1,21 +1,7 @@
-import { createContext, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { apiFetch } from "../lib/api";
 
-export type CurrentUser = {
-  id: string;
-  email: string;
-  displayName: string;
-  roles: string[];
-};
-
-export type AuthState = {
-  user: CurrentUser | null;
-  status: "loading" | "authenticated" | "anonymous";
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
-};
-
-export const AuthContext = createContext<AuthState | null>(null);
+import { AuthContext, type AuthState, type CurrentUser } from "./authState";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
@@ -45,5 +31,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("anonymous");
   };
 
-  return <AuthContext.Provider value={{ user, status, login, logout }}>{children}</AuthContext.Provider>;
+  const updateDisplayName = async (displayName: string) => {
+    const me = await apiFetch<CurrentUser>("/api/auth/me", {
+      method: "PUT",
+      body: JSON.stringify({ displayName }),
+    });
+    setUser(me);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, status, login, logout, updateDisplayName }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }

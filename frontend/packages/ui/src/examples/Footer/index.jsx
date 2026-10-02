@@ -26,7 +26,7 @@ import MDTypography from "components/MDTypography";
 // Material Dashboard 2 React base styles
 import typography from "assets/theme/base/typography";
 
-function Footer({ company, links }) {
+function Footer({ company = { href: "#", name: "MPSellerTools" }, links = [] }) {
   const { href, name } = company;
   const { size } = typography;
 
@@ -88,12 +88,6 @@ function Footer({ company, links }) {
     </MDBox>
   );
 }
-
-// Setting default values for the props of Footer
-Footer.defaultProps = {
-  company: { href: "#", name: "MPSellerTools" },
-  links: [],
-};
 
 // Typechecking props for the Footer
 Footer.propTypes = {

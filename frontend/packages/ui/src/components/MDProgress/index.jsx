@@ -24,7 +24,8 @@ import MDTypography from "components/MDTypography";
 // Custom styles for MDProgress
 import MDProgressRoot from "components/MDProgress/MDProgressRoot";
 
-const MDProgress = forwardRef(({ variant, color, value, label, ...rest }, ref) => (
+const MDProgress = forwardRef(
+  ({ variant = "contained", color = "info", value = 0, label = false, ...rest }, ref) => (
   <>
     {label && (
       <MDTypography variant="button" fontWeight="medium" color="text">
@@ -40,14 +41,6 @@ const MDProgress = forwardRef(({ variant, color, value, label, ...rest }, ref) =
     />
   </>
 ));
-
-// Setting default values for the props of MDProgress
-MDProgress.defaultProps = {
-  variant: "contained",
-  color: "info",
-  value: 0,
-  label: false,
-};
 
 // Typechecking props for the MDProgress
 MDProgress.propTypes = {

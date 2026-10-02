@@ -21,14 +21,14 @@ Coded by www.creative-tim.com
 
 const colors = {
   background: {
-    default: "#1a2035",
-    sidenav: "#1f283e",
-    card: "#202940",
+    default: "#0F172A",
+    sidenav: "#16213A",
+    card: "#1E293B",
   },
 
   text: {
-    main: "#ffffffcc",
-    focus: "#ffffffcc",
+    main: "#E2E8F0cc",
+    focus: "#E2E8F0cc",
   },
 
   transparent: {
@@ -47,96 +47,130 @@ const colors = {
   },
 
   primary: {
-    main: "#e91e63",
-    focus: "#e91e63",
+    main: "#4F46E5",
+    focus: "#4338CA",
   },
 
   secondary: {
-    main: "#7b809a",
-    focus: "#8f93a9",
+    main: "#64748B",
+    focus: "#475569",
   },
 
   info: {
-    main: "#1A73E8",
-    focus: "#1662C4",
+    main: "#0284C7",
+    focus: "#0369A1",
   },
 
   success: {
-    main: "#4CAF50",
-    focus: "#67bb6a",
+    main: "#059669",
+    focus: "#047857",
   },
 
   warning: {
-    main: "#fb8c00",
-    focus: "#fc9d26",
+    main: "#D97706",
+    focus: "#B45309",
   },
 
   error: {
-    main: "#F44335",
-    focus: "#f65f53",
+    main: "#DC2626",
+    focus: "#B91C1C",
   },
 
   light: {
-    main: "#f0f2f566",
-    focus: "#f0f2f566",
+    main: "#F1F5F966",
+    focus: "#F1F5F966",
   },
 
   dark: {
-    main: "#344767",
-    focus: "#2c3c58",
+    main: "#334155",
+    focus: "#1E293B",
   },
 
   grey: {
-    100: "#f8f9fa",
-    200: "#f0f2f5",
-    300: "#dee2e6",
-    400: "#ced4da",
-    500: "#adb5bd",
-    600: "#6c757d",
-    700: "#495057",
-    800: "#343a40",
-    900: "#212529",
+    100: "#F8FAFC",
+    200: "#F1F5F9",
+    300: "#E2E8F0",
+    400: "#CBD5E1",
+    500: "#94A3B8",
+    600: "#64748B",
+    700: "#475569",
+    800: "#334155",
+    900: "#1E293B",
   },
 
   gradients: {
     primary: {
-      main: "#EC407A",
-      state: "#D81B60",
+      main: "#6366F1",
+      state: "#4338CA",
     },
 
     secondary: {
-      main: "#747b8a",
-      state: "#495361",
+      main: "#94A3B8",
+      state: "#64748B",
     },
 
     info: {
-      main: "#49a3f1",
-      state: "#1A73E8",
+      main: "#38BDF8",
+      state: "#0284C7",
     },
 
     success: {
-      main: "#66BB6A",
-      state: "#43A047",
+      main: "#34D399",
+      state: "#059669",
     },
 
     warning: {
-      main: "#FFA726",
-      state: "#FB8C00",
+      main: "#FBBF24",
+      state: "#D97706",
     },
 
     error: {
-      main: "#EF5350",
-      state: "#E53935",
+      main: "#F87171",
+      state: "#DC2626",
     },
 
     light: {
-      main: "#EBEFF4",
-      state: "#CED4DA",
+      main: "#F1F5F9",
+      state: "#E2E8F0",
     },
 
     dark: {
-      main: "#323a54",
-      state: "#1a2035",
+      main: "#334155",
+      state: "#1E293B",
+    },
+
+    // Sidenav accent swatches — see the matching comment in the light theme's
+    // colors.js. Kept identical here since the dark-mode sidenav background
+    // ("#16213A") sits in the same tonal range as the light theme's dark
+    // gradient, so the same muted set still reads cleanly against it.
+    steel: {
+      main: "#4C6E94",
+      state: "#35506D",
+    },
+
+    slate: {
+      main: "#5B6B82",
+      state: "#404C5E",
+    },
+
+    teal: {
+      main: "#1F7A70",
+      state: "#15574F",
+    },
+
+    sage: {
+      main: "#5F7A52",
+      state: "#445A3A",
+    },
+
+    amber: {
+      main: "#92400E",
+      state: "#78350F",
+    },
+
+    mauve: {
+      main: "#8D5F86",
+      state: "#684761",
     },
   },
 
@@ -204,58 +238,58 @@ const colors = {
 
   badgeColors: {
     primary: {
-      background: "#f8b3ca",
-      text: "#cc084b",
+      background: "#E0E7FF",
+      text: "#4338CA",
     },
 
     secondary: {
-      background: "#d7d9e1",
-      text: "#6c757d",
+      background: "#F1F5F9",
+      text: "#475569",
     },
 
     info: {
-      background: "#aecef7",
-      text: "#095bc6",
+      background: "#E0F2FE",
+      text: "#0369A1",
     },
 
     success: {
-      background: "#bce2be",
-      text: "#339537",
+      background: "#D1FAE5",
+      text: "#047857",
     },
 
     warning: {
-      background: "#ffd59f",
-      text: "#c87000",
+      background: "#FEF3C7",
+      text: "#B45309",
     },
 
     error: {
-      background: "#fcd3d0",
-      text: "#f61200",
+      background: "#FEE2E2",
+      text: "#B91C1C",
     },
 
     light: {
       background: "#ffffff",
-      text: "#c7d3de",
+      text: "#CBD5E1",
     },
 
     dark: {
-      background: "#8097bf",
-      text: "#1e2e4a",
+      background: "#94A3B8",
+      text: "#1E293B",
     },
   },
 
   coloredShadows: {
-    primary: "#e91e62",
-    secondary: "#110e0e",
-    info: "#00bbd4",
-    success: "#4caf4f",
-    warning: "#ff9900",
-    error: "#f44336",
-    light: "#adb5bd",
-    dark: "#404040",
+    primary: "#4F46E5",
+    secondary: "#64748B",
+    info: "#0284C7",
+    success: "#059669",
+    warning: "#D97706",
+    error: "#DC2626",
+    light: "#CBD5E1",
+    dark: "#1E293B",
   },
 
-  inputBorderColor: "#d2d6da",
+  inputBorderColor: "#CBD5E1",
 
   tabs: {
     indicator: { boxShadow: "#ddd" },

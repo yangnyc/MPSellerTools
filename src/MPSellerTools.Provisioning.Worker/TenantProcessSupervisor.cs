@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using MPSellerTools.Core.Platform;
 
@@ -66,6 +67,13 @@ public class TenantProcessSupervisor(ProvisioningOptions options, ILogger<Tenant
         catch (ArgumentException)
         {
             // No process with that ID exists any more.
+            return false;
+        }
+        catch (Win32Exception)
+        {
+            // The PID exists but belongs to a process we can't query (the OS
+            // reused it for something we don't have access to) — definitely
+            // not the tenant process we launched.
             return false;
         }
     }

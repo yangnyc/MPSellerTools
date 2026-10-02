@@ -13,7 +13,7 @@ Coded by www.creative-tim.com
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // @mui material components
 import Divider from "@mui/material/Divider";
@@ -24,7 +24,6 @@ import Icon from "@mui/material/Icon";
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
-import MDButton from "components/MDButton";
 
 // Custom styles for the Configurator
 import ConfiguratorRoot from "examples/Configurator/ConfiguratorRoot";
@@ -33,8 +32,8 @@ import ConfiguratorRoot from "examples/Configurator/ConfiguratorRoot";
 import {
   useMaterialUIController,
   setOpenConfigurator,
-  setTransparentSidenav,
   setWhiteSidenav,
+  setSidenavTint,
   setFixedNavbar,
   setSidenavColor,
   setDarkMode,
@@ -46,12 +45,18 @@ function Configurator() {
     openConfigurator,
     fixedNavbar,
     sidenavColor,
-    transparentSidenav,
     whiteSidenav,
+    sidenavTint,
     darkMode,
   } = controller;
   const [disabled, setDisabled] = useState(false);
-  const sidenavColors = ["primary", "dark", "info", "success", "warning", "error"];
+  const configuratorRef = useRef(null);
+  const sidenavColors = ["steel", "slate", "teal", "sage", "amber", "mauve"];
+  // A curated subset of sidenavColors that reads well as a full sidenav
+  // background rather than a small accent chip, so the "Sidenav Style" row
+  // shows the same number of swatches (6: Dark, White + 4 tints) as the
+  // "Sidenav Colors" row above it.
+  const sidenavTypeTints = ["steel", "teal", "amber", "mauve"];
 
   // Use the useEffect hook to change the button state for the sidenav type based on window size.
   useEffect(() => {
@@ -70,57 +75,86 @@ function Configurator() {
     return () => window.removeEventListener("resize", handleDisabled);
   }, []);
 
+  // Close the panel on a click anywhere outside it. Only attached while open,
+  // so the very click that opens the panel (via the toggle button elsewhere
+  // in the app) can never also be seen as the "outside click" that closes it
+  // — this effect isn't registered with the DOM until after that click has
+  // already finished dispatching.
+  useEffect(() => {
+    if (!openConfigurator) {
+      return undefined;
+    }
+
+    function handleClickOutside(event) {
+      if (configuratorRef.current && !configuratorRef.current.contains(event.target)) {
+        setOpenConfigurator(dispatch, false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openConfigurator, dispatch]);
+
   const handleCloseConfigurator = () => setOpenConfigurator(dispatch, false);
-  const handleTransparentSidenav = () => {
-    setTransparentSidenav(dispatch, true);
-    setWhiteSidenav(dispatch, false);
-  };
   const handleWhiteSidenav = () => {
     setWhiteSidenav(dispatch, true);
-    setTransparentSidenav(dispatch, false);
+    setSidenavTint(dispatch, null);
   };
   const handleDarkSidenav = () => {
     setWhiteSidenav(dispatch, false);
-    setTransparentSidenav(dispatch, false);
+    setSidenavTint(dispatch, null);
+  };
+  const handleTintedSidenav = (color) => {
+    setSidenavTint(dispatch, color);
+    setWhiteSidenav(dispatch, false);
   };
   const handleFixedNavbar = () => setFixedNavbar(dispatch, !fixedNavbar);
   const handleDarkMode = () => setDarkMode(dispatch, !darkMode);
 
-  // sidenav type buttons styles
-  const sidenavTypeButtonsStyles = ({
-    functions: { pxToRem },
-    palette: { white, dark, background },
-    borders: { borderWidth },
-  }) => ({
-    height: pxToRem(39),
-    background: darkMode ? background.sidenav : white.main,
-    color: darkMode ? white.main : dark.main,
-    border: `${borderWidth[1]} solid ${darkMode ? white.main : dark.main}`,
+  // Background fill for a swatch button. Accent colors (steel, slate, ...)
+  // and "dark" use the theme's gradient pairs; "white" is a flat fill.
+  const getSwatchBackground = (variant, { functions: { linearGradient }, palette: { gradients, white } }) => {
+    if (variant === "white") {
+      return { backgroundImage: "none", background: white.main };
+    }
 
-    "&:hover, &:focus, &:focus:not(:hover)": {
-      background: darkMode ? background.sidenav : white.main,
-      color: darkMode ? white.main : dark.main,
-      border: `${borderWidth[1]} solid ${darkMode ? white.main : dark.main}`,
-    },
-  });
+    return { backgroundImage: linearGradient(gradients[variant].main, gradients[variant].state) };
+  };
 
-  // sidenav type active button styles
-  const sidenavTypeActiveButtonStyles = ({
-    functions: { pxToRem, linearGradient },
-    palette: { white, gradients, background },
-  }) => ({
-    height: pxToRem(39),
-    background: darkMode ? white.main : linearGradient(gradients.dark.main, gradients.dark.state),
-    color: darkMode ? background.sidenav : white.main,
+  // Shared 24px circular swatch style used for both the accent-color row
+  // and the sidenav-type row, so the two look like one family of controls.
+  const swatchStyles = (variant, isActive) => (theme) => {
+    const {
+      borders: { borderWidth },
+      palette: { white, dark, background },
+      transitions,
+    } = theme;
 
-    "&:hover, &:focus, &:focus:not(:hover)": {
-      background: darkMode ? white.main : linearGradient(gradients.dark.main, gradients.dark.state),
-      color: darkMode ? background.sidenav : white.main,
-    },
-  });
+    return {
+      width: "24px",
+      height: "24px",
+      padding: 0,
+      border: `${borderWidth[1]} solid ${darkMode ? background.sidenav : white.main}`,
+      borderColor: isActive ? (darkMode ? white.main : dark.main) : "transparent",
+      transition: transitions.create("border-color", {
+        easing: transitions.easing.sharp,
+        duration: transitions.duration.shorter,
+      }),
+      ...getSwatchBackground(variant, theme),
+
+      "&:not(:last-child)": {
+        mr: 1,
+      },
+
+      "&:hover, &:focus, &:active": {
+        borderColor: darkMode ? white.main : dark.main,
+      },
+    };
+  };
 
   return (
-    <ConfiguratorRoot variant="permanent" ownerState={{ openConfigurator }}>
+    <ConfiguratorRoot ref={configuratorRef} variant="permanent" ownerState={{ openConfigurator }}>
       <MDBox
         display="flex"
         justifyContent="space-between"
@@ -161,102 +195,39 @@ function Configurator() {
             {sidenavColors.map((color) => (
               <IconButton
                 key={color}
-                sx={({
-                  borders: { borderWidth },
-                  palette: { white, dark, background },
-                  transitions,
-                }) => ({
-                  width: "24px",
-                  height: "24px",
-                  padding: 0,
-                  border: `${borderWidth[1]} solid ${darkMode ? background.sidenav : white.main}`,
-                  borderColor: () => {
-                    let borderColorValue = sidenavColor === color && dark.main;
-
-                    if (darkMode && sidenavColor === color) {
-                      borderColorValue = white.main;
-                    }
-
-                    return borderColorValue;
-                  },
-                  transition: transitions.create("border-color", {
-                    easing: transitions.easing.sharp,
-                    duration: transitions.duration.shorter,
-                  }),
-                  backgroundImage: ({ functions: { linearGradient }, palette: { gradients } }) =>
-                    linearGradient(gradients[color].main, gradients[color].state),
-
-                  "&:not(:last-child)": {
-                    mr: 1,
-                  },
-
-                  "&:hover, &:focus, &:active": {
-                    borderColor: darkMode ? white.main : dark.main,
-                  },
-                })}
+                title={color}
+                sx={swatchStyles(color, sidenavColor === color)}
                 onClick={() => setSidenavColor(dispatch, color)}
               />
             ))}
           </MDBox>
         </MDBox>
 
-        <MDBox mt={3} lineHeight={1}>
-          <MDTypography variant="h6">Sidenav Type</MDTypography>
-          <MDTypography variant="button" color="text">
-            Choose between different sidenav types.
-          </MDTypography>
+        <MDBox mt={3}>
+          <MDTypography variant="h6">Sidenav Style</MDTypography>
 
-          <MDBox
-            sx={{
-              display: "flex",
-              mt: 2,
-              mr: 1,
-            }}
-          >
-            <MDButton
-              color="dark"
-              variant="gradient"
+          <MDBox mb={0.5}>
+            <IconButton
+              title="Dark"
+              disabled={disabled}
+              sx={swatchStyles("dark", !whiteSidenav && !sidenavTint)}
               onClick={handleDarkSidenav}
+            />
+            <IconButton
+              title="White"
               disabled={disabled}
-              fullWidth
-              sx={
-                !transparentSidenav && !whiteSidenav
-                  ? sidenavTypeActiveButtonStyles
-                  : sidenavTypeButtonsStyles
-              }
-            >
-              Dark
-            </MDButton>
-            <MDBox sx={{ mx: 1, width: "8rem", minWidth: "8rem" }}>
-              <MDButton
-                color="dark"
-                variant="gradient"
-                onClick={handleTransparentSidenav}
-                disabled={disabled}
-                fullWidth
-                sx={
-                  transparentSidenav && !whiteSidenav
-                    ? sidenavTypeActiveButtonStyles
-                    : sidenavTypeButtonsStyles
-                }
-              >
-                Transparent
-              </MDButton>
-            </MDBox>
-            <MDButton
-              color="dark"
-              variant="gradient"
+              sx={swatchStyles("white", whiteSidenav)}
               onClick={handleWhiteSidenav}
-              disabled={disabled}
-              fullWidth
-              sx={
-                whiteSidenav && !transparentSidenav
-                  ? sidenavTypeActiveButtonStyles
-                  : sidenavTypeButtonsStyles
-              }
-            >
-              White
-            </MDButton>
+            />
+            {sidenavTypeTints.map((color) => (
+              <IconButton
+                key={`type-${color}`}
+                title={color}
+                disabled={disabled}
+                sx={swatchStyles(color, sidenavTint === color)}
+                onClick={() => handleTintedSidenav(color)}
+              />
+            ))}
           </MDBox>
         </MDBox>
         <MDBox

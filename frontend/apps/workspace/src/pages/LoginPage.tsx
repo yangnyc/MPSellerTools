@@ -59,6 +59,8 @@ export default function LoginPage() {
               type="email"
               label="Email"
               fullWidth
+              autoComplete="email"
+              spellCheck={false}
               value={email}
               onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
                 setEmail(event.target.value)
@@ -70,6 +72,7 @@ export default function LoginPage() {
               type="password"
               label="Password"
               fullWidth
+              autoComplete="current-password"
               value={password}
               onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
                 setPassword(event.target.value)

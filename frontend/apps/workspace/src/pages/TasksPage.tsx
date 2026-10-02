@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
 import Dialog from "@mui/material/Dialog";
@@ -11,7 +11,7 @@ import MDButton from "components/MDButton";
 import MDInput from "components/MDInput";
 import DataTable from "examples/Tables/DataTable";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import DashboardNavbar from "examples/Navbars/DashboardNavbar";
+import WorkspaceNavbar from "../components/WorkspaceNavbar";
 import Footer from "examples/Footer";
 import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
@@ -42,9 +42,7 @@ export default function TasksPage() {
   const [assignedUserId, setAssignedUserId] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  const load = () => {
-    setLoading(true);
-    setError(null);
+  const fetchData = useCallback(() => {
     const requests: Promise<unknown>[] = [TasksApi.list().then(setTasks)];
     if (isTenantAdmin) {
       requests.push(UsersApi.list().then(setUsers));
@@ -52,9 +50,15 @@ export default function TasksPage() {
     Promise.all(requests)
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load tasks."))
       .finally(() => setLoading(false));
-  };
+  }, [isTenantAdmin]);
 
-  useEffect(load, [isTenantAdmin]);
+  useEffect(fetchData, [fetchData]);
+
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    fetchData();
+  };
 
   const openCreate = () => {
     setTitle("");
@@ -124,7 +128,7 @@ export default function TasksPage() {
 
   return (
     <DashboardLayout>
-      <DashboardNavbar onLogout={logout} />
+      <WorkspaceNavbar onLogout={logout} />
       <MDBox py={3}>
         <Card>
           <MDBox display="flex" justifyContent="space-between" alignItems="center" p={3}>

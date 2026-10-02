@@ -36,7 +36,13 @@ import configs from "examples/Charts/BarCharts/VerticalBarChart/configs";
 // Material Dashboard 2 React base styles
 import colors from "assets/theme/base/colors";
 
-function VerticalBarChart({ icon, title, description, height, chart }) {
+function VerticalBarChart({
+  icon = { color: "info", component: "" },
+  title = "",
+  description = "",
+  height = "19.125rem",
+  chart,
+}) {
   const chartDatasets = chart.datasets
     ? chart.datasets.map((dataset) => ({
         ...dataset,
@@ -98,14 +104,6 @@ function VerticalBarChart({ icon, title, description, height, chart }) {
 
   return title || description ? <Card>{renderChart}</Card> : renderChart;
 }
-
-// Setting default values for the props of VerticalBarChart
-VerticalBarChart.defaultProps = {
-  icon: { color: "info", component: "" },
-  title: "",
-  description: "",
-  height: "19.125rem",
-};
 
 // Typechecking props for the VerticalBarChart
 VerticalBarChart.propTypes = {

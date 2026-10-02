@@ -5,7 +5,7 @@ import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
 import MDInput from "components/MDInput";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import DashboardNavbar from "examples/Navbars/DashboardNavbar";
+import WorkspaceNavbar from "../components/WorkspaceNavbar";
 import Footer from "examples/Footer";
 import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
@@ -53,7 +53,7 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
-      <DashboardNavbar onLogout={logout} />
+      <WorkspaceNavbar onLogout={logout} />
       <MDBox py={3}>
         <Card sx={{ maxWidth: 480 }}>
           <MDBox p={3}>

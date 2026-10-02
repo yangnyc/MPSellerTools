@@ -33,7 +33,12 @@ import MDTypography from "components/MDTypography";
 // PolarChart configurations
 import configs from "examples/Charts/PolarChart/configs";
 
-function PolarChart({ icon, title, description, chart }) {
+function PolarChart({
+  icon = { color: "info", component: "" },
+  title = "",
+  description = "",
+  chart,
+}) {
   const { data, options } = configs(chart.labels || [], chart.datasets || {});
 
   const renderChart = (
@@ -81,13 +86,6 @@ function PolarChart({ icon, title, description, chart }) {
 
   return title || description ? <Card>{renderChart}</Card> : renderChart;
 }
-
-// Setting default values for the props of PolarChart
-PolarChart.defaultProps = {
-  icon: { color: "info", component: "" },
-  title: "",
-  description: "",
-};
 
 // Typechecking props for the PolarChart
 PolarChart.propTypes = {

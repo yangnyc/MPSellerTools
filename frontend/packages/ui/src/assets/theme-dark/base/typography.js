@@ -101,31 +101,35 @@ const typography = {
     ...baseHeadingProperties,
   },
 
+  // subtitle1/2 and body1/2 previously sat one size step above the standard
+  // Material Design type scale (20px/16px instead of 16px/14px), which read
+  // as oversized for running copy in cards, tables, and forms throughout the
+  // app. Aligned back to the conventional scale here.
   subtitle1: {
     fontFamily: baseProperties.fontFamily,
-    fontSize: baseProperties.fontSizeXL,
-    fontWeight: baseProperties.fontWeightLight,
+    fontSize: baseProperties.fontSizeMD,
+    fontWeight: baseProperties.fontWeightMedium,
     lineHeight: 1.625,
   },
 
   subtitle2: {
     fontFamily: baseProperties.fontFamily,
-    fontSize: baseProperties.fontSizeMD,
-    fontWeight: baseProperties.fontWeightLight,
+    fontSize: baseProperties.fontSizeSM,
+    fontWeight: baseProperties.fontWeightMedium,
     lineHeight: 1.6,
   },
 
   body1: {
     fontFamily: baseProperties.fontFamily,
-    fontSize: baseProperties.fontSizeXL,
+    fontSize: baseProperties.fontSizeMD,
     fontWeight: baseProperties.fontWeightRegular,
     lineHeight: 1.625,
   },
 
   body2: {
     fontFamily: baseProperties.fontFamily,
-    fontSize: baseProperties.fontSizeMD,
-    fontWeight: baseProperties.fontWeightLight,
+    fontSize: baseProperties.fontSizeSM,
+    fontWeight: baseProperties.fontWeightRegular,
     lineHeight: 1.6,
   },
 
@@ -146,6 +150,11 @@ const typography = {
 
   overline: {
     fontFamily: baseProperties.fontFamily,
+    fontSize: baseProperties.fontSizeXS,
+    fontWeight: baseProperties.fontWeightBold,
+    lineHeight: 1.25,
+    letterSpacing: pxToRem(0.5),
+    textTransform: "uppercase",
   },
 
   d1: {
