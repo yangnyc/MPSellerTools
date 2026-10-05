@@ -20,7 +20,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
       <MDSnackbar
         color={severity}
         icon={severity === "error" ? "warning" : "notifications"}
-        title="MPSellerTools"
+        title="MP Seller Tools"
         dateTime=""
         content={message}
         open={open}

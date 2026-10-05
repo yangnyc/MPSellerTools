@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
-import Card from "@mui/material/Card";
-import Chip from "@mui/material/Chip";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
-import MDBox from "components/MDBox";
-import MDTypography from "components/MDTypography";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Box from "@mui/material/Box";
+import Icon from "@mui/material/Icon";
 import MDButton from "components/MDButton";
 import MDInput from "components/MDInput";
 import DataTable from "examples/Tables/DataTable";
-import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import WorkspaceNavbar from "../components/WorkspaceNavbar";
-import Footer from "examples/Footer";
+import {
+  FilterTabs,
+  Identity,
+  InlineAlert,
+  KitDialog,
+  PageHeader,
+  Section,
+  StateBlock,
+  StatusPill,
+  roleLabel,
+  useKit,
+} from "examples/Kit";
+import PageShell from "../components/PageShell";
 import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -20,13 +24,19 @@ import { ApiError } from "../lib/api";
 import { UsersApi } from "../api/resources";
 import type { UserSummary } from "../api/types";
 
+type StatusFilter = "all" | "active" | "blocked";
+
+const ROLES = ["TenantAdmin", "Employee"];
+
 export default function UsersPage() {
-  const { logout } = useAuth();
+  const { user: currentUser, logout } = useAuth();
   const { notify } = useSnackbar();
+  const { c } = useKit();
 
   const [users, setUsers] = useState<UserSummary[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -45,11 +55,11 @@ export default function UsersPage() {
 
   useEffect(fetchData, [fetchData]);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     setError(null);
     fetchData();
-  };
+  }, [fetchData]);
 
   const openInvite = () => {
     setInviteEmail("");
@@ -67,7 +77,11 @@ export default function UsersPage() {
     try {
       const result = await UsersApi.invite({ email: inviteEmail, role: inviteRole });
       setInviteLink(result.devAcceptUrl);
+      setInviteError(null);
       notify("Invitation sent.", "success");
+      if (!result.devAcceptUrl) {
+        setInviteOpen(false);
+      }
       load();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -78,15 +92,28 @@ export default function UsersPage() {
     }
   };
 
-  const changeRole = async (targetUser: UserSummary, role: string) => {
+  const copyInviteLink = async () => {
+    if (!inviteLink) return;
     try {
-      await UsersApi.changeRole(targetUser.id, role);
-      notify(`${targetUser.displayName}'s role changed to ${role}.`, "success");
-      load();
-    } catch (err) {
-      notify(err instanceof ApiError ? err.message : "Role change failed.", "error");
+      await navigator.clipboard.writeText(inviteLink);
+      notify("Link copied.", "success");
+    } catch {
+      notify("Could not copy the link. Select it and copy manually.", "error");
     }
   };
+
+  const changeRole = useCallback(
+    async (targetUser: UserSummary, role: string) => {
+      try {
+        await UsersApi.changeRole(targetUser.id, role);
+        notify(`${targetUser.displayName}'s role changed to ${roleLabel(role)}.`, "success");
+        load();
+      } catch (err) {
+        notify(err instanceof ApiError ? err.message : "Role change failed.", "error");
+      }
+    },
+    [notify, load]
+  );
 
   const confirmBlock = async () => {
     if (!blockTarget) return;
@@ -106,124 +133,206 @@ export default function UsersPage() {
     }
   };
 
-  const columns = [
-    { Header: "Email", accessor: "email" },
-    { Header: "Name", accessor: "name" },
-    { Header: "Role", accessor: "role" },
-    { Header: "Status", accessor: "status" },
-    { Header: "Actions", accessor: "actions", align: "right" as const },
-  ];
+  // Plain values in the rows (so the table's search and sorting work on them)
+  // and the presentation in each column's Cell. Memoised because the table
+  // resets its page and filter whenever it is handed new row objects.
+  const table = useMemo(() => {
+    type Row = { user: UserSummary; name: string; email: string; role: string; statusLabel: string };
+    type CellProps = { row: { original: Row } };
 
-  const rows =
-    users?.map((u) => ({
-      email: u.email,
-      name: u.displayName,
-      role: (
-        <MDInput
-          select
-          SelectProps={{ native: true }}
-          size="small"
-          value={u.roles[0] ?? "Employee"}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeRole(u, e.target.value)}
-        >
-          <option value="TenantAdmin">TenantAdmin</option>
-          <option value="Employee">Employee</option>
-        </MDInput>
-      ),
-      status: <Chip size="small" color={u.isBlocked ? "error" : "success"} label={u.isBlocked ? "Blocked" : "Active"} />,
-      actions: (
-        <MDButton size="small" variant="outlined" color={u.isBlocked ? "success" : "error"} onClick={() => setBlockTarget(u)}>
-          {u.isBlocked ? "Unblock" : "Block"}
-        </MDButton>
-      ),
-    })) ?? [];
+    const rows: Row[] = (users ?? [])
+      .filter((u) => statusFilter === "all" || (statusFilter === "blocked") === u.isBlocked)
+      .map((u) => ({
+        user: u,
+        name: u.displayName,
+        email: u.email,
+        role: u.roles[0] ?? "Employee",
+        statusLabel: u.isBlocked ? "Blocked" : "Active",
+      }));
+
+    const columns = [
+      {
+        Header: "User",
+        id: "user",
+        // Name and email together, so searching and sorting cover both.
+        accessor: (row: Row) => `${row.name} ${row.email}`,
+        Cell: ({ row }: CellProps) => (
+          <Identity
+            name={row.original.name}
+            secondary={row.original.user.id === currentUser?.id ? `${row.original.email} · you` : row.original.email}
+          />
+        ),
+      },
+      {
+        Header: "Role",
+        accessor: "role",
+        Cell: ({ row }: CellProps) => (
+          <MDInput
+            select
+            SelectProps={{ native: true }}
+            size="small"
+            inputProps={{ "aria-label": `Role for ${row.original.name}` }}
+            value={row.original.role}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => changeRole(row.original.user, e.target.value)}
+          >
+            {ROLES.map((role) => (
+              <option key={role} value={role}>
+                {roleLabel(role)}
+              </option>
+            ))}
+          </MDInput>
+        ),
+      },
+      {
+        Header: "Status",
+        accessor: "statusLabel",
+        Cell: ({ row }: CellProps) => (
+          <StatusPill tone={row.original.user.isBlocked ? "error" : "success"} label={row.original.statusLabel} />
+        ),
+      },
+      {
+        Header: "Actions",
+        id: "actions",
+        accessor: "name",
+        align: "right" as const,
+        disableSortBy: true,
+        disableGlobalFilter: true,
+        Cell: ({ row }: CellProps) => (
+          <MDButton
+            size="small"
+            variant="outlined"
+            color={row.original.user.isBlocked ? "success" : "error"}
+            onClick={() => setBlockTarget(row.original.user)}
+          >
+            {row.original.user.isBlocked ? "Unblock" : "Block"}
+          </MDButton>
+        ),
+      },
+    ];
+    return { columns, rows };
+  }, [users, statusFilter, currentUser?.id, changeRole]);
+
+  const blockedCount = users?.filter((u) => u.isBlocked).length;
 
   return (
-    <DashboardLayout>
-      <WorkspaceNavbar onLogout={logout} />
-      <MDBox py={3}>
-        <Card>
-          <MDBox display="flex" justifyContent="space-between" alignItems="center" p={3}>
-            <MDTypography variant="h5">Users</MDTypography>
-            <MDButton variant="gradient" color="info" onClick={openInvite}>
-              Invite user
-            </MDButton>
-          </MDBox>
-          {loading && (
-            <MDBox p={3}>
-              <MDTypography variant="body2">Loading users…</MDTypography>
-            </MDBox>
-          )}
-          {error && (
-            <MDBox p={3}>
-              <MDTypography variant="body2" color="error">
-                {error}
-              </MDTypography>
-            </MDBox>
-          )}
-          {!loading && !error && (users?.length ?? 0) > 0 && <DataTable table={{ columns, rows }} canSearch />}
-        </Card>
-      </MDBox>
-      <Footer />
-
-      <Dialog open={inviteOpen} onClose={() => setInviteOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Invite user</DialogTitle>
-        <DialogContent>
-          {inviteError && (
-            <MDBox mb={2}>
-              <MDTypography variant="caption" color="error">
-                {inviteError}
-              </MDTypography>
-            </MDBox>
-          )}
-          {inviteLink ? (
-            <MDBox>
-              <MDTypography variant="body2" color="text">
-                Invitation sent. Development accept link (email delivery is not configured in this
-                environment):
-              </MDTypography>
-              <MDBox mt={1} p={1.5} sx={{ backgroundColor: "grey.100", borderRadius: 1, wordBreak: "break-all" }}>
-                <MDTypography variant="caption">{inviteLink}</MDTypography>
-              </MDBox>
-            </MDBox>
-          ) : (
-            <>
-              <MDBox mb={2} mt={1}>
-                <MDInput
-                  label="Email"
-                  type="email"
-                  fullWidth
-                  value={inviteEmail}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInviteEmail(e.target.value)}
-                />
-              </MDBox>
-              <MDBox mb={1}>
-                <MDInput
-                  select
-                  label="Role"
-                  fullWidth
-                  SelectProps={{ native: true }}
-                  value={inviteRole}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInviteRole(e.target.value)}
-                >
-                  <option value="Employee">Employee</option>
-                  <option value="TenantAdmin">TenantAdmin</option>
-                </MDInput>
-              </MDBox>
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <MDButton variant="text" color="secondary" onClick={() => setInviteOpen(false)}>
-            {inviteLink ? "Close" : "Cancel"}
+    <PageShell>
+      <PageHeader
+        icon="group"
+        title="Users"
+        subtitle="Invite teammates, set their role, and block access when someone leaves."
+        actions={
+          <MDButton variant="gradient" color="info" onClick={openInvite} startIcon={<Icon>person_add</Icon>}>
+            Invite user
           </MDButton>
-          {!inviteLink && (
-            <MDButton variant="gradient" color="info" onClick={submitInvite}>
-              Send invite
+        }
+      />
+
+      <Section flush>
+        {loading && <StateBlock kind="loading" title="Loading users" />}
+        {error && (
+          <StateBlock
+            kind="error"
+            title="Users could not be loaded"
+            message={error}
+            action={
+              <MDButton variant="outlined" color="info" size="small" onClick={load}>
+                Try again
+              </MDButton>
+            }
+          />
+        )}
+        {!loading && !error && (users?.length ?? 0) > 0 && (
+          <>
+            <Box sx={{ px: 3, pt: 2.5 }}>
+              <FilterTabs
+                label="Filter by status"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={[
+                  { value: "all", label: "All", count: users?.length },
+                  { value: "active", label: "Active", count: (users?.length ?? 0) - (blockedCount ?? 0) },
+                  { value: "blocked", label: "Blocked", count: blockedCount },
+                ]}
+              />
+            </Box>
+            <DataTable table={table} canSearch />
+          </>
+        )}
+      </Section>
+
+      <KitDialog
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        onSubmit={inviteLink ? undefined : submitInvite}
+        icon={inviteLink ? "mark_email_read" : "person_add"}
+        tone={inviteLink ? "success" : "info"}
+        title={inviteLink ? "Invitation sent" : "Invite user"}
+        subtitle={
+          inviteLink
+            ? "Share this link with the new user so they can set a password."
+            : "They receive a single-use link to set their own password."
+        }
+        actions={
+          <>
+            <MDButton variant="text" color="secondary" onClick={() => setInviteOpen(false)}>
+              {inviteLink ? "Close" : "Cancel"}
             </MDButton>
-          )}
-        </DialogActions>
-      </Dialog>
+            {inviteLink ? (
+              <MDButton variant="gradient" color="info" onClick={copyInviteLink} startIcon={<Icon>content_copy</Icon>}>
+                Copy link
+              </MDButton>
+            ) : (
+              <MDButton type="submit" variant="gradient" color="info">
+                Send invite
+              </MDButton>
+            )}
+          </>
+        }
+      >
+        {inviteError && <InlineAlert sx={{ mb: 2.5 }}>{inviteError}</InlineAlert>}
+        {inviteLink ? (
+          <>
+            <InlineAlert tone="info" sx={{ mb: 2 }}>
+              Email delivery is not configured in this environment, so the accept link is shown here instead.
+            </InlineAlert>
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: "10px",
+                fontFamily: "monospace",
+                fontSize: "0.8125rem",
+                wordBreak: "break-all",
+                color: c.text,
+                backgroundColor: c.surfaceAlt,
+                border: `1px solid ${c.border}`,
+              }}
+            >
+              {inviteLink}
+            </Box>
+          </>
+        ) : (
+          <Box sx={{ display: "grid", gap: 2.5, pt: 0.5 }}>
+            <MDInput
+              label="Email"
+              type="email"
+              fullWidth
+              value={inviteEmail}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInviteEmail(e.target.value)}
+            />
+            <MDInput
+              select
+              label="Role"
+              fullWidth
+              SelectProps={{ native: true }}
+              value={inviteRole}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInviteRole(e.target.value)}
+            >
+              <option value="Employee">{roleLabel("Employee")}</option>
+              <option value="TenantAdmin">{roleLabel("TenantAdmin")}</option>
+            </MDInput>
+          </Box>
+        )}
+      </KitDialog>
 
       <ConfirmDialog
         open={!!blockTarget}
@@ -234,6 +343,6 @@ export default function UsersPage() {
         onConfirm={confirmBlock}
         onCancel={() => setBlockTarget(null)}
       />
-    </DashboardLayout>
+    </PageShell>
   );
 }

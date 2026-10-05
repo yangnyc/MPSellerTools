@@ -25,9 +25,13 @@ import MDBox from "components/MDBox";
 // Material Dashboard 2 React contexts
 import { useMaterialUIController } from "context";
 
+// MP Seller Tools page kit colours (light/dark aware)
+import { useKit } from "examples/Kit/tokens";
+
 function DataTableHeadCell({ width = "auto", children, sorted = "none", align = "left", ...rest }) {
   const [controller] = useMaterialUIController();
   const { darkMode } = controller;
+  const { c } = useKit();
 
   return (
     <MDBox
@@ -35,8 +39,10 @@ function DataTableHeadCell({ width = "auto", children, sorted = "none", align = 
       width={width}
       py={1.5}
       px={3}
-      sx={({ palette: { light }, borders: { borderWidth } }) => ({
-        borderBottom: `${borderWidth[1]} solid ${light.main}`,
+      sx={({ borders: { borderWidth } }) => ({
+        backgroundColor: c.surfaceAlt,
+        borderTop: `${borderWidth[1]} solid ${c.border}`,
+        borderBottom: `${borderWidth[1]} solid ${c.border}`,
       })}
     >
       <MDBox
@@ -49,6 +55,9 @@ function DataTableHeadCell({ width = "auto", children, sorted = "none", align = 
           fontSize: size.xxs,
           fontWeight: fontWeightBold,
           textTransform: "uppercase",
+          // Right-aligned headers carry their sort arrows on the left; keep
+          // the label clear of them when the column is narrow.
+          paddingLeft: sorted && align === "right" ? "18px" : 0,
           cursor: sorted && "pointer",
           userSelect: sorted && "none",
         })}

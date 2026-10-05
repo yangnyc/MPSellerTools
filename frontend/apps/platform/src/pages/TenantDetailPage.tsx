@@ -1,39 +1,62 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import Card from "@mui/material/Card";
-import Chip from "@mui/material/Chip";
+import Box from "@mui/material/Box";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
+import LinearProgress from "@mui/material/LinearProgress";
 import Link from "@mui/material/Link";
-import MDBox from "components/MDBox";
-import MDTypography from "components/MDTypography";
+import Tooltip from "@mui/material/Tooltip";
 import MDButton from "components/MDButton";
 import MDInput from "components/MDInput";
-import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import PlatformNavbar from "../components/PlatformNavbar";
-import Footer from "examples/Footer";
+import {
+  DetailList,
+  InitialsAvatar,
+  InlineAlert,
+  PageHeader,
+  Section,
+  StateBlock,
+  StatusPill,
+  Surface,
+  formatDateTime,
+  timeAgo,
+  useKit,
+} from "examples/Kit";
+import PageShell from "../components/PageShell";
 import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { ApiError } from "../lib/api";
 import { TenantsApi } from "../api/resources";
 import { TENANT_STATUS_LABELS, type TenantDetail, type TenantStatus } from "../api/types";
+import { TENANT_STATUS_TONE } from "../lib/status";
 
-const STATUS_COLOR: Record<TenantStatus, "info" | "success" | "warning" | "error"> = {
-  0: "info",
-  1: "success",
-  2: "warning",
-  3: "error",
+type Action = "suspend" | "resume" | "retry";
+
+const ACTIONS: Record<Action, { title: string; label: string; icon: string; color: "warning" | "success" | "info" }> = {
+  suspend: { title: "Suspend company", label: "Suspend", icon: "pause_circle", color: "warning" },
+  resume: { title: "Resume company", label: "Resume", icon: "play_circle", color: "success" },
+  retry: { title: "Retry provisioning", label: "Retry provisioning", icon: "refresh", color: "info" },
+};
+
+// The one lifecycle action the server accepts in each state (none while provisioning).
+const ACTION_FOR_STATUS: Record<TenantStatus, Action | null> = { 0: null, 1: "suspend", 2: "resume", 3: "retry" };
+
+const STATE_NOTES: Record<TenantStatus, string> = {
+  0: "The provisioning worker is creating this company's database and starting its workspace.",
+  1: "The workspace is running and its team can sign in. Suspending stops the instance until you resume it.",
+  2: "The workspace is stopped and nobody can sign in. Resuming starts it again and checks that it is ready.",
+  3: "Provisioning did not finish. Retrying picks up where it stopped without creating anything twice.",
 };
 
 export default function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { logout } = useAuth();
   const { notify } = useSnackbar();
+  const { c } = useKit();
 
   const [tenant, setTenant] = useState<TenantDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<"suspend" | "resume" | "retry" | null>(null);
+  const [confirmAction, setConfirmAction] = useState<Action | null>(null);
 
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
@@ -107,123 +130,174 @@ export default function TenantDetailPage() {
     }
   };
 
-  if (error) {
+  const copyUrl = async () => {
+    if (!tenant?.url) return;
+    try {
+      await navigator.clipboard.writeText(tenant.url);
+      notify("Login URL copied.", "success");
+    } catch {
+      notify("Could not copy the URL. Select it and copy manually.", "error");
+    }
+  };
+
+  if (error || !tenant) {
     return (
-      <DashboardLayout>
-        <PlatformNavbar onLogout={logout} />
-        <MDBox py={3}>
-          <MDTypography color="error">{error}</MDTypography>
-        </MDBox>
-        <Footer />
-      </DashboardLayout>
+      <PageShell>
+        <PageHeader icon="apartment" title="Company" backTo="/tenants" backLabel="All tenants" />
+        <Surface>
+          {error ? (
+            <StateBlock
+              kind="error"
+              title="This company could not be loaded"
+              message={error}
+              action={
+                <MDButton variant="outlined" color="info" size="small" onClick={load}>
+                  Try again
+                </MDButton>
+              }
+            />
+          ) : (
+            <StateBlock kind="loading" title="Loading company" />
+          )}
+        </Surface>
+      </PageShell>
     );
   }
 
-  if (!tenant) {
-    return (
-      <DashboardLayout>
-        <PlatformNavbar onLogout={logout} />
-        <MDBox py={3}>
-          <MDTypography variant="body2">Loading…</MDTypography>
-        </MDBox>
-        <Footer />
-      </DashboardLayout>
-    );
-  }
+  const action = ACTION_FOR_STATUS[tenant.status];
+  const actionButton = action && (
+    <MDButton
+      variant="gradient"
+      color={ACTIONS[action].color}
+      startIcon={<Icon>{ACTIONS[action].icon}</Icon>}
+      onClick={() => setConfirmAction(action)}
+    >
+      {ACTIONS[action].label}
+    </MDButton>
+  );
 
   return (
-    <DashboardLayout>
-      <PlatformNavbar onLogout={logout} />
-      <MDBox py={3}>
-        <Card sx={{ maxWidth: 640 }}>
-          <MDBox p={3}>
-            <MDBox display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              {editingName ? (
-                <MDBox display="flex" alignItems="center" gap={1}>
-                  <MDInput
-                    size="small"
-                    label="Company name"
-                    autoFocus
-                    value={nameDraft}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNameDraft(e.target.value)}
-                    onKeyDown={(e: React.KeyboardEvent) => {
-                      if (e.key === "Enter") saveName();
-                      if (e.key === "Escape") cancelEditingName();
-                    }}
-                  />
-                  <IconButton size="small" color="info" aria-label="Save name" disabled={savingName} onClick={saveName}>
-                    <Icon>check</Icon>
-                  </IconButton>
-                  <IconButton size="small" aria-label="Cancel" disabled={savingName} onClick={cancelEditingName}>
-                    <Icon>close</Icon>
-                  </IconButton>
-                </MDBox>
-              ) : (
-                <MDBox display="flex" alignItems="center" gap={1}>
-                  <MDTypography variant="h5">{tenant.name}</MDTypography>
-                  <IconButton size="small" aria-label="Edit name" onClick={startEditingName}>
-                    <Icon fontSize="small">edit</Icon>
-                  </IconButton>
-                </MDBox>
-              )}
-              <Chip color={STATUS_COLOR[tenant.status]} label={TENANT_STATUS_LABELS[tenant.status]} />
-            </MDBox>
-            <MDTypography variant="body2" color="text">
-              Slug: {tenant.slug}
-            </MDTypography>
-            <MDTypography variant="body2" color="text" mb={1}>
-              Login URL:{" "}
-              {tenant.url ? (
-                <Link href={tenant.url} target="_blank" rel="noreferrer">
-                  {tenant.url}
-                </Link>
-              ) : (
-                "not yet assigned"
-              )}
-            </MDTypography>
-            {tenant.status === 0 && (
-              <MDTypography variant="body2" color="info">
-                Provisioning in progress — this page updates automatically.
-              </MDTypography>
-            )}
-            {tenant.failureReason && (
-              <MDTypography variant="body2" color="error">
-                Failure: {tenant.failureReason}
-              </MDTypography>
-            )}
-            <MDBox mt={3} display="flex" gap={2}>
-              {tenant.status === 1 && (
-                <MDButton variant="gradient" color="warning" onClick={() => setConfirmAction("suspend")}>
-                  Suspend
-                </MDButton>
-              )}
-              {tenant.status === 2 && (
-                <MDButton variant="gradient" color="success" onClick={() => setConfirmAction("resume")}>
-                  Resume
-                </MDButton>
-              )}
-              {tenant.status === 3 && (
-                <MDButton variant="gradient" color="info" onClick={() => setConfirmAction("retry")}>
-                  Retry provisioning
-                </MDButton>
-              )}
-            </MDBox>
-          </MDBox>
-        </Card>
-      </MDBox>
-      <Footer />
+    <PageShell>
+      <PageHeader
+        backTo="/tenants"
+        backLabel="All tenants"
+        title={
+          editingName ? (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <MDInput
+                size="small"
+                label="Company name"
+                autoFocus
+                value={nameDraft}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNameDraft(e.target.value)}
+                onKeyDown={(e: React.KeyboardEvent) => {
+                  if (e.key === "Enter") saveName();
+                  if (e.key === "Escape") cancelEditingName();
+                }}
+              />
+              <IconButton size="small" color="info" aria-label="Save name" disabled={savingName} onClick={saveName}>
+                <Icon>check</Icon>
+              </IconButton>
+              <IconButton
+                size="small"
+                aria-label="Cancel"
+                disabled={savingName}
+                onClick={cancelEditingName}
+                sx={{ color: c.muted }}
+              >
+                <Icon>close</Icon>
+              </IconButton>
+            </Box>
+          ) : (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <InitialsAvatar name={tenant.name} size={48} square />
+              <span>{tenant.name}</span>
+              <Tooltip title="Rename">
+                <IconButton size="small" aria-label="Edit name" onClick={startEditingName} sx={{ color: c.muted }}>
+                  <Icon fontSize="small">edit</Icon>
+                </IconButton>
+              </Tooltip>
+            </Box>
+          )
+        }
+        actions={
+          <StatusPill
+            tone={TENANT_STATUS_TONE[tenant.status]}
+            label={TENANT_STATUS_LABELS[tenant.status]}
+            pulse={tenant.status === 0}
+          />
+        }
+      />
+
+      {tenant.status === 0 && (
+        <Surface sx={{ mb: 3, p: 2.5 }}>
+          <Box sx={{ mb: 1.5, fontSize: "0.875rem", fontWeight: 500, color: c.text }}>
+            Provisioning in progress — this page updates automatically.
+          </Box>
+          <LinearProgress color="info" sx={{ borderRadius: 3 }} />
+        </Surface>
+      )}
+      {tenant.failureReason && (
+        <InlineAlert title="Provisioning failed" sx={{ mb: 3 }}>
+          {tenant.failureReason}
+        </InlineAlert>
+      )}
+
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "3fr 2fr" }, alignItems: "start", gap: 3 }}>
+        <Section icon="dns" title="Workspace" subtitle="How this company's team reaches its instance.">
+          <DetailList
+            items={[
+              {
+                label: "Login URL",
+                value: tenant.url ? (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Link href={tenant.url} target="_blank" rel="noreferrer" sx={{ color: c.accent }}>
+                      {tenant.url}
+                    </Link>
+                    <Tooltip title="Copy">
+                      <IconButton size="small" aria-label="Copy login URL" onClick={copyUrl} sx={{ color: c.muted }}>
+                        <Icon sx={{ fontSize: "1rem !important" }}>content_copy</Icon>
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                ) : (
+                  <Box component="span" sx={{ color: c.muted }}>
+                    Not yet assigned
+                  </Box>
+                ),
+              },
+              {
+                label: "Slug",
+                value: (
+                  <Box component="span" sx={{ fontFamily: "monospace" }}>
+                    {tenant.slug}
+                  </Box>
+                ),
+              },
+              { label: "Created", value: formatDateTime(tenant.createdAtUtc) },
+              {
+                label: "Last updated",
+                value: <span title={formatDateTime(tenant.updatedAtUtc)}>{timeAgo(tenant.updatedAtUtc)}</span>,
+              },
+            ]}
+          />
+        </Section>
+
+        <Section icon="tune" tone={TENANT_STATUS_TONE[tenant.status]} title="Lifecycle" subtitle={TENANT_STATUS_LABELS[tenant.status]}>
+          <Box sx={{ fontSize: "0.875rem", lineHeight: 1.6, color: c.muted }}>{STATE_NOTES[tenant.status]}</Box>
+          {actionButton && <Box sx={{ mt: 2.5 }}>{actionButton}</Box>}
+        </Section>
+      </Box>
 
       <ConfirmDialog
         open={!!confirmAction}
-        title={
-          confirmAction === "suspend" ? "Suspend company" : confirmAction === "resume" ? "Resume company" : "Retry provisioning"
-        }
+        title={confirmAction ? ACTIONS[confirmAction].title : ""}
         message={`Are you sure you want to ${confirmAction} "${tenant.name}"?`}
-        confirmLabel={confirmAction === "suspend" ? "Suspend" : confirmAction === "resume" ? "Resume" : "Retry"}
+        confirmLabel={confirmAction === "retry" ? "Retry" : confirmAction ? ACTIONS[confirmAction].label : ""}
         confirmColor={confirmAction === "suspend" ? "warning" : "info"}
         onConfirm={runAction}
         onCancel={() => setConfirmAction(null)}
       />
-    </DashboardLayout>
+    </PageShell>
   );
 }

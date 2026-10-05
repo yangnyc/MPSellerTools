@@ -23,6 +23,8 @@ import { createContext, useContext, useReducer, useMemo } from "react";
 // prop-types is a library for typechecking of props
 import PropTypes from "prop-types";
 
+import { defaultThemeName, themeOptions, resolveThemeName } from "context/themes";
+
 // Material Dashboard 2 React main context
 // NOTE: authentication state is intentionally NOT part of this shared UI context.
 // Each app (platform/workspace) owns its own cookie-session-based auth state
@@ -63,12 +65,26 @@ function reducer(state, action) {
       return { ...state, layout: action.value };
     }
     case "DARKMODE": {
-      try {
-        window.localStorage.setItem("darkMode", JSON.stringify(action.value));
-      } catch {
-        // localStorage unavailable (private mode, disabled storage, etc.) — darkMode just won't persist
-      }
       return { ...state, darkMode: action.value };
+    }
+    // Switches to a named theme and applies its light/dark and sidenav preset.
+    case "THEME_NAME": {
+      const themeName = resolveThemeName(action.value);
+      const { preset } = themeOptions.find((option) => option.id === themeName);
+      return { ...state, ...preset, themeName };
+    }
+    // Applies a saved per-user theme (see each app's ThemeSync) in one step.
+    case "THEME_SETTINGS": {
+      const { themeName, darkMode, whiteSidenav, sidenavTint, sidenavColor, fixedNavbar } = action.value;
+      return {
+        ...state,
+        themeName: resolveThemeName(themeName),
+        darkMode,
+        whiteSidenav,
+        sidenavTint,
+        sidenavColor,
+        fixedNavbar,
+      };
     }
     default: {
       throw new Error(`Unhandled action type: ${action.type}`);
@@ -76,30 +92,30 @@ function reducer(state, action) {
   }
 }
 
-function getStoredDarkMode() {
-  try {
-    return JSON.parse(window.localStorage.getItem("darkMode")) === true;
-  } catch {
-    return false;
-  }
-}
+// The theme a user sees until they change something. Theme choices are stored
+// only on the signed-in user's profile in the database (see each app's
+// ThemeSync) — nothing is kept in the browser.
+const defaultThemeSettings = {
+  themeName: defaultThemeName,
+  darkMode: false,
+  whiteSidenav: false,
+  sidenavTint: null,
+  sidenavColor: "steel",
+  fixedNavbar: true,
+};
 
 // Material Dashboard 2 React context provider
 function MaterialUIControllerProvider({ children }) {
   const initialState = {
+    // sidenavTint is non-null when the sidenav background itself is tinted
+    // with one of the sidenavColors accent colors (see Configurator's
+    // "Sidenav Style" row), mutually exclusive with whiteSidenav.
+    ...defaultThemeSettings,
     miniSidenav: false,
-    whiteSidenav: false,
-    // Non-null when the sidenav background itself is tinted with one of the
-    // sidenavColors accent colors (see Configurator's "Sidenav Style" row),
-    // mutually exclusive with whiteSidenav.
-    sidenavTint: null,
-    sidenavColor: "steel",
     transparentNavbar: true,
-    fixedNavbar: true,
     openConfigurator: false,
     direction: "ltr",
     layout: "dashboard",
-    darkMode: getStoredDarkMode(),
   };
 
   const [controller, dispatch] = useReducer(reducer, initialState);
@@ -138,6 +154,8 @@ const setOpenConfigurator = (dispatch, value) => dispatch({ type: "OPEN_CONFIGUR
 const setDirection = (dispatch, value) => dispatch({ type: "DIRECTION", value });
 const setLayout = (dispatch, value) => dispatch({ type: "LAYOUT", value });
 const setDarkMode = (dispatch, value) => dispatch({ type: "DARKMODE", value });
+const setThemeName = (dispatch, value) => dispatch({ type: "THEME_NAME", value });
+const applyThemeSettings = (dispatch, value) => dispatch({ type: "THEME_SETTINGS", value });
 
 export {
   MaterialUIControllerProvider,
@@ -152,4 +170,8 @@ export {
   setDirection,
   setLayout,
   setDarkMode,
+  setThemeName,
+  applyThemeSettings,
+  defaultThemeSettings,
+  themeOptions,
 };

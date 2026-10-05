@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { apiFetch } from "../lib/api";
+import { apiFetch, resetAntiforgeryToken } from "../lib/api";
 
-import { AuthContext, type AuthState, type CurrentUser } from "./authState";
+import { AuthContext, type AuthState, type CurrentUser, type ThemeSettings } from "./authState";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
@@ -21,12 +21,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
+    resetAntiforgeryToken();
     setUser(me);
     setStatus("authenticated");
   };
 
   const logout = async () => {
     await apiFetch<void>("/api/auth/logout", { method: "POST" });
+    resetAntiforgeryToken();
     setUser(null);
     setStatus("anonymous");
   };
@@ -39,8 +41,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(me);
   };
 
+  const saveTheme = async (theme: ThemeSettings) => {
+    const me = await apiFetch<CurrentUser>("/api/auth/me/theme", {
+      method: "PUT",
+      body: JSON.stringify(theme),
+    });
+    setUser(me);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, status, login, logout, updateDisplayName }}>
+    <AuthContext.Provider value={{ user, status, login, logout, updateDisplayName, saveTheme }}>
       {children}
     </AuthContext.Provider>
   );

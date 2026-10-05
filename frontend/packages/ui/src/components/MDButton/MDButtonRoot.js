@@ -27,6 +27,10 @@ export default styled(Button)(({ theme, ownerState }) => {
   const { borderRadius } = borders;
   const { colored } = boxShadows;
 
+  // A theme whose button color is too light for white text (see the Noir Gold
+  // theme in assets/themes) names the text color to use on it instead.
+  const onColor = palette.onColors?.[color];
+
   // styles for the button with variant="contained"
   const containedStyles = () => {
     // background color value
@@ -71,6 +75,11 @@ export default styled(Button)(({ theme, ownerState }) => {
       focusedColorValue = text.main;
     } else if (color === "primary" || color === "error" || color === "dark") {
       focusedColorValue = white.main;
+    }
+
+    if (onColor) {
+      colorValue = onColor;
+      focusedColorValue = onColor;
     }
 
     return {
@@ -134,7 +143,7 @@ export default styled(Button)(({ theme, ownerState }) => {
 
       "&:active:not(:hover)": {
         backgroundColor: colorValue,
-        color: white.main,
+        color: onColor ?? white.main,
         opacity: 0.85,
       },
 
@@ -180,6 +189,10 @@ export default styled(Button)(({ theme, ownerState }) => {
       colorValue = text.main;
     } else if (color === "light") {
       colorValue = gradients.dark.state;
+    }
+
+    if (onColor) {
+      colorValue = onColor;
     }
 
     return {

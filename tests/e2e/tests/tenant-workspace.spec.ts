@@ -8,7 +8,7 @@ test.describe("Company workspace — TenantAdmin", () => {
   test("logs in and sees the full menu", async ({ page }) => {
     await page.goto(`${company.url}/login`);
     await page.getByLabel("Email").fill(company.tenantAdmin.email);
-    await page.getByLabel("Password").fill(company.tenantAdmin.password);
+    await page.getByLabel("Password", { exact: true }).fill(company.tenantAdmin.password);
     await page.getByRole("button", { name: "Sign in" }).click();
 
     await expect(page).toHaveURL(/\/dashboard$/);
@@ -21,14 +21,14 @@ test.describe("Company workspace — TenantAdmin", () => {
   test("SPA deep link to /products works directly", async ({ page }) => {
     await page.goto(`${company.url}/login`);
     await page.getByLabel("Email").fill(company.tenantAdmin.email);
-    await page.getByLabel("Password").fill(company.tenantAdmin.password);
+    await page.getByLabel("Password", { exact: true }).fill(company.tenantAdmin.password);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
 
     await page.goto(`${company.url}/products`);
 
     await expect(page).toHaveURL(/\/products$/);
-    await expect(page.getByText("Products")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Products" })).toBeVisible();
   });
 });
 
@@ -36,7 +36,7 @@ test.describe("Company workspace — Employee", () => {
   test("logs in and does NOT see TenantAdmin-only menu items", async ({ page }) => {
     await page.goto(`${company.url}/login`);
     await page.getByLabel("Email").fill(company.employee.email);
-    await page.getByLabel("Password").fill(company.employee.password);
+    await page.getByLabel("Password", { exact: true }).fill(company.employee.password);
     await page.getByRole("button", { name: "Sign in" }).click();
 
     await expect(page).toHaveURL(/\/dashboard$/);
@@ -52,7 +52,7 @@ test.describe("Company workspace — Employee", () => {
   test("direct navigation to /users redirects away even though the menu item is hidden", async ({ page }) => {
     await page.goto(`${company.url}/login`);
     await page.getByLabel("Email").fill(company.employee.email);
-    await page.getByLabel("Password").fill(company.employee.password);
+    await page.getByLabel("Password", { exact: true }).fill(company.employee.password);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
 

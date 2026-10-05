@@ -105,4 +105,79 @@ public class AuthenticationAndAntiforgeryTests(TenantHostFixture fixture) : ICla
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Theme_settings_are_saved_on_the_profile_and_returned_on_me()
+    {
+        await fixture.CreateUserAsync("theme-save@example.com", "Password123!", "Employee");
+        using var client = fixture.CreateClient();
+        await TenantApiHelpers.LoginAsync(client, "theme-save@example.com", "Password123!");
+
+        var before = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/me");
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, before.GetProperty("theme").ValueKind);
+
+        var response = await TenantApiHelpers.PutJsonWithAntiforgeryAsync(
+            client,
+            "/api/auth/me/theme",
+            new { themeName = "noir", darkMode = true, whiteSidenav = false, sidenavTint = "teal", sidenavColor = "amber", fixedNavbar = false });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var me = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/me");
+        var theme = me.GetProperty("theme");
+        Assert.Equal("noir", theme.GetProperty("themeName").GetString());
+        Assert.True(theme.GetProperty("darkMode").GetBoolean());
+        Assert.False(theme.GetProperty("whiteSidenav").GetBoolean());
+        Assert.Equal("teal", theme.GetProperty("sidenavTint").GetString());
+        Assert.Equal("amber", theme.GetProperty("sidenavColor").GetString());
+        Assert.False(theme.GetProperty("fixedNavbar").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Theme_settings_reject_values_that_are_not_swatch_names()
+    {
+        await fixture.CreateUserAsync("theme-invalid@example.com", "Password123!", "Employee");
+        using var client = fixture.CreateClient();
+        await TenantApiHelpers.LoginAsync(client, "theme-invalid@example.com", "Password123!");
+
+        var response = await TenantApiHelpers.PutJsonWithAntiforgeryAsync(
+            client,
+            "/api/auth/me/theme",
+            new { darkMode = false, whiteSidenav = false, sidenavTint = (string?)null, sidenavColor = "url(javascript:1)", fixedNavbar = true });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Theme_settings_without_a_theme_name_are_still_accepted()
+    {
+        await fixture.CreateUserAsync("theme-unnamed@example.com", "Password123!", "Employee");
+        using var client = fixture.CreateClient();
+        await TenantApiHelpers.LoginAsync(client, "theme-unnamed@example.com", "Password123!");
+
+        var response = await TenantApiHelpers.PutJsonWithAntiforgeryAsync(
+            client,
+            "/api/auth/me/theme",
+            new { darkMode = false, whiteSidenav = false, sidenavTint = (string?)null, sidenavColor = "steel", fixedNavbar = true });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var me = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/me");
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, me.GetProperty("theme").GetProperty("themeName").ValueKind);
+    }
+
+    [Fact]
+    public async Task Theme_settings_reject_a_theme_name_that_is_not_a_plain_name()
+    {
+        await fixture.CreateUserAsync("theme-badname@example.com", "Password123!", "Employee");
+        using var client = fixture.CreateClient();
+        await TenantApiHelpers.LoginAsync(client, "theme-badname@example.com", "Password123!");
+
+        var response = await TenantApiHelpers.PutJsonWithAntiforgeryAsync(
+            client,
+            "/api/auth/me/theme",
+            new { themeName = "<script>", darkMode = false, whiteSidenav = false, sidenavTint = (string?)null, sidenavColor = "steel", fixedNavbar = true });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

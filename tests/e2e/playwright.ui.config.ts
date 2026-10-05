@@ -9,7 +9,7 @@ export default defineConfig({
     channel: process.env.PLAYWRIGHT_CHANNEL,
   },
   webServer: {
-    command: "node ../../node_modules/vite/bin/vite.js",
+    command: "npm run dev",
     cwd: "../../frontend/apps/platform",
     url: "http://localhost:5100",
     reuseExistingServer: !process.env.CI,

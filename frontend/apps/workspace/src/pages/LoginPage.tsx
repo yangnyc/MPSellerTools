@@ -40,7 +40,7 @@ export default function LoginPage() {
       <Card sx={{ width: "100%", maxWidth: 420, p: 4 }}>
         <MDBox textAlign="center" mb={3}>
           <MDTypography variant="h4" fontWeight="medium">
-            MPSellerTools
+            MP Seller Tools
           </MDTypography>
           <MDTypography variant="body2" color="text">
             Sign in to your company workspace

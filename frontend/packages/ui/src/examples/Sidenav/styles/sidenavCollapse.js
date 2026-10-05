@@ -14,10 +14,19 @@ Coded by www.creative-tim.com
 */
 function collapseItem(theme, ownerState) {
   const { palette, transitions, breakpoints, boxShadows, borders, functions } = theme;
-  const { active, whiteSidenav, tintIsLightBackground, darkMode, sidenavColor, accentMatchesTint } =
-    ownerState;
+  const {
+    active,
+    whiteSidenav,
+    tintIsLightBackground,
+    darkMode,
+    sidenavColor,
+    accentMatchesTint,
+    accentNeedsDarkText,
+  } = ownerState;
 
-  const { white, transparent, dark, grey, gradients } = palette;
+  const { white, black, transparent, dark, grey, gradients } = palette;
+  const activeColor = accentNeedsDarkText ? black.main : white.main;
+  const inactiveColor = whiteSidenav || tintIsLightBackground ? dark.main : white.main;
   const { md } = boxShadows;
   const { borderWidth, borderRadius } = borders;
   const { pxToRem, rgba, linearGradient } = functions;
@@ -26,7 +35,7 @@ function collapseItem(theme, ownerState) {
     background: active
       ? linearGradient(gradients[sidenavColor].main, gradients[sidenavColor].state)
       : transparent.main,
-    color: (whiteSidenav || tintIsLightBackground) && !active ? dark.main : white.main,
+    color: active ? activeColor : inactiveColor,
     display: "flex",
     alignItems: "center",
     width: `calc(100% - ${pxToRem(32)})`,
@@ -66,9 +75,10 @@ function collapseItem(theme, ownerState) {
 
 function collapseIconBox(theme, ownerState) {
   const { palette, transitions, borders, functions } = theme;
-  const { whiteSidenav, tintIsLightBackground, active } = ownerState;
+  const { whiteSidenav, tintIsLightBackground, active, accentNeedsDarkText } = ownerState;
 
-  const { white, dark } = palette;
+  const { white, black, dark } = palette;
+  const activeColor = accentNeedsDarkText ? black.main : white.main;
   const { borderRadius } = borders;
   const { pxToRem } = functions;
 
@@ -77,7 +87,7 @@ function collapseIconBox(theme, ownerState) {
   return {
     minWidth: pxToRem(32),
     minHeight: pxToRem(32),
-    color: isLightBackground && !active ? dark.main : white.main,
+    color: active ? activeColor : isLightBackground ? dark.main : white.main,
     borderRadius: borderRadius.md,
     display: "grid",
     placeItems: "center",

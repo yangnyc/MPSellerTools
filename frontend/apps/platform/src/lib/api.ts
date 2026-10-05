@@ -14,6 +14,12 @@ async function getAntiforgeryToken(): Promise<string> {
   return cachedAntiforgeryToken;
 }
 
+// The server binds each token to the identity it was issued for, so a token
+// fetched while anonymous is rejected once signed in (and vice versa).
+export function resetAntiforgeryToken() {
+  cachedAntiforgeryToken = null;
+}
+
 export class ApiError extends Error {
   status: number;
 

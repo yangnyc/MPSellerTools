@@ -77,6 +77,30 @@ and the ported JS" below.
   now-fully-unused `handleInputPagination` function. Discovered while
   building Increment 5's Products/Orders/Tasks/Users list pages, all of
   which use this component for search + pagination.
+  Later restyled to match the page kit below (tinted header row, row hover,
+  search icon); a column with `disableSortBy` no longer shows sort arrows.
+
+## What was added on top: the page kit
+
+`frontend/packages/ui/src/examples/Kit/` is MPSellerTools code, not part of
+the upstream template. It holds the page-level building blocks that every
+signed-in page of both apps is composed from, and it carries the login pages'
+navy / sky / indigo look into the rest of the product:
+
+- `AppPage` — the page frame: `DashboardLayout`, a top bar (breadcrumb trail,
+  light/dark toggle, display settings, account menu) and `Footer`. Each app
+  wraps it in `src/components/PageShell.tsx` to pass in its own auth state.
+- `PageHeader`, `Hero`, `Section`, `Surface`, `StatCard`, `StatusPill`,
+  `FilterTabs`, `StateBlock` (loading / empty / error), `InlineAlert`,
+  `Identity`, `DetailList`, `KitDialog`.
+- `tokens.js` resolves every kit colour for light or dark mode in one place;
+  `format.js` holds the shared money, date, and role-label formatting.
+
+The kit sits beside the template components rather than replacing them: the
+`Sidenav`, `Configurator`, `DataTable`, `MDButton`, `MDInput`, `MDSnackbar`,
+and both MUI themes are still the upstream ones described above. The kit has
+named exports, so it is typed by its own `declare module "examples/Kit"` block
+in each app's `src/types/mpsellertools-ui.d.ts`.
 
 ## What was removed entirely
 

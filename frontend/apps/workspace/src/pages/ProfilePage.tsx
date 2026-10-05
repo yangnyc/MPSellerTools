@@ -1,32 +1,59 @@
 import { useState } from "react";
-import Card from "@mui/material/Card";
+import Box from "@mui/material/Box";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
-import MDBox from "components/MDBox";
-import MDTypography from "components/MDTypography";
+import Tooltip from "@mui/material/Tooltip";
 import MDButton from "components/MDButton";
 import MDInput from "components/MDInput";
-import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import WorkspaceNavbar from "../components/WorkspaceNavbar";
-import Footer from "examples/Footer";
+import {
+  DetailList,
+  InitialsAvatar,
+  InlineAlert,
+  PageHeader,
+  Section,
+  StatusPill,
+  Surface,
+  roleLabel,
+  useKit,
+} from "examples/Kit";
+import PageShell from "../components/PageShell";
 import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
 import { apiFetch, ApiError } from "../lib/api";
 
-const PASSWORD_RULES = "At least 12 characters, with an uppercase letter, a lowercase letter, and a number.";
+const PASSWORD_RULES: { label: string; error: string; test: (password: string) => boolean }[] = [
+  {
+    label: "At least 12 characters",
+    error: "New password must be at least 12 characters.",
+    test: (password) => password.length >= 12,
+  },
+  {
+    label: "An uppercase letter",
+    error: "New password must include an uppercase letter.",
+    test: (password) => /[A-Z]/.test(password),
+  },
+  {
+    label: "A lowercase letter",
+    error: "New password must include a lowercase letter.",
+    test: (password) => /[a-z]/.test(password),
+  },
+  {
+    label: "A number",
+    error: "New password must include a number.",
+    test: (password) => /[0-9]/.test(password),
+  },
+];
 
 function validateNewPassword(password: string): string | null {
-  if (password.length < 12) return "New password must be at least 12 characters.";
-  if (!/[A-Z]/.test(password)) return "New password must include an uppercase letter.";
-  if (!/[a-z]/.test(password)) return "New password must include a lowercase letter.";
-  if (!/[0-9]/.test(password)) return "New password must include a number.";
-  return null;
+  return PASSWORD_RULES.find((rule) => !rule.test(password))?.error ?? null;
 }
 
 export default function ProfilePage() {
   const { user, logout, updateDisplayName } = useAuth();
   const { notify } = useSnackbar();
+  const kit = useKit();
+  const { c } = kit;
 
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(user?.displayName ?? "");
@@ -72,12 +99,12 @@ export default function ProfilePage() {
   };
 
   const passwordFieldsFilled = currentPassword && newPassword && confirmPassword;
-  const passwordError =
-    newPassword && confirmPassword && newPassword !== confirmPassword
-      ? "New password and confirmation do not match."
-      : newPassword
-        ? validateNewPassword(newPassword)
-        : null;
+  const mismatch = Boolean(newPassword && confirmPassword && newPassword !== confirmPassword);
+  const passwordError = mismatch
+    ? "New password and confirmation do not match."
+    : newPassword
+      ? validateNewPassword(newPassword)
+      : null;
 
   const submit = async () => {
     setError(null);
@@ -120,6 +147,7 @@ export default function ProfilePage() {
         disableRipple
         aria-label={showPasswords ? "Hide passwords" : "Show passwords"}
         onClick={() => setShowPasswords((v) => !v)}
+        sx={{ color: c.muted }}
       >
         <Icon fontSize="small">{showPasswords ? "visibility_off" : "visibility"}</Icon>
       </IconButton>
@@ -127,80 +155,98 @@ export default function ProfilePage() {
   );
 
   return (
-    <DashboardLayout>
-      <WorkspaceNavbar onLogout={logout} />
-      <MDBox py={3}>
-        <Card sx={{ maxWidth: 480, mb: 3 }}>
-          <MDBox p={3}>
-            <MDTypography variant="h5" mb={2}>
-              Profile
-            </MDTypography>
+    <PageShell>
+      <PageHeader icon="person" title="Profile" subtitle="Your account details and password." />
 
-            {editingName ? (
-              <MDBox display="flex" alignItems="center" gap={1} mb={1}>
-                <MDInput
-                  size="small"
-                  label="Name"
-                  fullWidth
-                  autoFocus
-                  value={nameDraft}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNameDraft(e.target.value)}
-                  onKeyDown={(e: React.KeyboardEvent) => {
-                    if (e.key === "Enter") saveName();
-                    if (e.key === "Escape") cancelEditingName();
-                  }}
-                />
-                <IconButton
-                  size="small"
-                  color="info"
-                  aria-label="Save name"
-                  disabled={savingName}
-                  onClick={saveName}
-                >
-                  <Icon>check</Icon>
-                </IconButton>
-                <IconButton size="small" aria-label="Cancel" disabled={savingName} onClick={cancelEditingName}>
-                  <Icon>close</Icon>
-                </IconButton>
-              </MDBox>
-            ) : (
-              <MDBox display="flex" alignItems="center" gap={1}>
-                <MDTypography variant="body2">Name: {user?.displayName}</MDTypography>
-                <IconButton size="small" aria-label="Edit name" onClick={startEditingName}>
-                  <Icon fontSize="small">edit</Icon>
-                </IconButton>
-              </MDBox>
-            )}
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "2fr 3fr" }, alignItems: "start", gap: 3 }}>
+        <Surface sx={{ p: 3 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+            <InitialsAvatar name={user?.displayName || user?.email} size={64} />
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              {editingName ? (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <MDInput
+                    size="small"
+                    label="Name"
+                    fullWidth
+                    autoFocus
+                    value={nameDraft}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNameDraft(e.target.value)}
+                    onKeyDown={(e: React.KeyboardEvent) => {
+                      if (e.key === "Enter") saveName();
+                      if (e.key === "Escape") cancelEditingName();
+                    }}
+                  />
+                  <IconButton size="small" color="info" aria-label="Save name" disabled={savingName} onClick={saveName}>
+                    <Icon>check</Icon>
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    aria-label="Cancel"
+                    disabled={savingName}
+                    onClick={cancelEditingName}
+                    sx={{ color: c.muted }}
+                  >
+                    <Icon>close</Icon>
+                  </IconButton>
+                </Box>
+              ) : (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Box
+                    component="h2"
+                    sx={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      fontSize: "1.25rem",
+                      fontWeight: 700,
+                      color: c.text,
+                    }}
+                  >
+                    {user?.displayName}
+                  </Box>
+                  <Tooltip title="Edit name">
+                    <IconButton size="small" aria-label="Edit name" onClick={startEditingName} sx={{ color: c.muted }}>
+                      <Icon fontSize="small">edit</Icon>
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              )}
+              <Box sx={{ fontSize: "0.875rem", color: c.muted, overflowWrap: "anywhere" }}>{user?.email}</Box>
+            </Box>
+          </Box>
+          <DetailList
+            columns={1}
+            items={[
+              {
+                label: "Role",
+                value: user?.roles.length ? (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                    {user.roles.map((role) => (
+                      <StatusPill key={role} tone="primary" label={roleLabel(role)} />
+                    ))}
+                  </Box>
+                ) : (
+                  "—"
+                ),
+              },
+            ]}
+          />
+        </Surface>
 
-            <MDTypography variant="body2">Email: {user?.email}</MDTypography>
-            <MDTypography variant="body2">Role: {user?.roles.join(", ") || "—"}</MDTypography>
-          </MDBox>
-        </Card>
-        <Card sx={{ maxWidth: 480 }}>
-          <MDBox
+        <Section icon="lock" title="Change password" subtitle="Use a password you don't use anywhere else.">
+          <Box
             component="form"
-            p={3}
+            noValidate
             onSubmit={(e: React.FormEvent) => {
               e.preventDefault();
               submit();
             }}
           >
-            <MDTypography variant="h5" mb={2}>
-              Change password
-            </MDTypography>
-            <MDTypography variant="caption" color="text" mb={2} display="block">
-              {PASSWORD_RULES}
-            </MDTypography>
-            {error && (
-              <MDBox mb={2}>
-                <MDTypography variant="caption" color="error">
-                  {error}
-                </MDTypography>
-              </MDBox>
-            )}
+            {error && <InlineAlert sx={{ mb: 2.5 }}>{error}</InlineAlert>}
             {/* Chrome's password manager pairs the nearest preceding text input with any
                 password field on the page — without a dedicated username field right here,
-                it reaches past this form for the navbar search box instead. */}
+                it can attach the saved password to an unrelated field instead. */}
             <input
               type="text"
               name="username"
@@ -211,47 +257,70 @@ export default function ProfilePage() {
               tabIndex={-1}
               style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 }}
             />
-            <MDBox mb={2}>
-              <MDInput
-                type={showPasswords ? "text" : "password"}
-                label="Current password"
-                autoComplete="current-password"
-                fullWidth
-                value={currentPassword}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentPassword(e.target.value)}
-                InputProps={{ endAdornment: passwordAdornment }}
-              />
-            </MDBox>
-            <MDBox mb={2}>
-              <MDInput
-                type={showPasswords ? "text" : "password"}
-                label="New password"
-                autoComplete="new-password"
-                fullWidth
-                value={newPassword}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
-                InputProps={{ endAdornment: passwordAdornment }}
-              />
-            </MDBox>
-            <MDBox mb={1}>
-              <MDInput
-                type={showPasswords ? "text" : "password"}
-                label="Confirm new password"
-                autoComplete="new-password"
-                fullWidth
-                value={confirmPassword}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
-                InputProps={{ endAdornment: passwordAdornment }}
-              />
-            </MDBox>
-            {passwordError && (
-              <MDBox mb={2}>
-                <MDTypography variant="caption" color="error">
-                  {passwordError}
-                </MDTypography>
-              </MDBox>
-            )}
-            <MDBox mt={2}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, alignItems: "start", gap: 3 }}>
+              <Box sx={{ display: "grid", gap: 2.5 }}>
+                <MDInput
+                  type={showPasswords ? "text" : "password"}
+                  label="Current password"
+                  autoComplete="current-password"
+                  fullWidth
+                  value={currentPassword}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentPassword(e.target.value)}
+                  InputProps={{ endAdornment: passwordAdornment }}
+                />
+                <MDInput
+                  type={showPasswords ? "text" : "password"}
+                  label="New password"
+                  autoComplete="new-password"
+                  fullWidth
+                  value={newPassword}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
+                  InputProps={{ endAdornment: passwordAdornment }}
+                />
+                <MDInput
+                  type={showPasswords ? "text" : "password"}
+                  label="Confirm new password"
+                  autoComplete="new-password"
+                  fullWidth
+                  error={mismatch}
+                  value={confirmPassword}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
+                  InputProps={{ endAdornment: passwordAdornment }}
+                />
+              </Box>
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: "12px",
+                  backgroundColor: c.surfaceAlt,
+                  border: `1px solid ${c.border}`,
+                }}
+              >
+                <Box sx={{ mb: 1, fontSize: "0.8125rem", fontWeight: 700, color: c.text }}>Your new password needs</Box>
+                {[
+                  ...PASSWORD_RULES.map((rule) => ({ label: rule.label, met: rule.test(newPassword) })),
+                  { label: "To match the confirmation", met: Boolean(newPassword) && newPassword === confirmPassword },
+                ].map((rule) => (
+                  <Box
+                    key={rule.label}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      py: 0.375,
+                      fontSize: "0.8125rem",
+                      color: rule.met ? kit.tone("success").fg : c.muted,
+                    }}
+                  >
+                    <Icon sx={{ fontSize: "1rem !important" }}>
+                      {rule.met ? "check_circle" : "radio_button_unchecked"}
+                    </Icon>
+                    {rule.label}
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
               <MDButton
                 type="submit"
                 variant="gradient"
@@ -260,11 +329,10 @@ export default function ProfilePage() {
               >
                 {submitting ? "Changing…" : "Change password"}
               </MDButton>
-            </MDBox>
-          </MDBox>
-        </Card>
-      </MDBox>
-      <Footer />
-    </DashboardLayout>
+            </Box>
+          </Box>
+        </Section>
+      </Box>
+    </PageShell>
   );
 }

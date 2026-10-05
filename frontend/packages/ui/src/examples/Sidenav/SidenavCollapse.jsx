@@ -46,6 +46,9 @@ function SidenavCollapse({ icon, name, active = false, ...rest }) {
   // identical to the sidenav's own background and the highlight all but
   // disappears — collapseItem adds a visible edge in that case.
   const accentMatchesTint = Boolean(sidenavTint) && sidenavTint === sidenavColor;
+  // The active pill is filled with the accent, so a light accent needs dark
+  // text and icons on it.
+  const accentNeedsDarkText = sidenavTintsNeedingDarkText.includes(sidenavColor);
 
   return (
     <ListItem component="li">
@@ -59,6 +62,7 @@ function SidenavCollapse({ icon, name, active = false, ...rest }) {
             darkMode,
             sidenavColor,
             accentMatchesTint,
+            accentNeedsDarkText,
           })
         }
       >
@@ -69,6 +73,7 @@ function SidenavCollapse({ icon, name, active = false, ...rest }) {
               tintIsLightBackground,
               darkMode,
               active,
+              accentNeedsDarkText,
             })
           }
         >

@@ -1,10 +1,8 @@
 import { useEffect, type ReactNode } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import Icon from "@mui/material/Icon";
-import MDBox from "components/MDBox";
 import Sidenav from "examples/Sidenav";
 import Configurator from "examples/Configurator";
-import { useMaterialUIController, setOpenConfigurator } from "context";
+import { useMaterialUIController } from "context";
 import routes, { type AppRoute } from "./routes";
 import LoginPage from "./pages/LoginPage";
 import { useAuth } from "./auth/useAuth";
@@ -34,40 +32,14 @@ function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
-  const [controller, dispatch] = useMaterialUIController();
-  const { layout, openConfigurator, sidenavColor } = controller;
+  const [controller] = useMaterialUIController();
+  const { layout, sidenavColor } = controller;
   const { pathname } = useLocation();
   const { status } = useAuth();
 
   useEffect(() => {
     document.documentElement.scrollTop = 0;
   }, [pathname]);
-
-  const handleConfiguratorOpen = () => setOpenConfigurator(dispatch, !openConfigurator);
-
-  const configsButton = (
-    <MDBox
-      display="flex"
-      justifyContent="center"
-      alignItems="center"
-      width="3.25rem"
-      height="3.25rem"
-      bgColor="white"
-      shadow="sm"
-      borderRadius="50%"
-      position="fixed"
-      right="2rem"
-      bottom="2rem"
-      zIndex={99}
-      color="dark"
-      sx={{ cursor: "pointer" }}
-      onClick={handleConfiguratorOpen}
-    >
-      <Icon fontSize="small" color="inherit">
-        settings
-      </Icon>
-    </MDBox>
-  );
 
   const showChrome = layout === "dashboard" && pathname !== "/login" && status === "authenticated";
   const sidenavRoutes = routes.filter((route) => !route.hideFromSidenav);
@@ -76,9 +48,8 @@ export default function App() {
     <>
       {showChrome && (
         <>
-          <Sidenav color={sidenavColor} brandName="MPSellerTools" routes={sidenavRoutes} />
+          <Sidenav color={sidenavColor} brandName="MP Seller Tools" routes={sidenavRoutes} />
           <Configurator />
-          {configsButton}
         </>
       )}
       <Routes>

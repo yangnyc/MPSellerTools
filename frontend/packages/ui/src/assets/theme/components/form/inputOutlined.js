@@ -51,6 +51,15 @@ const inputOutlined = {
       color: grey[700],
       padding: pxToRem(12),
       backgroundColor: transparent.main,
+
+      // keep the browser autofill from painting its own light background over the input
+      "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus": {
+        WebkitBoxShadow: "none",
+        WebkitTextFillColor: grey[700],
+        caretColor: grey[700],
+        borderRadius: "inherit",
+        transition: "background-color 600000s 0s, color 600000s 0s",
+      },
     },
 
     inputSizeSmall: {

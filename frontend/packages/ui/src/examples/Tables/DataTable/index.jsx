@@ -43,6 +43,9 @@ import MDPagination from "components/MDPagination";
 import DataTableHeadCell from "examples/Tables/DataTable/DataTableHeadCell";
 import DataTableBodyCell from "examples/Tables/DataTable/DataTableBodyCell";
 
+// MP Seller Tools page kit colours (light/dark aware)
+import { useKit } from "examples/Kit/tokens";
+
 function DataTable({
   entriesPerPage = { defaultValue: 10, entries: [5, 10, 15, 20, 25] },
   canSearch = false,
@@ -56,6 +59,7 @@ function DataTable({
   const entries = entriesPerPage.entries
     ? entriesPerPage.entries.map((el) => el.toString())
     : ["5", "10", "15", "20", "25"];
+  const { c } = useKit();
   const columns = useMemo(() => table.columns, [table]);
   const data = useMemo(() => table.rows, [table]);
 
@@ -125,7 +129,9 @@ function DataTable({
   const setSortedValue = (column) => {
     let sortedValue;
 
-    if (isSorted && column.isSorted) {
+    if (!column.canSort) {
+      sortedValue = false;
+    } else if (isSorted && column.isSorted) {
       sortedValue = column.isSortedDesc ? "desc" : "asce";
     } else if (isSorted) {
       sortedValue = "none";
@@ -142,7 +148,7 @@ function DataTable({
   return (
     <TableContainer sx={{ boxShadow: "none" }}>
       {entriesPerPage || canSearch ? (
-        <MDBox display="flex" justifyContent="space-between" alignItems="center" p={3}>
+        <MDBox display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5} px={3} py={2}>
           {entriesPerPage && (
             <MDBox display="flex" alignItems="center">
               <Autocomplete
@@ -162,9 +168,16 @@ function DataTable({
             </MDBox>
           )}
           {canSearch && (
-            <MDBox width="12rem" ml="auto">
+            <MDBox width="16rem" maxWidth="100%" ml="auto">
               <MDInput
                 placeholder="Search..."
+                InputProps={{
+                  startAdornment: (
+                    <Icon fontSize="small" sx={{ mr: 0.75, color: c.subtle }}>
+                      search
+                    </Icon>
+                  ),
+                }}
                 value={search}
                 size="small"
                 fullWidth
@@ -179,35 +192,55 @@ function DataTable({
       ) : null}
       <Table {...getTableProps()}>
         <MDBox component="thead">
-          {headerGroups.map((headerGroup) => (
-            <TableRow {...headerGroup.getHeaderGroupProps()}>
-              {headerGroup.headers.map((column) => (
-                <DataTableHeadCell
-                  {...column.getHeaderProps(isSorted && column.getSortByToggleProps())}
-                  width={column.width ? column.width : "auto"}
-                  align={column.align ? column.align : "left"}
-                  sorted={setSortedValue(column)}
-                >
-                  {column.render("Header")}
-                </DataTableHeadCell>
-              ))}
-            </TableRow>
-          ))}
+          {headerGroups.map((headerGroup) => {
+            // react-table's prop getters include `key`, which React requires
+            // to be passed directly rather than through a spread.
+            const { key: headerGroupKey, ...headerGroupProps } = headerGroup.getHeaderGroupProps();
+            return (
+              <TableRow key={headerGroupKey} {...headerGroupProps}>
+                {headerGroup.headers.map((column) => {
+                  const { key: headerKey, ...headerProps } = column.getHeaderProps(
+                    isSorted && column.getSortByToggleProps()
+                  );
+                  return (
+                    <DataTableHeadCell
+                      key={headerKey}
+                      {...headerProps}
+                      width={column.width ? column.width : "auto"}
+                      align={column.align ? column.align : "left"}
+                      sorted={setSortedValue(column)}
+                    >
+                      {column.render("Header")}
+                    </DataTableHeadCell>
+                  );
+                })}
+              </TableRow>
+            );
+          })}
         </MDBox>
         <TableBody {...getTableBodyProps()}>
           {page.map((row, key) => {
             prepareRow(row);
+            const { key: rowKey, ...rowProps } = row.getRowProps();
             return (
-              <TableRow {...row.getRowProps()}>
-                {row.cells.map((cell) => (
-                  <DataTableBodyCell
-                    noBorder={noEndBorder && page.length - 1 === key}
-                    align={cell.column.align ? cell.column.align : "left"}
-                    {...cell.getCellProps()}
-                  >
-                    {cell.render("Cell")}
-                  </DataTableBodyCell>
-                ))}
+              <TableRow
+                key={rowKey}
+                {...rowProps}
+                sx={{ transition: "background-color 120ms ease", "&:hover": { backgroundColor: c.hover } }}
+              >
+                {row.cells.map((cell) => {
+                  const { key: cellKey, ...cellProps } = cell.getCellProps();
+                  return (
+                    <DataTableBodyCell
+                      key={cellKey}
+                      noBorder={noEndBorder && page.length - 1 === key}
+                      align={cell.column.align ? cell.column.align : "left"}
+                      {...cellProps}
+                    >
+                      {cell.render("Cell")}
+                    </DataTableBodyCell>
+                  );
+                })}
               </TableRow>
             );
           })}
@@ -219,7 +252,8 @@ function DataTable({
         flexDirection={{ xs: "column", sm: "row" }}
         justifyContent="space-between"
         alignItems={{ xs: "flex-start", sm: "center" }}
-        p={!showTotalEntries && pageOptions.length === 1 ? 0 : 3}
+        px={!showTotalEntries && pageOptions.length === 1 ? 0 : 3}
+        py={!showTotalEntries && pageOptions.length === 1 ? 0 : 2}
       >
         {showTotalEntries && (
           <MDBox mb={{ xs: 3, sm: 0 }}>

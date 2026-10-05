@@ -33,7 +33,7 @@ test("search stays controlled and row counts reflect filtered results", async ({
 });
 
 test("sidebar icons follow text contrast and style survives resizing", async ({ page }) => {
-  const sidebar = page.locator(".MuiDrawer-paper").filter({ has: page.getByText("MPSellerTools", { exact: true }) });
+  const sidebar = page.locator(".MuiDrawer-paper").filter({ has: page.getByText("MP Seller Tools", { exact: true }) });
   const dashboardIcon = sidebar.locator('a[href="/dashboard"] .MuiIcon-root');
   await expect(dashboardIcon).toHaveCSS("color", "rgb(255, 255, 255)");
   await page.getByText("settings", { exact: true }).last().click();

@@ -19,16 +19,21 @@ import PropTypes from "prop-types";
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
 
+// MP Seller Tools page kit colours (light/dark aware)
+import { useKit } from "examples/Kit/tokens";
+
 function DataTableBodyCell({ noBorder = false, align = "left", children }) {
+  const { c } = useKit();
+
   return (
     <MDBox
       component="td"
       textAlign={align}
       py={1.5}
       px={3}
-      sx={({ palette: { light }, typography: { size }, borders: { borderWidth } }) => ({
+      sx={({ typography: { size }, borders: { borderWidth } }) => ({
         fontSize: size.sm,
-        borderBottom: noBorder ? "none" : `${borderWidth[1]} solid ${light.main}`,
+        borderBottom: noBorder ? "none" : `${borderWidth[1]} solid ${c.border}`,
       })}
     >
       <MDBox

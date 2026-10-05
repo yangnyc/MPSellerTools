@@ -1,77 +1,215 @@
 import { useEffect, useState } from "react";
-import Grid from "@mui/material/Grid";
-import MDBox from "components/MDBox";
-import MDTypography from "components/MDTypography";
-import ComplexStatisticsCard from "examples/Cards/StatisticsCards/ComplexStatisticsCard";
-import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import WorkspaceNavbar from "../components/WorkspaceNavbar";
-import Footer from "examples/Footer";
+import { Link as RouterLink } from "react-router-dom";
+import Box from "@mui/material/Box";
+import Icon from "@mui/material/Icon";
+import MDButton from "components/MDButton";
+import {
+  Hero,
+  InlineAlert,
+  Section,
+  StatCard,
+  StateBlock,
+  StatusPill,
+  formatDateTime,
+  formatMoney,
+  timeAgo,
+  useKit,
+} from "examples/Kit";
+import PageShell from "../components/PageShell";
 import { useAuth } from "../auth/useAuth";
-import { DashboardApi } from "../api/resources";
-import type { TenantDashboard } from "../api/types";
+import { DashboardApi, OrdersApi, TasksApi } from "../api/resources";
+import {
+  ORDER_STATUS_LABELS,
+  TASK_STATUS_LABELS,
+  type Order,
+  type TenantDashboard,
+  type WorkItem,
+} from "../api/types";
+import { ORDER_STATUS_TONE, TASK_STATUS_TONE } from "../lib/status";
+
+const LIST_LIMIT = 5;
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const { c } = useKit();
   const isTenantAdmin = user?.roles.includes("TenantAdmin") ?? false;
+
   const [data, setData] = useState<TenantDashboard | null>(null);
+  const [failed, setFailed] = useState(false);
+  // The server already scopes both lists to what this user may see: the whole
+  // company for a TenantAdmin, only their own assignments for an Employee.
+  const [orders, setOrders] = useState<Order[] | null>(null);
+  const [tasks, setTasks] = useState<WorkItem[] | null>(null);
 
   useEffect(() => {
     DashboardApi.get()
       .then(setData)
-      .catch(() => setData(null));
+      .catch(() => setFailed(true));
+    OrdersApi.list()
+      .then(setOrders)
+      .catch(() => setOrders([]));
+    TasksApi.list()
+      .then(setTasks)
+      .catch(() => setTasks([]));
   }, []);
 
+  const firstName = (user?.displayName || user?.email || "").split(/[\s@]/)[0];
+  const recentOrders = orders
+    ? [...orders].sort((a, b) => b.createdAtUtc.localeCompare(a.createdAtUtc)).slice(0, LIST_LIMIT)
+    : null;
+  const openTasks = tasks ? tasks.filter((t) => t.status === 0 || t.status === 1).slice(0, LIST_LIMIT) : null;
+
+  const rowSx = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 2,
+    px: 3,
+    py: 1.75,
+    borderBottom: `1px solid ${c.border}`,
+    "&:last-of-type": { borderBottom: "none" },
+  };
+
+  const viewAll = (to: string) => (
+    <MDButton component={RouterLink} to={to} variant="text" color="info" size="small">
+      View all
+    </MDButton>
+  );
+
   return (
-    <DashboardLayout>
-      <WorkspaceNavbar onLogout={logout} />
-      <MDBox py={3}>
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <MDTypography variant="h4" fontWeight="medium">
-              {isTenantAdmin ? "Company Dashboard" : "My Dashboard"}
-            </MDTypography>
-            <MDTypography variant="body2" color="text" mb={2}>
-              {isTenantAdmin
-                ? "Metrics calculated from your company's products, orders, and tasks."
-                : "Your assigned orders and tasks."}
-            </MDTypography>
-          </Grid>
-          {data && (
-            <>
-              {isTenantAdmin && (
-                <Grid item xs={12} md={6} lg={3}>
-                  <ComplexStatisticsCard
-                    color="info"
-                    icon="inventory_2"
-                    title="Catalog"
-                    count={data.productCount}
-                    percentage={{ color: "info", amount: "", label: "active products" }}
-                  />
-                </Grid>
-              )}
-              <Grid item xs={12} md={6} lg={3}>
-                <ComplexStatisticsCard
-                  color="success"
-                  icon="receipt_long"
-                  title="Open orders"
-                  count={data.openOrderCount}
-                  percentage={{ color: "success", amount: "", label: `of ${data.totalOrderCount} total` }}
-                />
-              </Grid>
-              <Grid item xs={12} md={6} lg={3}>
-                <ComplexStatisticsCard
-                  color="warning"
-                  icon="checklist"
-                  title="Open tasks"
-                  count={data.openTaskCount}
-                  percentage={{ color: "warning", amount: "", label: `of ${data.totalTaskCount} total` }}
-                />
-              </Grid>
-            </>
+    <PageShell>
+      <Hero
+        eyebrow={isTenantAdmin ? "Company Dashboard" : "My Dashboard"}
+        title={firstName ? `Welcome back, ${firstName}` : "Welcome back"}
+        subtitle={
+          isTenantAdmin
+            ? "Live numbers from your company's products, orders, and tasks."
+            : "The orders and tasks currently assigned to you."
+        }
+        actions={
+          <>
+            <MDButton component={RouterLink} to="/orders" color="white" startIcon={<Icon>receipt_long</Icon>}>
+              Orders
+            </MDButton>
+            <MDButton component={RouterLink} to="/tasks" variant="outlined" color="white" startIcon={<Icon>checklist</Icon>}>
+              Tasks
+            </MDButton>
+          </>
+        }
+      />
+
+      {failed && (
+        <InlineAlert sx={{ mb: 3 }}>The dashboard numbers could not be loaded. Reload the page to try again.</InlineAlert>
+      )}
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gap: 3,
+          mb: 3,
+        }}
+      >
+        {isTenantAdmin && (
+          <StatCard
+            icon="inventory_2"
+            tone="primary"
+            label="Catalog"
+            value={data?.productCount}
+            hint="Active products"
+            to="/products"
+          />
+        )}
+        <StatCard
+          icon="receipt_long"
+          tone="info"
+          label="Open orders"
+          value={data?.openOrderCount}
+          hint={data ? `of ${data.totalOrderCount} total` : undefined}
+          progress={data && data.totalOrderCount > 0 ? data.openOrderCount / data.totalOrderCount : undefined}
+          to="/orders"
+        />
+        <StatCard
+          icon="checklist"
+          tone="warning"
+          label="Open tasks"
+          value={data?.openTaskCount}
+          hint={data ? `of ${data.totalTaskCount} total` : undefined}
+          progress={data && data.totalTaskCount > 0 ? data.openTaskCount / data.totalTaskCount : undefined}
+          to="/tasks"
+        />
+      </Box>
+
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 3 }}>
+        <Section
+          icon="receipt_long"
+          title={isTenantAdmin ? "Recent orders" : "My orders"}
+          subtitle="Newest first"
+          actions={viewAll("/orders")}
+          flush
+        >
+          {!recentOrders && <StateBlock kind="loading" title="Loading orders" />}
+          {recentOrders?.length === 0 && (
+            <StateBlock
+              icon="receipt_long"
+              title="No orders"
+              message={isTenantAdmin ? "Orders you create will show up here." : "No orders are currently assigned to you."}
+            />
           )}
-        </Grid>
-      </MDBox>
-      <Footer />
-    </DashboardLayout>
+          {recentOrders?.map((order) => (
+            <Box key={order.id} sx={rowSx}>
+              <Box sx={{ minWidth: 0 }}>
+                <Box sx={{ fontSize: "0.875rem", fontWeight: 500, whiteSpace: "nowrap", color: c.text }}>{order.orderNumber}</Box>
+                <Box sx={{ fontSize: "0.75rem", color: c.muted }} title={formatDateTime(order.createdAtUtc)}>
+                  {order.items.length} {order.items.length === 1 ? "item" : "items"} · {timeAgo(order.createdAtUtc)}
+                </Box>
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <StatusPill tone={ORDER_STATUS_TONE[order.status]} label={ORDER_STATUS_LABELS[order.status]} />
+                <Box sx={{ minWidth: 72, textAlign: "right", fontSize: "0.875rem", fontWeight: 700, color: c.text }}>
+                  {formatMoney(order.total)}
+                </Box>
+              </Box>
+            </Box>
+          ))}
+        </Section>
+
+        <Section
+          icon="checklist"
+          tone="warning"
+          title={isTenantAdmin ? "Open tasks" : "My open tasks"}
+          subtitle="Not yet done or cancelled"
+          actions={viewAll("/tasks")}
+          flush
+        >
+          {!openTasks && <StateBlock kind="loading" title="Loading tasks" />}
+          {openTasks?.length === 0 && (
+            <StateBlock icon="task_alt" title="All caught up" message="There are no open tasks right now." />
+          )}
+          {openTasks?.map((task) => (
+            <Box key={task.id} sx={rowSx}>
+              <Box sx={{ minWidth: 0 }}>
+                <Box
+                  sx={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    fontSize: "0.875rem",
+                    fontWeight: 500,
+                    color: c.text,
+                  }}
+                >
+                  {task.title}
+                </Box>
+                <Box sx={{ fontSize: "0.75rem", color: c.muted }}>
+                  {task.dueAtUtc ? `Due ${formatDateTime(task.dueAtUtc)}` : `Updated ${timeAgo(task.updatedAtUtc)}`}
+                </Box>
+              </Box>
+              <StatusPill tone={TASK_STATUS_TONE[task.status]} label={TASK_STATUS_LABELS[task.status]} />
+            </Box>
+          ))}
+        </Section>
+      </Box>
+    </PageShell>
   );
 }

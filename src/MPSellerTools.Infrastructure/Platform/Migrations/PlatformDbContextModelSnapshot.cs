@@ -217,6 +217,10 @@ namespace MPSellerTools.Infrastructure.Platform.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("ThemeSettingsJson")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
 

@@ -2,9 +2,9 @@ import { useEffect } from "react";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import { useMaterialUIController } from "context";
-import theme from "assets/theme";
-import themeDark from "assets/theme-dark";
+import muiThemeFor from "assets/themes";
 import { AuthProvider } from "./auth/AuthContext";
+import ThemeSync from "./auth/ThemeSync";
 import { SnackbarProvider } from "./components/SnackbarProvider";
 import App from "./App";
 
@@ -13,7 +13,7 @@ import App from "./App";
 // otherwise the snackbar falls back to MUI's default theme, which lacks the
 // custom theme.functions/palette.gradients these components read from.
 export default function ThemedApp() {
-  const [{ darkMode }] = useMaterialUIController();
+  const [{ themeName, darkMode }] = useMaterialUIController();
 
   // Roboto loads via a render-blocking-free <link> with `display=swap`, so
   // the first paint can use a fallback font. MUI measures each outlined
@@ -30,9 +30,10 @@ export default function ThemedApp() {
   }, []);
 
   return (
-    <ThemeProvider theme={darkMode ? themeDark : theme}>
+    <ThemeProvider theme={muiThemeFor(themeName, darkMode)}>
       <CssBaseline />
       <AuthProvider>
+        <ThemeSync />
         <SnackbarProvider>
           <App />
         </SnackbarProvider>

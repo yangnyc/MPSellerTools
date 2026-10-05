@@ -1,40 +1,54 @@
-import { useCallback, useEffect, useState } from "react";
-import Card from "@mui/material/Card";
-import Chip from "@mui/material/Chip";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
-import MDBox from "components/MDBox";
-import MDTypography from "components/MDTypography";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Box from "@mui/material/Box";
+import Icon from "@mui/material/Icon";
 import MDButton from "components/MDButton";
 import MDInput from "components/MDInput";
 import DataTable from "examples/Tables/DataTable";
-import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import WorkspaceNavbar from "../components/WorkspaceNavbar";
-import Footer from "examples/Footer";
+import {
+  FilterTabs,
+  Identity,
+  InlineAlert,
+  KitDialog,
+  PageHeader,
+  Section,
+  StateBlock,
+  StatusPill,
+  Surface,
+  formatDateTime,
+  timeAgo,
+  useKit,
+} from "examples/Kit";
+import PageShell from "../components/PageShell";
 import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
 import { ApiError } from "../lib/api";
 import { TasksApi, UsersApi } from "../api/resources";
 import { TASK_STATUS_LABELS, type TaskStatus, type UserSummary, type WorkItem } from "../api/types";
+import { NEXT_STATUSES, TASK_STATUS_TONE } from "../lib/status";
 
-const NEXT_STATUSES: Record<TaskStatus, TaskStatus[]> = {
-  0: [1, 3],
-  1: [2, 3],
-  2: [],
-  3: [],
+type View = "board" | "table";
+
+const TASK_STATUSES: TaskStatus[] = [0, 1, 2, 3];
+
+const NEXT_ACTION_LABELS: Record<TaskStatus, string> = {
+  0: "Reopen",
+  1: "Start",
+  2: "Mark done",
+  3: "Cancel task",
 };
 
 export default function TasksPage() {
   const { user, logout } = useAuth();
   const { notify } = useSnackbar();
+  const kit = useKit();
+  const { c } = kit;
   const isTenantAdmin = user?.roles.includes("TenantAdmin") ?? false;
 
   const [tasks, setTasks] = useState<WorkItem[] | null>(null);
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<View>("board");
 
   const [formOpen, setFormOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -54,11 +68,11 @@ export default function TasksPage() {
 
   useEffect(fetchData, [fetchData]);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     setError(null);
     fetchData();
-  };
+  }, [fetchData]);
 
   const openCreate = () => {
     setTitle("");
@@ -91,130 +105,317 @@ export default function TasksPage() {
     }
   };
 
-  const changeStatus = async (task: WorkItem, status: TaskStatus) => {
-    try {
-      await TasksApi.changeStatus(task.id, status, task.rowVersion);
-      notify(`Task "${task.title}" moved to ${TASK_STATUS_LABELS[status]}.`, "success");
-      load();
-    } catch (err) {
-      notify(err instanceof ApiError ? err.message : "Status change failed.", "error");
-    }
-  };
+  const changeStatus = useCallback(
+    async (task: WorkItem, status: TaskStatus) => {
+      try {
+        await TasksApi.changeStatus(task.id, status, task.rowVersion);
+        notify(`Task "${task.title}" moved to ${TASK_STATUS_LABELS[status]}.`, "success");
+        load();
+      } catch (err) {
+        notify(err instanceof ApiError ? err.message : "Status change failed.", "error");
+      }
+    },
+    [notify, load]
+  );
 
-  const userNameById = (id: string) => users.find((u) => u.id === id)?.displayName ?? "Unknown";
+  const assigneeName = useCallback(
+    (id: string) => users.find((u) => u.id === id)?.displayName ?? "Unknown",
+    [users]
+  );
 
-  const columns = [
-    { Header: "Title", accessor: "title" },
-    { Header: "Status", accessor: "status" },
-    ...(isTenantAdmin ? [{ Header: "Assigned to", accessor: "assignedTo" }] : []),
-    { Header: "Actions", accessor: "actions", align: "right" as const },
-  ];
+  const statusActions = useCallback(
+    (task: WorkItem) =>
+      NEXT_STATUSES[task.status].map((next) => (
+        <MDButton
+          key={next}
+          size="small"
+          variant="outlined"
+          color={next === 3 ? "secondary" : "info"}
+          onClick={() => changeStatus(task, next as TaskStatus)}
+        >
+          {NEXT_ACTION_LABELS[next as TaskStatus]}
+        </MDButton>
+      )),
+    [changeStatus]
+  );
 
-  const rows =
-    tasks?.map((t) => ({
+  // Plain values in the rows (so the table's search and sorting work on them)
+  // and the presentation in each column's Cell. Memoised because the table
+  // resets its page and filter whenever it is handed new row objects.
+  const table = useMemo(() => {
+    type Row = { task: WorkItem; title: string; statusLabel: string; assignedTo: string; updatedAtUtc: string };
+    type CellProps = { row: { original: Row } };
+
+    const rows: Row[] = (tasks ?? []).map((t) => ({
+      task: t,
       title: t.title,
-      status: <Chip size="small" label={TASK_STATUS_LABELS[t.status]} />,
-      assignedTo: isTenantAdmin ? userNameById(t.assignedUserId) : undefined,
-      actions: (
-        <MDBox display="flex" justifyContent="flex-end" gap={1}>
-          {NEXT_STATUSES[t.status].map((next) => (
-            <MDButton key={next} size="small" variant="outlined" color="info" onClick={() => changeStatus(t, next)}>
-              {TASK_STATUS_LABELS[next]}
-            </MDButton>
-          ))}
-        </MDBox>
-      ),
-    })) ?? [];
+      statusLabel: TASK_STATUS_LABELS[t.status],
+      assignedTo: assigneeName(t.assignedUserId),
+      updatedAtUtc: t.updatedAtUtc,
+    }));
+
+    const columns = [
+      {
+        Header: "Task",
+        accessor: "title",
+        Cell: ({ row }: CellProps) => (
+          <Box sx={{ maxWidth: 420, lineHeight: 1.35, whiteSpace: "normal" }}>
+            <Box sx={{ fontWeight: 500, color: c.text }}>{row.original.title}</Box>
+            {row.original.task.description && (
+              <Box sx={{ fontSize: "0.75rem", color: c.muted }}>{row.original.task.description}</Box>
+            )}
+          </Box>
+        ),
+      },
+      {
+        Header: "Status",
+        accessor: "statusLabel",
+        Cell: ({ row }: CellProps) => (
+          <StatusPill tone={TASK_STATUS_TONE[row.original.task.status]} label={row.original.statusLabel} />
+        ),
+      },
+      ...(isTenantAdmin
+        ? [
+            {
+              Header: "Assigned to",
+              accessor: "assignedTo",
+              Cell: ({ value }: { value: string }) => <Identity name={value} size={28} />,
+            },
+          ]
+        : []),
+      {
+        Header: "Updated",
+        accessor: "updatedAtUtc",
+        Cell: ({ value }: { value: string }) => <span title={formatDateTime(value)}>{timeAgo(value)}</span>,
+      },
+      {
+        Header: "Actions",
+        id: "actions",
+        accessor: "title",
+        align: "right" as const,
+        disableSortBy: true,
+        disableGlobalFilter: true,
+        Cell: ({ row }: CellProps) => (
+          <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>{statusActions(row.original.task)}</Box>
+        ),
+      },
+    ];
+    return { columns, rows };
+  }, [tasks, isTenantAdmin, assigneeName, statusActions, c]);
+
+  const hasTasks = !loading && !error && (tasks?.length ?? 0) > 0;
 
   return (
-    <DashboardLayout>
-      <WorkspaceNavbar onLogout={logout} />
-      <MDBox py={3}>
-        <Card>
-          <MDBox display="flex" justifyContent="space-between" alignItems="center" p={3}>
-            <MDTypography variant="h5">Tasks</MDTypography>
+    <PageShell>
+      <PageHeader
+        icon="checklist"
+        title="Tasks"
+        subtitle={
+          isTenantAdmin
+            ? "Assign work to your team and follow it to completion."
+            : "Your assigned work. Update a task's status as you make progress."
+        }
+        actions={
+          <>
+            <FilterTabs
+              label="View"
+              value={view}
+              onChange={setView}
+              options={[
+                { value: "board", label: "Board" },
+                { value: "table", label: "Table" },
+              ]}
+            />
             {isTenantAdmin && (
-              <MDButton variant="gradient" color="info" onClick={openCreate}>
+              <MDButton variant="gradient" color="info" onClick={openCreate} startIcon={<Icon>add</Icon>}>
                 Create task
               </MDButton>
             )}
-          </MDBox>
-          {loading && (
-            <MDBox p={3}>
-              <MDTypography variant="body2">Loading tasks…</MDTypography>
-            </MDBox>
-          )}
-          {error && (
-            <MDBox p={3}>
-              <MDTypography variant="body2" color="error">
-                {error}
-              </MDTypography>
-            </MDBox>
-          )}
-          {!loading && !error && tasks?.length === 0 && (
-            <MDBox p={3}>
-              <MDTypography variant="body2" color="text">
-                {isTenantAdmin ? "No tasks yet." : "No tasks are currently assigned to you."}
-              </MDTypography>
-            </MDBox>
-          )}
-          {!loading && !error && (tasks?.length ?? 0) > 0 && <DataTable table={{ columns, rows }} canSearch />}
-        </Card>
-      </MDBox>
-      <Footer />
+          </>
+        }
+      />
 
-      <Dialog open={formOpen} onClose={() => setFormOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Create task</DialogTitle>
-        <DialogContent>
-          {formError && (
-            <MDBox mb={2}>
-              <MDTypography variant="caption" color="error">
-                {formError}
-              </MDTypography>
-            </MDBox>
-          )}
-          <MDBox mb={2} mt={1}>
-            <MDInput label="Title" fullWidth value={title} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)} />
-          </MDBox>
-          <MDBox mb={2}>
-            <MDInput
-              label="Description"
-              fullWidth
-              multiline
-              rows={3}
-              value={description}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)}
+      {!hasTasks && (
+        <Section flush>
+          {loading && <StateBlock kind="loading" title="Loading tasks" />}
+          {error && (
+            <StateBlock
+              kind="error"
+              title="Tasks could not be loaded"
+              message={error}
+              action={
+                <MDButton variant="outlined" color="info" size="small" onClick={load}>
+                  Try again
+                </MDButton>
+              }
             />
-          </MDBox>
-          <MDBox mb={1}>
-            <MDInput
-              select
-              label="Assign to"
-              fullWidth
-              SelectProps={{ native: true }}
-              value={assignedUserId}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAssignedUserId(e.target.value)}
-            >
-              <option value="" />
-              {users
-                .filter((u) => !u.isBlocked)
-                .map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.displayName} ({u.email})
-                  </option>
+          )}
+          {!loading && !error && (
+            <StateBlock
+              icon="task_alt"
+              title="No tasks yet"
+              message={isTenantAdmin ? "Create a task and assign it to someone on your team." : "No tasks are currently assigned to you."}
+              action={
+                isTenantAdmin && (
+                  <MDButton variant="gradient" color="info" size="small" onClick={openCreate}>
+                    Create task
+                  </MDButton>
+                )
+              }
+            />
+          )}
+        </Section>
+      )}
+
+      {hasTasks && view === "table" && (
+        <Section flush>
+          <DataTable table={table} canSearch />
+        </Section>
+      )}
+
+      {hasTasks && view === "board" && (
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))", xxl: "repeat(4, minmax(0, 1fr))" },
+            alignItems: "start",
+            gap: 3,
+          }}
+        >
+          {TASK_STATUSES.map((status) => {
+            const column = tasks?.filter((t) => t.status === status) ?? [];
+            return (
+              <Box
+                key={status}
+                component="section"
+                aria-label={TASK_STATUS_LABELS[status]}
+                sx={{
+                  p: 1.5,
+                  borderRadius: "16px",
+                  backgroundColor: c.surfaceAlt,
+                  border: `1px solid ${c.border}`,
+                  borderTop: `3px solid ${kit.tone(TASK_STATUS_TONE[status]).solid}`,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 1, pt: 0.5, pb: 1.5 }}>
+                  <Box component="h2" sx={{ fontSize: "0.875rem", fontWeight: 700, color: c.text }}>
+                    {TASK_STATUS_LABELS[status]}
+                  </Box>
+                  <Box sx={{ fontSize: "0.75rem", fontWeight: 500, color: c.muted }}>{column.length}</Box>
+                </Box>
+                {column.length === 0 && (
+                  <Box sx={{ px: 1, py: 3, textAlign: "center", fontSize: "0.8125rem", color: c.subtle }}>
+                    Nothing here
+                  </Box>
+                )}
+                {column.map((task) => (
+                  <Surface key={task.id} sx={{ p: 2, mb: 1.5, "&:last-of-type": { mb: 0 } }}>
+                    <Box sx={{ fontSize: "0.875rem", fontWeight: 500, lineHeight: 1.4, color: c.text }}>{task.title}</Box>
+                    {task.description && (
+                      <Box
+                        sx={{
+                          mt: 0.5,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                          fontSize: "0.8125rem",
+                          lineHeight: 1.5,
+                          color: c.muted,
+                        }}
+                      >
+                        {task.description}
+                      </Box>
+                    )}
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 1,
+                        mt: 1.5,
+                      }}
+                    >
+                      {isTenantAdmin ? (
+                        <Identity name={assigneeName(task.assignedUserId)} size={24} />
+                      ) : (
+                        <span />
+                      )}
+                      <Box
+                        sx={{ fontSize: "0.75rem", color: c.subtle }}
+                        title={formatDateTime(task.dueAtUtc ?? task.updatedAtUtc)}
+                      >
+                        {task.dueAtUtc ? `Due ${formatDateTime(task.dueAtUtc)}` : `Updated ${timeAgo(task.updatedAtUtc)}`}
+                      </Box>
+                    </Box>
+                    {NEXT_STATUSES[task.status].length > 0 && (
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1.5, pt: 1.5, borderTop: `1px solid ${c.border}` }}>
+                        {statusActions(task)}
+                      </Box>
+                    )}
+                  </Surface>
                 ))}
-            </MDInput>
-          </MDBox>
-        </DialogContent>
-        <DialogActions>
-          <MDButton variant="text" color="secondary" onClick={() => setFormOpen(false)}>
-            Cancel
-          </MDButton>
-          <MDButton variant="gradient" color="info" onClick={submitForm}>
-            Create
-          </MDButton>
-        </DialogActions>
-      </Dialog>
-    </DashboardLayout>
+              </Box>
+            );
+          })}
+        </Box>
+      )}
+
+      <KitDialog
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        onSubmit={submitForm}
+        icon="add_task"
+        title="Create task"
+        subtitle="The assignee sees it on their dashboard right away."
+        actions={
+          <>
+            <MDButton variant="text" color="secondary" onClick={() => setFormOpen(false)}>
+              Cancel
+            </MDButton>
+            <MDButton type="submit" variant="gradient" color="info">
+              Create
+            </MDButton>
+          </>
+        }
+      >
+        {formError && <InlineAlert sx={{ mb: 2.5 }}>{formError}</InlineAlert>}
+        <Box sx={{ display: "grid", gap: 2.5, pt: 0.5 }}>
+          <MDInput
+            label="Title"
+            fullWidth
+            value={title}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
+          />
+          <MDInput
+            label="Description"
+            fullWidth
+            multiline
+            rows={3}
+            value={description}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)}
+          />
+          <MDInput
+            select
+            label="Assign to"
+            fullWidth
+            SelectProps={{ native: true }}
+            InputLabelProps={{ shrink: true }}
+            value={assignedUserId}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAssignedUserId(e.target.value)}
+          >
+            <option value="">Select a team member</option>
+            {users
+              .filter((u) => !u.isBlocked)
+              .map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.displayName} ({u.email})
+                </option>
+              ))}
+          </MDInput>
+        </Box>
+      </KitDialog>
+    </PageShell>
   );
 }

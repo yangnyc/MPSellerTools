@@ -177,6 +177,13 @@ const colors = {
       main: "#8D5F86",
       state: "#684761",
     },
+
+    // The Noir Gold theme's accent. Unlike the six above it is too light for
+    // white text, so it is registered in sidenavTintContrast.js.
+    gold: {
+      main: "#D4AF37",
+      state: "#B8911F",
+    },
   },
 
   socialMediaColors: {

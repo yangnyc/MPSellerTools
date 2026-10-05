@@ -65,7 +65,7 @@ public class AuthController(
         }
 
         var roles = await userManager.GetRolesAsync(user);
-        return Ok(new CurrentUserResponse(user.Id, user.Email!, user.DisplayName, roles.ToList()));
+        return Ok(new CurrentUserResponse(user.Id, user.Email!, user.DisplayName, roles.ToList(), ThemeSettings.FromJson(user.ThemeSettingsJson)));
     }
 
     [HttpPut("me")]
@@ -84,6 +84,30 @@ public class AuthController(
         }
 
         user.DisplayName = displayName;
+        var result = await userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            return Problem(string.Join(" ", result.Errors.Select(e => e.Description)), statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        return await Me();
+    }
+
+    [HttpPut("me/theme")]
+    public async Task<IActionResult> UpdateTheme([FromBody] ThemeSettings request)
+    {
+        var user = await userManager.GetUserAsync(User);
+        if (user is null || user.IsBlocked)
+        {
+            return Unauthorized();
+        }
+
+        if (!request.IsValid())
+        {
+            return Problem("Invalid theme settings.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        user.ThemeSettingsJson = request.ToJson();
         var result = await userManager.UpdateAsync(user);
         if (!result.Succeeded)
         {
