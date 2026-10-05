@@ -99,7 +99,10 @@ export default function WorkspaceNavbar({ onLogout, profileHref = "/profile" }: 
           >
             <Icon sx={{ fontSize: 18, color: SB_MUTED }}>search</Icon>
             <InputBase
+              type="search"
               placeholder="Search..."
+              autoComplete="off"
+              name="workspace-search"
               sx={{
                 flex: 1,
                 fontSize: 14,

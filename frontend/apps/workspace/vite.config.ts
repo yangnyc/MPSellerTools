@@ -16,6 +16,18 @@ export default defineConfig({
       context: path.resolve(uiSrc, "context"),
       assets: path.resolve(uiSrc, "assets"),
     },
+    // packages/ui has its own node_modules (no workspace hoisting in this
+    // environment — see docs/template-adaptation.md), so without this, files
+    // aliased in from packages/ui/src resolve a second copy of these
+    // singleton-sensitive libs, breaking React hooks / MUI theme context.
+    dedupe: [
+      "react",
+      "react-dom",
+      "react-router-dom",
+      "@emotion/react",
+      "@emotion/styled",
+      "@mui/material",
+    ],
   },
   server: {
     port: 5201,

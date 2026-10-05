@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+#Requires -Version 5.1
 # Commits and pushes any pending changes in this repo to GitHub. Run on a schedule via Task Scheduler.
 
 $ErrorActionPreference = "Stop"
@@ -23,7 +23,10 @@ try {
     }
 
     & $git -C $repo commit -m ("Auto-push {0}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"))
+    if ($LASTEXITCODE -ne 0) { throw "git commit failed with exit code $LASTEXITCODE" }
+
     & $git -C $repo push origin master
+    if ($LASTEXITCODE -ne 0) { throw "git push failed with exit code $LASTEXITCODE" }
 
     Log "Committed and pushed changes."
 }

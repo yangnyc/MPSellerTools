@@ -177,7 +177,14 @@ export default function ProfilePage() {
           </MDBox>
         </Card>
         <Card sx={{ maxWidth: 480 }}>
-          <MDBox p={3}>
+          <MDBox
+            component="form"
+            p={3}
+            onSubmit={(e: React.FormEvent) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
             <MDTypography variant="h5" mb={2}>
               Change password
             </MDTypography>
@@ -191,10 +198,24 @@ export default function ProfilePage() {
                 </MDTypography>
               </MDBox>
             )}
+            {/* Chrome's password manager pairs the nearest preceding text input with any
+                password field on the page — without a dedicated username field right here,
+                it reaches past this form for the navbar search box instead. */}
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              value={user?.email ?? ""}
+              readOnly
+              aria-hidden="true"
+              tabIndex={-1}
+              style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 }}
+            />
             <MDBox mb={2}>
               <MDInput
                 type={showPasswords ? "text" : "password"}
                 label="Current password"
+                autoComplete="current-password"
                 fullWidth
                 value={currentPassword}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentPassword(e.target.value)}
@@ -205,6 +226,7 @@ export default function ProfilePage() {
               <MDInput
                 type={showPasswords ? "text" : "password"}
                 label="New password"
+                autoComplete="new-password"
                 fullWidth
                 value={newPassword}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
@@ -215,6 +237,7 @@ export default function ProfilePage() {
               <MDInput
                 type={showPasswords ? "text" : "password"}
                 label="Confirm new password"
+                autoComplete="new-password"
                 fullWidth
                 value={confirmPassword}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
@@ -230,9 +253,9 @@ export default function ProfilePage() {
             )}
             <MDBox mt={2}>
               <MDButton
+                type="submit"
                 variant="gradient"
                 color="info"
-                onClick={submit}
                 disabled={!passwordFieldsFilled || !!passwordError || submitting}
               >
                 {submitting ? "Changing…" : "Change password"}
