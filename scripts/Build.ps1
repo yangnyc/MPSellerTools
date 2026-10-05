@@ -23,13 +23,23 @@ function Write-Step($message) {
     Write-Host "==> $message" -ForegroundColor Cyan
 }
 
-Write-Step "Installing frontend dependencies"
-Push-Location (Join-Path $repoRoot "frontend")
-try {
-    npm install
-    if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
-} finally {
-    Pop-Location
+# Installed per package rather than once at the workspace root: a root
+# install symlinks each workspace into frontend/node_modules, which fails
+# with EISDIR on filesystems that can't hold symlinks (e.g. a VM shared
+# folder). --no-workspaces stops npm from walking up to frontend/package.json
+# and doing that root install anyway. Each package has its own
+# package-lock.json, and the Vite configs already resolve packages/ui by
+# path, so nothing needs the hoisted layout.
+$frontendPackages = @("apps/platform", "apps/workspace", "packages/ui")
+foreach ($package in $frontendPackages) {
+    Write-Step "Installing frontend dependencies ($package)"
+    Push-Location (Join-Path $repoRoot "frontend/$package")
+    try {
+        npm install --no-workspaces
+        if ($LASTEXITCODE -ne 0) { throw "npm install failed for $package" }
+    } finally {
+        Pop-Location
+    }
 }
 
 # Each app writes its build output directly into the corresponding host's
