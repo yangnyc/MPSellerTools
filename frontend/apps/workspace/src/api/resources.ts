@@ -3,8 +3,15 @@ import type {
   AuditEntry,
   CompanySettings,
   CreateInvitationResponse,
+  EbayEnvironment,
+  EbayOrderImport,
+  EbayProductImport,
+  EbayStatus,
+  ForcePasswordResetResponse,
+  Listings,
   Order,
   OrderStatus,
+  PendingInvitation,
   Product,
   TaskStatus,
   TenantDashboard,
@@ -23,6 +30,10 @@ export const ProductsApi = {
   update: (id: string, data: { name: string; price: number; stockQuantity: number; rowVersion: string }) =>
     apiFetch<Product>(`/api/products/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   archive: (id: string) => apiFetch<void>(`/api/products/${id}/archive`, { method: "POST" }),
+};
+
+export const ListingsApi = {
+  list: () => apiFetch<Listings>("/api/listings"),
 };
 
 export const OrdersApi = {
@@ -63,6 +74,11 @@ export const UsersApi = {
     apiFetch<void>(`/api/users/${id}/role`, { method: "PUT", body: JSON.stringify({ role }) }),
   block: (id: string) => apiFetch<void>(`/api/users/${id}/block`, { method: "POST" }),
   unblock: (id: string) => apiFetch<void>(`/api/users/${id}/unblock`, { method: "POST" }),
+  signOut: (id: string) => apiFetch<void>(`/api/users/${id}/sign-out`, { method: "POST" }),
+  forcePasswordReset: (id: string) =>
+    apiFetch<ForcePasswordResetResponse>(`/api/users/${id}/force-password-reset`, { method: "POST" }),
+  pendingInvitations: () => apiFetch<PendingInvitation[]>("/api/invitations"),
+  revokeInvitation: (id: string) => apiFetch<void>(`/api/invitations/${id}`, { method: "DELETE" }),
 };
 
 export const SettingsApi = {
@@ -71,6 +87,20 @@ export const SettingsApi = {
     apiFetch<CompanySettings>("/api/settings", { method: "PUT", body: JSON.stringify(data) }),
 };
 
+export const EbayApi = {
+  get: () => apiFetch<EbayStatus>("/api/ebay"),
+  // An empty clientSecret keeps the Cert ID already saved.
+  saveSettings: (data: { environment: EbayEnvironment; clientId: string; clientSecret: string; ruName: string }) =>
+    apiFetch<EbayStatus>("/api/ebay/settings", { method: "PUT", body: JSON.stringify(data) }),
+  connect: () => apiFetch<{ authorizeUrl: string }>("/api/ebay/connect", { method: "POST" }),
+  complete: (codeOrUrl: string) =>
+    apiFetch<EbayStatus>("/api/ebay/complete", { method: "POST", body: JSON.stringify({ codeOrUrl }) }),
+  disconnect: () => apiFetch<EbayStatus>("/api/ebay/disconnect", { method: "POST" }),
+  importOrders: () => apiFetch<EbayOrderImport>("/api/ebay/import/orders", { method: "POST" }),
+  importProducts: () => apiFetch<EbayProductImport>("/api/ebay/import/products", { method: "POST" }),
+};
+
 export const AuditApi = {
-  list: () => apiFetch<AuditEntry[]>("/api/audit"),
+  // The server returns the newest 100 entries unless asked for more (up to 500).
+  list: (take?: number) => apiFetch<AuditEntry[]>(take ? `/api/audit?take=${take}` : "/api/audit"),
 };

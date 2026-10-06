@@ -17,6 +17,8 @@ export type CurrentUser = {
   displayName: string;
   roles: string[];
   theme: ThemeSettings | null;
+  // The sidebar menu groups kept pinned open, by group key (see routes.tsx).
+  pinnedMenus?: string[];
 };
 
 export type AuthState = {
@@ -26,6 +28,11 @@ export type AuthState = {
   logout: () => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
   saveTheme: (theme: ThemeSettings) => Promise<void>;
+  // The settings last saved for a named theme, or null if it was never used
+  // that way: in light or dark mode when `darkMode` is given, otherwise in
+  // whichever mode the theme was last used in.
+  loadTheme: (themeName: string, darkMode?: boolean) => Promise<ThemeSettings | null>;
+  savePinnedMenus: (menus: string[]) => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthState | null>(null);

@@ -163,17 +163,17 @@ version` against the npm registry, not guessed):
 
 | Package | Upstream pin | Used here | Why |
 | --- | --- | --- | --- |
-| react / react-dom | 18.2.0 | 18.3.1 | Latest 18.x patch; MUI v5 and `react-table` v7 are not verified against React 19. |
+| react / react-dom | 18.2.0 | 19.3.0 | Latest. `react-table` v7 only declares React ≤ 18 as a peer, so each `package.json` carries an `overrides` entry pointing it at the installed React; it runs on 19 unchanged. |
 | react-router-dom | 6.16.0 | 6.30.6 | Latest 6.x; v7 changes the routing API (data routers), which the ported `Sidenav`/`App.tsx` pattern does not use. |
-| @mui/material / @mui/icons-material | 5.5.2 / 5.5.1 | 5.18.0 | Latest v5.x. MUI is at major v9 upstream; jumping to it would require auditing breaking changes across v6–v9 for every ported component, which was judged not worth it for a UI foundation — see the brief's "do not force-upgrade every dependency to conceal conflicts" instruction. |
-| @emotion/react / @emotion/styled | 11.8.x | 11.14.0 / 11.14.1 | Latest 11.x (MUI v5's required emotion major). |
+| @mui/material / @mui/icons-material | 5.5.2 / 5.5.1 | 9.4.0 | Latest. MUI 9 dropped APIs the ported template relies on, so they are bridged in one place each rather than at every call site: `MDBox`/`MDTypography` move layout props (`display`, `px`, ...) into `sx`; `MDInput` maps `InputProps`/`inputProps`/`SelectProps`/`InputLabelProps`/`FormHelperTextProps` onto `slotProps`; `Divider`'s removed `light` prop is a `MuiDivider-light` class; and the palette's `transparent` is written as `rgba(0, 0, 0, 0)`. |
+| @emotion/react / @emotion/styled | 11.8.x | 11.14.0 / 11.14.1 | Latest 11.x (the emotion major MUI requires). |
 | axios | 1.5.1 | 1.20.0 | Latest 1.x. |
 | chart.js / react-chartjs-2 | 4.4.0 / 5.2.0 | 4.5.1 / 5.3.1 | Latest patches. |
 | react-table | 7.8.0 | 7.8.0 | Unchanged — no newer release exists (project appears unmaintained upstream); `@types/react-table` `7.7.20` added for TS. |
-| chroma-js | 2.4.2 (exact) | 2.6.0 | Latest 2.x; upstream v3 was not adopted without auditing its API changes. |
+| chroma-js | 2.4.2 (exact) | 3.2.0 | Latest; the calls used here (`chroma(...)` and its colour conversions) are unchanged in v3. |
 | prop-types | 15.8.1 | 15.8.1 | Unchanged, already latest. |
 | Build tool | Create React App (`react-scripts` 5.0.1) | Vite 8.3.0 + `@vitejs/plugin-react` | Brief §2 requires Vite; CRA is deprecated upstream. |
-| TypeScript | none (plain JS) | 6.0.3 | New app code only; ported components stay JS (see above). |
+| TypeScript | none (plain JS) | 7.0.2 | New app code only; ported components stay JS (see above). |
 | Linting | ESLint + `eslint-config-airbnb` | `oxlint` | Vite's current scaffold default; a fast Rust-based linter. Not a brief requirement either way — chosen for the fresh app code since there was no existing ESLint setup to preserve for it. |
 
 `package-lock.json` at `frontend/` pins the resolved dependency tree.

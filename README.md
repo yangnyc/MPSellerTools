@@ -210,6 +210,24 @@ This is a **local development** setup, explicitly not production-hardened:
   under that same identity — see `docs/windows-deployment.md` for the
   separate privileged deployment identity a real deployment needs.
 
+## Multichannel catalog (Amazon, eBay, Walmart, website)
+
+Products have variants with their own SKU, price and stock, and each variant
+can be listed on Amazon, eBay, Walmart and the company's own website with
+channel-specific content, price and quantity. Changes reach the channels
+through an outbox and a background worker in each tenant's host.
+
+**It is off by default and has never been run against a real marketplace.**
+Out of the box every channel operation is a dry run and orders leave stock
+alone, as before. The adapters are tested against in-process fakes only; no
+credentials were available to try a sandbox.
+
+- [`docs/multichannel-catalog.md`](docs/multichannel-catalog.md) — data model, ER diagram, data ownership, how sync works
+- [`docs/marketplace-operations.md`](docs/marketplace-operations.md) — configuration, the admin API, dry runs, retries, rollback, and the checklist of what is and is not done
+- [`docs/marketplace-integrations.md`](docs/marketplace-integrations.md) — which API operations were verified against official documentation, and which are assumptions
+
+There is no workspace screen for it yet; it is driven through the tenant API.
+
 ## Repository layout
 
 | Path | Contents |

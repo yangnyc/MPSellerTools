@@ -21,18 +21,29 @@ Coded by www.creative-tim.com
 
 const colors = {
   background: {
-    default: "#0F172A",
-    sidenav: "#16213A",
-    card: "#1E293B",
+    default: "#2E2933",
+    sidenav: "#39333F",
+    card: "#4B4453",
   },
 
+  // `secondary` and `disabled`, and `action` below, are what MUI itself uses
+  // for helper text and disabled controls; its defaults are black, for a
+  // light page.
   text: {
-    main: "#E2E8F0cc",
-    focus: "#E2E8F0cc",
+    main: "#E3DEE8cc",
+    focus: "#E3DEE8cc",
+    secondary: "rgba(255, 255, 255, 0.7)",
+    disabled: "rgba(255, 255, 255, 0.45)",
+  },
+
+  action: {
+    disabled: "rgba(255, 255, 255, 0.45)",
+    disabledBackground: "rgba(255, 255, 255, 0.12)",
   },
 
   transparent: {
-    main: "transparent",
+    // Written as rgba because MUI 9 parses every palette colour and rejects the keyword.
+    main: "rgba(0, 0, 0, 0)",
   },
 
   white: {
@@ -46,19 +57,21 @@ const colors = {
     focus: "#000000",
   },
 
+  // Lighter than the light theme's, so it shows against the #4B4453 cards.
   primary: {
-    main: "#4F46E5",
-    focus: "#4338CA",
+    main: "#6A6173",
+    focus: "#5C5466",
   },
 
   secondary: {
-    main: "#64748B",
-    focus: "#475569",
+    main: "#B0A8B9",
+    focus: "#CCC5D3",
   },
 
+  // #845EC2 and #C34A36 lightened, so outlined buttons read on the #4B4453 cards.
   info: {
-    main: "#0284C7",
-    focus: "#0369A1",
+    main: "#A98BDD",
+    focus: "#845EC2",
   },
 
   success: {
@@ -67,81 +80,82 @@ const colors = {
   },
 
   warning: {
-    main: "#D97706",
-    focus: "#B45309",
+    main: "#FF8066",
+    focus: "#B24A33",
   },
 
   error: {
-    main: "#DC2626",
-    focus: "#B91C1C",
+    main: "#EE8A77",
+    focus: "#C34A36",
   },
 
   light: {
-    main: "#F1F5F966",
-    focus: "#F1F5F966",
+    main: "#F1EEF466",
+    focus: "#F1EEF466",
   },
 
   dark: {
-    main: "#334155",
-    focus: "#1E293B",
+    main: "#5C5466",
+    focus: "#4B4453",
   },
 
   grey: {
-    100: "#F8FAFC",
-    200: "#F1F5F9",
-    300: "#E2E8F0",
-    400: "#CBD5E1",
-    500: "#94A3B8",
-    600: "#64748B",
-    700: "#475569",
-    800: "#334155",
-    900: "#1E293B",
+    100: "#F8F7FA",
+    200: "#F1EEF4",
+    300: "#E3DEE8",
+    400: "#CCC5D3",
+    500: "#B0A8B9",
+    600: "#7D7486",
+    700: "#4B4453",
+    800: "#3A3440",
+    900: "#332E39",
   },
 
   gradients: {
     primary: {
-      main: "#6366F1",
-      state: "#4338CA",
+      main: "#6A6173",
+      state: "#3A3440",
     },
 
     secondary: {
-      main: "#94A3B8",
-      state: "#64748B",
+      main: "#B0A8B9",
+      state: "#7D7486",
     },
 
     info: {
-      main: "#38BDF8",
-      state: "#0284C7",
+      main: "#A07FD6",
+      state: "#845EC2",
     },
 
+    // Dark enough for the white text on a success button.
     success: {
-      main: "#34D399",
-      state: "#059669",
+      main: "#0E9F6E",
+      state: "#047857",
     },
 
     warning: {
-      main: "#FBBF24",
-      state: "#D97706",
+      main: "#FF9C87",
+      state: "#FF8066",
     },
 
     error: {
-      main: "#F87171",
-      state: "#DC2626",
+      main: "#D9624E",
+      state: "#C34A36",
     },
 
     light: {
-      main: "#F1F5F9",
-      state: "#E2E8F0",
+      main: "#F1EEF4",
+      state: "#E3DEE8",
     },
 
     dark: {
-      main: "#334155",
-      state: "#1E293B",
+      main: "#3A3440",
+      state: "#332E39",
     },
 
     // Sidenav accent swatches — see the matching comment in the light theme's
     // colors.js. Kept identical here since the dark-mode sidenav background
-    // ("#16213A") sits in the same tonal range as the light theme's dark
+    // ("#39333F") sits in the same tonal range as the light theme's dark
     // gradient, so the same muted set still reads cleanly against it.
     steel: {
       main: "#4C6E94",
@@ -178,6 +192,12 @@ const colors = {
     gold: {
       main: "#D4AF37",
       state: "#B8911F",
+    },
+
+    // Like gold, too light for white text.
+    mint: {
+      main: "#36D7C3",
+      state: "#00A08E",
     },
   },
 
@@ -245,18 +265,18 @@ const colors = {
 
   badgeColors: {
     primary: {
-      background: "#E0E7FF",
-      text: "#4338CA",
+      background: "#ECE9EF",
+      text: "#3A3440",
     },
 
     secondary: {
-      background: "#F1F5F9",
-      text: "#475569",
+      background: "#F1EEF4",
+      text: "#4B4453",
     },
 
     info: {
-      background: "#E0F2FE",
-      text: "#0369A1",
+      background: "#EDE5F8",
+      text: "#6E4BAA",
     },
 
     success: {
@@ -265,38 +285,38 @@ const colors = {
     },
 
     warning: {
-      background: "#FEF3C7",
-      text: "#B45309",
+      background: "#FFE9E3",
+      text: "#B24A33",
     },
 
     error: {
-      background: "#FEE2E2",
-      text: "#B91C1C",
+      background: "#F9E1DC",
+      text: "#9E3324",
     },
 
     light: {
       background: "#ffffff",
-      text: "#CBD5E1",
+      text: "#CCC5D3",
     },
 
     dark: {
-      background: "#94A3B8",
-      text: "#1E293B",
+      background: "#B0A8B9",
+      text: "#332E39",
     },
   },
 
   coloredShadows: {
-    primary: "#4F46E5",
-    secondary: "#64748B",
-    info: "#0284C7",
+    primary: "#4B4453",
+    secondary: "#7D7486",
+    info: "#845EC2",
     success: "#059669",
-    warning: "#D97706",
-    error: "#DC2626",
-    light: "#CBD5E1",
-    dark: "#1E293B",
+    warning: "#FF8066",
+    error: "#C34A36",
+    light: "#CCC5D3",
+    dark: "#332E39",
   },
 
-  inputBorderColor: "#CBD5E1",
+  inputBorderColor: "#CCC5D3",
 
   tabs: {
     indicator: { boxShadow: "#ddd" },

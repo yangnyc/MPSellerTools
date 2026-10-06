@@ -6,6 +6,7 @@ using MPSellerTools.Core.Notifications;
 using MPSellerTools.Infrastructure.Hosting;
 using MPSellerTools.Infrastructure.Notifications;
 using MPSellerTools.Infrastructure.Platform;
+using MPSellerTools.PlatformHost.Services;
 using Serilog;
 
 // Content root must be pinned to the directory containing this assembly, not
@@ -98,6 +99,11 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod()
             .AllowCredentials());
 });
+
+// Tenant users are read from and managed through each company's own instance.
+builder.Services.AddHttpClient(TenantUsersClient.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddScoped(services =>
+    new TenantUsersClient(services.GetRequiredService<IHttpClientFactory>(), localDataDirectory));
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();

@@ -21,9 +21,39 @@ import PropTypes from "prop-types";
 // Custom styles for MDInput
 import MDInputRoot from "components/MDInput/MDInputRoot";
 
+// MUI 9 replaced TextField's InputProps / inputProps / SelectProps /
+// InputLabelProps / FormHelperTextProps with a single `slotProps`. Pages still
+// pass the older names, so they are mapped onto it here, the one place every
+// text field passes through.
 const MDInput = forwardRef(
-  ({ error = false, success = false, disabled = false, ...rest }, ref) => (
-    <MDInputRoot {...rest} ref={ref} ownerState={{ error, success, disabled }} />
+  (
+    {
+      error = false,
+      success = false,
+      disabled = false,
+      InputProps,
+      inputProps,
+      SelectProps,
+      InputLabelProps,
+      FormHelperTextProps,
+      slotProps,
+      ...rest
+    },
+    ref
+  ) => (
+    <MDInputRoot
+      {...rest}
+      slotProps={{
+        input: InputProps,
+        htmlInput: inputProps,
+        select: SelectProps,
+        inputLabel: InputLabelProps,
+        formHelperText: FormHelperTextProps,
+        ...slotProps,
+      }}
+      ref={ref}
+      ownerState={{ error, success, disabled }}
+    />
   )
 );
 

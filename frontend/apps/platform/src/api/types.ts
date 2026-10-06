@@ -1,12 +1,13 @@
 // Mirrors the response/request DTOs in MPSellerTools.PlatformHost.Contracts.
 
-export type TenantStatus = 0 | 1 | 2 | 3; // Provisioning, Active, Suspended, Failed
+export type TenantStatus = 0 | 1 | 2 | 3 | 4; // Provisioning, Active, Suspended, Failed, Deleting
 
 export const TENANT_STATUS_LABELS: Record<TenantStatus, string> = {
   0: "Provisioning",
   1: "Active",
   2: "Suspended",
   3: "Failed",
+  4: "Deleting",
 };
 
 export type TenantSummary = {
@@ -29,11 +30,27 @@ export type TenantDetail = {
   updatedAtUtc: string;
 };
 
-export type ProvisioningJobType = 0 | 1 | 2; // CreateTenant, Suspend, Resume
+export type TenantRuntime = {
+  id: string;
+  name: string;
+  slug: string;
+  status: TenantStatus;
+  url: string | null;
+  port: number | null;
+  databaseName: string | null;
+  applicationInstanceId: string | null;
+  processId: number | null;
+  processStartTimeUtc: string | null;
+  updatedAtUtc: string;
+};
+
+export type ProvisioningJobType = 0 | 1 | 2 | 3 | 4; // CreateTenant, Suspend, Resume, Restart, Delete
 export const JOB_TYPE_LABELS: Record<ProvisioningJobType, string> = {
   0: "Create",
   1: "Suspend",
   2: "Resume",
+  3: "Restart",
+  4: "Delete",
 };
 
 export type ProvisioningJobStatus = 0 | 1 | 2 | 3; // Pending, Running, Succeeded, Failed
@@ -65,6 +82,22 @@ export type RecentJobSummary = {
   updatedAtUtc: string;
 };
 export type PlatformDashboard = { tenantCounts: TenantStatusCounts; recentJobs: RecentJobSummary[] };
+
+export type TenantUser = {
+  tenantId: string;
+  tenantName: string;
+  tenantSlug: string;
+  id: string;
+  email: string;
+  displayName: string;
+  roles: string[];
+  isBlocked: boolean;
+};
+
+// A company whose users could not be read, and why.
+export type UnavailableTenant = { tenantId: string; tenantName: string; reason: string };
+
+export type TenantUsers = { users: TenantUser[]; unavailable: UnavailableTenant[] };
 
 export type AuditEntry = {
   id: string;

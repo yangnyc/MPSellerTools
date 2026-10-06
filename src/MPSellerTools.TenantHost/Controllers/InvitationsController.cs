@@ -1,10 +1,7 @@
-using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MPSellerTools.Core.Business;
-using MPSellerTools.Core.Notifications;
 using MPSellerTools.Core.Tenancy;
 using MPSellerTools.Infrastructure.Tenants;
 using MPSellerTools.TenantHost.Contracts;
@@ -17,7 +14,7 @@ namespace MPSellerTools.TenantHost.Controllers;
 public class InvitationsController(
     TenantDbContext db,
     UserManager<TenantUser> userManager,
-    IDevOutbox outbox,
+    InvitationIssuer invitations,
     IWebHostEnvironment environment,
     AuditLogger audit) : ControllerBase
 {
@@ -30,27 +27,7 @@ public class InvitationsController(
             return Problem("Role must be TenantAdmin or Employee.", statusCode: StatusCodes.Status400BadRequest);
         }
 
-        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
-            .Replace('+', '-').Replace('/', '_').TrimEnd('=');
-        var tokenHash = HashToken(rawToken);
-
-        var invitation = new Invitation
-        {
-            Id = Guid.NewGuid(),
-            Email = request.Email,
-            Role = request.Role,
-            TokenHash = tokenHash,
-            ExpiresAtUtc = DateTime.UtcNow.AddDays(7),
-            CreatedByUserId = userManager.GetUserId(User) is { } id ? Guid.Parse(id) : Guid.Empty,
-            CreatedAtUtc = DateTime.UtcNow,
-        };
-
-        db.Invitations.Add(invitation);
-        audit.Log("UserInvited", $"email={request.Email}; role={request.Role}");
-        await db.SaveChangesAsync();
-
-        var acceptLink = $"/accept-invitation?token={Uri.EscapeDataString(rawToken)}";
-        await outbox.WriteAsync(request.Email, "You've been invited to MPSellerTools", $"Accept your invitation: {acceptLink}");
+        var (invitation, acceptLink) = await invitations.IssueAsync(request.Email, request.Role);
 
         // The caller (a TenantAdmin) is the authorized initiator of this
         // invitation, so returning the dev link directly here — rather than
@@ -61,11 +38,47 @@ public class InvitationsController(
         return Ok(new CreateInvitationResponse(invitation.Id, devAcceptUrl));
     }
 
+    /// <summary>Invitations that have been sent but not accepted yet, newest first.</summary>
+    [HttpGet]
+    [Authorize(Policy = Roles.TenantAdmin)]
+    public async Task<IActionResult> ListPending()
+    {
+        var now = DateTime.UtcNow;
+        var pending = await db.Invitations
+            .Where(i => i.AcceptedAtUtc == null)
+            .OrderByDescending(i => i.CreatedAtUtc)
+            .Select(i => new PendingInvitationResponse(i.Id, i.Email, i.Role, i.CreatedAtUtc, i.ExpiresAtUtc, i.ExpiresAtUtc < now))
+            .ToListAsync();
+        return Ok(pending);
+    }
+
+    /// <summary>Revokes a pending invitation, so its link stops working.</summary>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = Roles.TenantAdmin)]
+    public async Task<IActionResult> Revoke(Guid id)
+    {
+        var invitation = await db.Invitations.FindAsync(id);
+        if (invitation is null)
+        {
+            return NotFound();
+        }
+
+        if (invitation.AcceptedAtUtc is not null)
+        {
+            return Problem("This invitation has already been accepted.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        db.Invitations.Remove(invitation);
+        audit.Log("InvitationRevoked", $"email={invitation.Email}; role={invitation.Role}");
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+
     [HttpPost("accept")]
     [AllowAnonymous]
     public async Task<IActionResult> Accept([FromBody] AcceptInvitationRequest request)
     {
-        var tokenHash = HashToken(request.Token);
+        var tokenHash = InvitationIssuer.HashToken(request.Token);
         var invitation = await db.Invitations.FirstOrDefaultAsync(i => i.TokenHash == tokenHash);
 
         if (invitation is null || invitation.AcceptedAtUtc is not null || invitation.ExpiresAtUtc < DateTime.UtcNow)
@@ -95,7 +108,4 @@ public class InvitationsController(
 
         return NoContent();
     }
-
-    private static string HashToken(string rawToken) =>
-        Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawToken)));
 }

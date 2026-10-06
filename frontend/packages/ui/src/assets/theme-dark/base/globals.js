@@ -15,12 +15,19 @@ Coded by www.creative-tim.com
 
 // Material Dashboard 2 React Base Styles
 import colors from "assets/theme-dark/base/colors";
+import { nativeOptionSelector } from "assets/theme/base/globals";
 
-const { info, dark } = colors;
+const { info, dark, background, white } = colors;
 
 const globals = {
   html: {
     scrollBehavior: "smooth",
+  },
+  // An open dropdown's list would otherwise be white, while its options
+  // inherit the field's light text.
+  [nativeOptionSelector]: {
+    backgroundColor: background.card,
+    color: white.main,
   },
   "*, *::before, *::after": {
     margin: 0,

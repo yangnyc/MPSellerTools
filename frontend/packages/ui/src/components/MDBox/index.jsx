@@ -18,6 +18,10 @@ import { forwardRef } from "react";
 // prop-types is a library for typechecking of props
 import PropTypes from "prop-types";
 
+// MUI 9 no longer reads layout props (display, px, justifyContent, ...) off
+// Box, so they are moved into `sx` here, where every MDBox passes through.
+import { unstable_extendSxProp as extendSxProp } from "@mui/system";
+
 // Custom styles for MDBox
 import MDBoxRoot from "components/MDBox/MDBoxRoot";
 
@@ -36,7 +40,7 @@ const MDBox = forwardRef(
     ref
   ) => (
     <MDBoxRoot
-      {...rest}
+      {...extendSxProp(rest)}
       ref={ref}
       ownerState={{ variant, bgColor, color, opacity, borderRadius, shadow, coloredShadow }}
     />

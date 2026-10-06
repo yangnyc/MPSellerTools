@@ -65,7 +65,8 @@ public class AuthController(
         }
 
         var roles = await userManager.GetRolesAsync(user);
-        return Ok(new CurrentUserResponse(user.Id, user.Email!, user.DisplayName, roles.ToList(), ThemeSettings.FromJson(user.ThemeSettingsJson)));
+        var profile = ThemeProfile.FromJson(user.ThemeSettingsJson);
+        return Ok(new CurrentUserResponse(user.Id, user.Email!, user.DisplayName, roles.ToList(), profile.Active, profile.PinnedMenus ?? []));
     }
 
     [HttpPut("me")]
@@ -107,7 +108,50 @@ public class AuthController(
             return Problem("Invalid theme settings.", statusCode: StatusCodes.Status400BadRequest);
         }
 
-        user.ThemeSettingsJson = request.ToJson();
+        user.ThemeSettingsJson = ThemeProfile.FromJson(user.ThemeSettingsJson).With(request).ToJson();
+        var result = await userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            return Problem(string.Join(" ", result.Errors.Select(e => e.Description)), statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        return await Me();
+    }
+
+    /// <summary>
+    /// The settings last saved for a named theme, read when the user switches
+    /// to it: in light or dark mode when <paramref name="dark"/> says which, else
+    /// in the mode the theme was last used in. 204 if never used that way.
+    /// </summary>
+    [HttpGet("me/theme/{themeName}")]
+    public async Task<IActionResult> GetSavedTheme(string themeName, [FromQuery] bool? dark = null)
+    {
+        var user = await userManager.GetUserAsync(User);
+        if (user is null || user.IsBlocked)
+        {
+            return Unauthorized();
+        }
+
+        var saved = ThemeProfile.FromJson(user.ThemeSettingsJson).Find(themeName, dark);
+        return saved is null ? NoContent() : Ok(saved);
+    }
+
+    /// <summary>Saves which sidebar menu groups the user keeps pinned open.</summary>
+    [HttpPut("me/pinned-menus")]
+    public async Task<IActionResult> UpdatePinnedMenus([FromBody] PinnedMenusRequest request)
+    {
+        var user = await userManager.GetUserAsync(User);
+        if (user is null || user.IsBlocked)
+        {
+            return Unauthorized();
+        }
+
+        if (!request.IsValid())
+        {
+            return Problem("Invalid menu names.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        user.ThemeSettingsJson = (ThemeProfile.FromJson(user.ThemeSettingsJson) with { PinnedMenus = request.Menus }).ToJson();
         var result = await userManager.UpdateAsync(user);
         if (!result.Succeeded)
         {

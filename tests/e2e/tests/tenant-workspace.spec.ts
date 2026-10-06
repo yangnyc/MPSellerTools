@@ -13,7 +13,7 @@ test.describe("Company workspace — TenantAdmin", () => {
 
     await expect(page).toHaveURL(/\/dashboard$/);
     // TenantAdmin-only menu items (brief §8) are all visible.
-    await expect(page.getByRole("link", { name: "Users" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Users" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Settings" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Audit" })).toBeVisible();
   });
@@ -42,7 +42,7 @@ test.describe("Company workspace — Employee", () => {
     await expect(page).toHaveURL(/\/dashboard$/);
     // brief §8: "Do not show tenant management, user management, or company
     // settings menus" to Employees.
-    await expect(page.getByRole("link", { name: "Users" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Users" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Settings" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Audit" })).toHaveCount(0);
     // But their own dashboard/products/orders/tasks/profile remain.

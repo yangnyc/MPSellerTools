@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
@@ -12,6 +12,7 @@ import {
   DetailList,
   InitialsAvatar,
   InlineAlert,
+  KitDialog,
   PageHeader,
   Section,
   StateBlock,
@@ -38,18 +39,20 @@ const ACTIONS: Record<Action, { title: string; label: string; icon: string; colo
   retry: { title: "Retry provisioning", label: "Retry provisioning", icon: "refresh", color: "info" },
 };
 
-// The one lifecycle action the server accepts in each state (none while provisioning).
-const ACTION_FOR_STATUS: Record<TenantStatus, Action | null> = { 0: null, 1: "suspend", 2: "resume", 3: "retry" };
+// The one lifecycle action the server accepts in each state (none while provisioning or deleting).
+const ACTION_FOR_STATUS: Record<TenantStatus, Action | null> = { 0: null, 1: "suspend", 2: "resume", 3: "retry", 4: null };
 
 const STATE_NOTES: Record<TenantStatus, string> = {
   0: "The provisioning worker is creating this company's database and starting its workspace.",
   1: "The workspace is running and its team can sign in. Suspending stops the instance until you resume it.",
   2: "The workspace is stopped and nobody can sign in. Resuming starts it again and checks that it is ready.",
-  3: "Provisioning did not finish. Retrying picks up where it stopped without creating anything twice.",
+  3: "The last operation did not finish. Retrying provisioning picks up where it stopped without creating anything twice.",
+  4: "The worker is stopping this company's workspace and removing its database and files.",
 };
 
 export default function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { logout } = useAuth();
   const { notify } = useSnackbar();
   const { c } = useKit();
@@ -62,20 +65,39 @@ export default function TenantDetailPage() {
   const [nameDraft, setNameDraft] = useState("");
   const [savingName, setSavingName] = useState(false);
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteSlug, setDeleteSlug] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  // Set once a deletion is under way, so the 404 that ends it reads as success.
+  const awaitingDeletion = useRef(false);
+
   const load = useCallback(() => {
     if (!id) return;
     TenantsApi.get(id)
-      .then((value) => { setTenant(value); setError(null); })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load company."));
-  }, [id]);
+      .then((value) => {
+        setTenant(value);
+        setError(null);
+        if (value.status === 4) awaitingDeletion.current = true;
+      })
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 404 && awaitingDeletion.current) {
+          notify("Company deleted.", "success");
+          navigate("/tenants");
+          return;
+        }
+        setError(err instanceof ApiError ? err.message : "Failed to load company.");
+      });
+  }, [id, navigate, notify]);
 
   useEffect(load, [load]);
-  // Poll while provisioning so the page updates itself once the worker finishes.
+  // Poll while the worker is busy with this company, so the page follows it.
+  const workerBusy = tenant?.status === 0 || tenant?.status === 4;
   useEffect(() => {
-    if (tenant?.status !== 0) return;
+    if (!workerBusy) return;
     const timer = setInterval(load, 3000);
     return () => clearInterval(timer);
-  }, [tenant?.status, load]);
+  }, [workerBusy, load]);
 
   const startEditingName = () => {
     setNameDraft(tenant?.name ?? "");
@@ -127,6 +149,32 @@ export default function TenantDetailPage() {
       }
       notify(err instanceof ApiError ? err.message : "Action failed.", "error");
       setConfirmAction(null);
+    }
+  };
+
+  const openDelete = () => {
+    setDeleteSlug("");
+    setDeleteError(null);
+    setDeleteOpen(true);
+  };
+
+  const submitDelete = async () => {
+    if (!id || !tenant || deleteSlug.trim() !== tenant.slug) return;
+    setDeleting(true);
+    try {
+      await TenantsApi.remove(id, deleteSlug.trim());
+      awaitingDeletion.current = true;
+      setDeleteOpen(false);
+      notify("Deletion started.", "success");
+      load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        await logout();
+        return;
+      }
+      setDeleteError(err instanceof ApiError ? err.message : "Failed to delete company.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -237,8 +285,16 @@ export default function TenantDetailPage() {
           <LinearProgress color="info" sx={{ borderRadius: 3 }} />
         </Surface>
       )}
+      {tenant.status === 4 && (
+        <Surface sx={{ mb: 3, p: 2.5 }}>
+          <Box sx={{ mb: 1.5, fontSize: "0.875rem", fontWeight: 500, color: c.text }}>
+            Deleting this company — you'll be taken back to the list when it is gone.
+          </Box>
+          <LinearProgress color="error" sx={{ borderRadius: 3 }} />
+        </Surface>
+      )}
       {tenant.failureReason && (
-        <InlineAlert title="Provisioning failed" sx={{ mb: 3 }}>
+        <InlineAlert title={tenant.failureReason.startsWith("Delete") ? "Deletion failed" : "Provisioning failed"} sx={{ mb: 3 }}>
           {tenant.failureReason}
         </InlineAlert>
       )}
@@ -288,6 +344,68 @@ export default function TenantDetailPage() {
           {actionButton && <Box sx={{ mt: 2.5 }}>{actionButton}</Box>}
         </Section>
       </Box>
+
+      <Section
+        icon="delete_forever"
+        tone="error"
+        title="Delete company"
+        subtitle="Permanent. This cannot be undone."
+        sx={{ mt: 3 }}
+      >
+        <Box sx={{ fontSize: "0.875rem", lineHeight: 1.6, color: c.muted }}>
+          Deleting stops the workspace, drops this company's database with all its users, products, orders and tasks, and
+          removes it from the platform. To only stop access and keep the data, suspend it instead.
+        </Box>
+        <Box sx={{ mt: 2.5 }}>
+          <MDButton
+            variant="outlined"
+            color="error"
+            startIcon={<Icon>delete_forever</Icon>}
+            disabled={workerBusy}
+            onClick={openDelete}
+          >
+            Delete company
+          </MDButton>
+        </Box>
+      </Section>
+
+      <KitDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onSubmit={submitDelete}
+        maxWidth="xs"
+        icon="warning_amber"
+        tone="error"
+        title="Delete company"
+        subtitle={`${tenant.name} and all of its data will be removed for good.`}
+        actions={
+          <>
+            <MDButton variant="text" color="secondary" onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </MDButton>
+            <MDButton type="submit" variant="gradient" color="error" disabled={deleting || deleteSlug.trim() !== tenant.slug}>
+              Delete permanently
+            </MDButton>
+          </>
+        }
+      >
+        {deleteError && <InlineAlert sx={{ mb: 2.5 }}>{deleteError}</InlineAlert>}
+        <Box sx={{ mb: 2, fontSize: "0.875rem", lineHeight: 1.6, color: c.muted }}>
+          Type the company's slug{" "}
+          <Box component="span" sx={{ fontFamily: "monospace", fontWeight: 700, color: c.text }}>
+            {tenant.slug}
+          </Box>{" "}
+          to confirm.
+        </Box>
+        <MDInput
+          label="Company slug"
+          fullWidth
+          autoFocus
+          autoComplete="off"
+          value={deleteSlug}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDeleteSlug(e.target.value)}
+        />
+      </KitDialog>
 
       <ConfirmDialog
         open={!!confirmAction}

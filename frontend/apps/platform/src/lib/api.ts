@@ -50,12 +50,12 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    throw new ApiError(response.status, problem?.title ?? problem?.detail ?? "Request failed");
+    // The detail is the server's own explanation; the title is only the status name ("Bad Request").
+    throw new ApiError(response.status, problem?.detail ?? problem?.title ?? "Request failed");
   }
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
+  // 204 No Content, and 202 Accepted from the endpoints that only queue work,
+  // carry no body to parse.
+  const body = await response.text();
+  return (body ? JSON.parse(body) : undefined) as T;
 }

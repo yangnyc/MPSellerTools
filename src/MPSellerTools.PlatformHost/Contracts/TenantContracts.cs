@@ -26,6 +26,23 @@ public record TenantDetailResponse(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
 
+/// <summary>
+/// Where and how a tenant's instance is running, for the console's tenant
+/// controls. Names and ids only — never a connection string or credential.
+/// </summary>
+public record TenantRuntimeResponse(
+    Guid Id,
+    string Name,
+    string Slug,
+    TenantStatus Status,
+    string? Url,
+    int? Port,
+    string? DatabaseName,
+    Guid? ApplicationInstanceId,
+    int? ProcessId,
+    DateTime? ProcessStartTimeUtc,
+    DateTime UpdatedAtUtc);
+
 public record ProvisioningJobResponse(
     Guid Id,
     Guid TenantId,

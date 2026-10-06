@@ -1,5 +1,5 @@
 import type { KitTone } from "examples/Kit";
-import type { OrderStatus, TaskStatus } from "../api/types";
+import type { ListingStatus, OrderStatus, TaskStatus } from "../api/types";
 
 // Status → colour tone, shared by every page that shows an order or a task.
 export const ORDER_STATUS_TONE: Record<OrderStatus, KitTone> = {
@@ -14,6 +14,12 @@ export const TASK_STATUS_TONE: Record<TaskStatus, KitTone> = {
   1: "warning",
   2: "success",
   3: "neutral",
+};
+
+export const LISTING_STATUS_TONE: Record<ListingStatus, KitTone> = {
+  0: "success",
+  1: "warning",
+  2: "neutral",
 };
 
 // The transitions the server permits from each status (orders and tasks share

@@ -23,6 +23,7 @@ import Icon from "@mui/material/Icon";
 
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
+import MDInput from "components/MDInput";
 import MDTypography from "components/MDTypography";
 
 // Custom styles for the Configurator
@@ -54,7 +55,9 @@ function Configurator() {
   } = controller;
   const [disabled, setDisabled] = useState(false);
   const configuratorRef = useRef(null);
-  const sidenavColors = ["steel", "slate", "teal", "sage", "amber", "mauve", "gold"];
+  // "slate" and "sage" are no longer offered; their gradients stay in
+  // colors.js so a profile that saved one still renders.
+  const sidenavColors = ["steel", "teal", "amber", "mauve", "gold", "mint"];
   // A curated subset of sidenavColors that reads well as a full sidenav
   // background rather than a small accent chip, so the "Sidenav Style" row
   // shows the same number of swatches (6: Dark, White + 4 tints) as the
@@ -156,35 +159,7 @@ function Configurator() {
     };
   };
 
-  // One row per named theme: its colours, name, and a check when selected.
-  const themeOptionStyles = (isActive) => (theme) => {
-    const {
-      borders: { borderWidth, borderRadius },
-      palette: { white, dark, grey },
-      functions: { rgba },
-    } = theme;
-    const activeColor = darkMode ? white.main : dark.main;
-
-    return {
-      display: "flex",
-      alignItems: "center",
-      gap: 1.5,
-      width: "100%",
-      py: 1.25,
-      pr: 1.5,
-      pl: 2,
-      textAlign: "left",
-      cursor: "pointer",
-      fontFamily: "inherit",
-      background: "none",
-      borderRadius: borderRadius.md,
-      border: `${borderWidth[1]} solid ${isActive ? activeColor : rgba(grey[500], 0.4)}`,
-
-      "&:hover, &:focus-visible": {
-        borderColor: activeColor,
-      },
-    };
-  };
+  const activeTheme = themeOptions.find((option) => option.id === themeName) ?? themeOptions[0];
 
   return (
     <ConfiguratorRoot ref={configuratorRef} variant="permanent" ownerState={{ openConfigurator }}>
@@ -224,50 +199,44 @@ function Configurator() {
         <MDBox mb={3}>
           <MDTypography variant="h6">Theme</MDTypography>
 
-          <MDBox role="group" aria-label="Theme" display="grid" gap={1} mt={1}>
-            {themeOptions.map((option) => {
-              const isActive = themeName === option.id;
+          <MDBox mt={1.5}>
+            <MDInput
+              select
+              fullWidth
+              size="small"
+              SelectProps={{ native: true }}
+              inputProps={{ "aria-label": "Theme" }}
+              value={themeName}
+              onChange={(event) => setThemeName(dispatch, event.target.value)}
+            >
+              {themeOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </MDInput>
+          </MDBox>
 
-              return (
+          {/* The chosen theme's colours and description. */}
+          <MDBox display="flex" alignItems="center" gap={1.5} mt={1.5} pl={0.5}>
+            <MDBox display="flex" flexShrink={0}>
+              {activeTheme.swatch.map((color) => (
                 <MDBox
-                  key={option.id}
-                  component="button"
-                  type="button"
-                  aria-pressed={isActive}
-                  onClick={() => setThemeName(dispatch, option.id)}
-                  sx={themeOptionStyles(isActive)}
-                >
-                  <MDBox display="flex" flexShrink={0}>
-                    {option.swatch.map((color) => (
-                      <MDBox
-                        key={color}
-                        sx={({ palette: { grey } }) => ({
-                          width: 18,
-                          height: 18,
-                          ml: "-4px",
-                          borderRadius: "50%",
-                          backgroundColor: color,
-                          border: `1px solid ${grey[500]}`,
-                        })}
-                      />
-                    ))}
-                  </MDBox>
-                  <MDBox flex={1} minWidth={0} lineHeight={1.3}>
-                    <MDTypography variant="button" fontWeight="medium" display="block">
-                      {option.name}
-                    </MDTypography>
-                    <MDTypography variant="caption" color="text" display="block">
-                      {option.description}
-                    </MDTypography>
-                  </MDBox>
-                  {isActive && (
-                    <Icon fontSize="small" sx={{ color: ({ palette: { white, dark } }) => (darkMode ? white.main : dark.main) }}>
-                      check
-                    </Icon>
-                  )}
-                </MDBox>
-              );
-            })}
+                  key={color}
+                  sx={({ palette: { grey } }) => ({
+                    width: 18,
+                    height: 18,
+                    ml: "-4px",
+                    borderRadius: "50%",
+                    backgroundColor: color,
+                    border: `1px solid ${grey[500]}`,
+                  })}
+                />
+              ))}
+            </MDBox>
+            <MDTypography variant="caption" color="text">
+              {activeTheme.description}
+            </MDTypography>
           </MDBox>
         </MDBox>
 

@@ -65,4 +65,10 @@ const divider = {
   },
 };
 
-export default divider;
+// MUI 9 dropped Divider's `light` prop along with its style slot, so the
+// light look is keyed off a class the components add themselves.
+const { light, ...styleOverrides } = divider.styleOverrides;
+
+export default {
+  styleOverrides: { ...styleOverrides, root: { ...styleOverrides.root, "&.MuiDivider-light": light } },
+};

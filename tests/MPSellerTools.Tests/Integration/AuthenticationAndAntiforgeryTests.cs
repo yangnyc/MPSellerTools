@@ -134,6 +134,115 @@ public class AuthenticationAndAntiforgeryTests(TenantHostFixture fixture) : ICla
     }
 
     [Fact]
+    public async Task Each_named_theme_keeps_its_own_settings_when_the_user_switches_between_them()
+    {
+        await fixture.CreateUserAsync("theme-switch@example.com", "Password123!", "Employee");
+        using var client = fixture.CreateClient();
+        await TenantApiHelpers.LoginAsync(client, "theme-switch@example.com", "Password123!");
+
+        // Never used: nothing to read back.
+        Assert.Equal(HttpStatusCode.NoContent, (await client.GetAsync("/api/auth/me/theme/noir")).StatusCode);
+
+        await TenantApiHelpers.PutJsonWithAntiforgeryAsync(
+            client,
+            "/api/auth/me/theme",
+            new { themeName = "ocean", darkMode = false, whiteSidenav = true, sidenavTint = (string?)null, sidenavColor = "teal", fixedNavbar = false });
+        await TenantApiHelpers.PutJsonWithAntiforgeryAsync(
+            client,
+            "/api/auth/me/theme",
+            new { themeName = "noir", darkMode = true, whiteSidenav = false, sidenavTint = (string?)null, sidenavColor = "gold", fixedNavbar = true });
+
+        // The theme in use is the last one saved...
+        var me = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/me");
+        Assert.Equal("noir", me.GetProperty("theme").GetProperty("themeName").GetString());
+
+        // ...and the one switched away from is still there to switch back to.
+        var ocean = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/me/theme/ocean");
+        Assert.Equal("ocean", ocean.GetProperty("themeName").GetString());
+        Assert.True(ocean.GetProperty("whiteSidenav").GetBoolean());
+        Assert.Equal("teal", ocean.GetProperty("sidenavColor").GetString());
+        Assert.False(ocean.GetProperty("fixedNavbar").GetBoolean());
+
+        var noir = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/me/theme/noir");
+        Assert.True(noir.GetProperty("darkMode").GetBoolean());
+        Assert.Equal("gold", noir.GetProperty("sidenavColor").GetString());
+    }
+
+    [Fact]
+    public async Task Light_and_dark_each_keep_their_own_colours_within_a_theme()
+    {
+        await fixture.CreateUserAsync("theme-modes@example.com", "Password123!", "Employee");
+        using var client = fixture.CreateClient();
+        await TenantApiHelpers.LoginAsync(client, "theme-modes@example.com", "Password123!");
+
+        await TenantApiHelpers.PutJsonWithAntiforgeryAsync(
+            client,
+            "/api/auth/me/theme",
+            new { themeName = "ocean", darkMode = false, whiteSidenav = true, sidenavTint = (string?)null, sidenavColor = "teal", fixedNavbar = true });
+
+        // Dark has not been used yet.
+        Assert.Equal(HttpStatusCode.NoContent, (await client.GetAsync("/api/auth/me/theme/ocean?dark=true")).StatusCode);
+
+        await TenantApiHelpers.PutJsonWithAntiforgeryAsync(
+            client,
+            "/api/auth/me/theme",
+            new { themeName = "ocean", darkMode = true, whiteSidenav = false, sidenavTint = (string?)null, sidenavColor = "amber", fixedNavbar = true });
+
+        var light = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/me/theme/ocean?dark=false");
+        Assert.False(light.GetProperty("darkMode").GetBoolean());
+        Assert.True(light.GetProperty("whiteSidenav").GetBoolean());
+        Assert.Equal("teal", light.GetProperty("sidenavColor").GetString());
+
+        var dark = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/me/theme/ocean?dark=true");
+        Assert.True(dark.GetProperty("darkMode").GetBoolean());
+        Assert.Equal("amber", dark.GetProperty("sidenavColor").GetString());
+
+        // With no mode asked for, the theme comes back in the mode it was last used in.
+        var last = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/me/theme/ocean");
+        Assert.True(last.GetProperty("darkMode").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Pinned_menus_are_saved_on_the_profile_and_survive_a_theme_change()
+    {
+        await fixture.CreateUserAsync("pins@example.com", "Password123!", "Employee");
+        using var client = fixture.CreateClient();
+        await TenantApiHelpers.LoginAsync(client, "pins@example.com", "Password123!");
+
+        var before = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/me");
+        Assert.Equal(0, before.GetProperty("pinnedMenus").GetArrayLength());
+
+        var response = await TenantApiHelpers.PutJsonWithAntiforgeryAsync(client, "/api/auth/me/pinned-menus", new { menus = new[] { "users" } });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await TenantApiHelpers.PutJsonWithAntiforgeryAsync(
+            client,
+            "/api/auth/me/theme",
+            new { themeName = "noir", darkMode = true, whiteSidenav = false, sidenavTint = (string?)null, sidenavColor = "gold", fixedNavbar = true });
+
+        var me = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/me");
+        Assert.Equal(["users"], me.GetProperty("pinnedMenus").EnumerateArray().Select(m => m.GetString()));
+        Assert.Equal("noir", me.GetProperty("theme").GetProperty("themeName").GetString());
+
+        var unpinned = await TenantApiHelpers.PutJsonWithAntiforgeryAsync(client, "/api/auth/me/pinned-menus", new { menus = Array.Empty<string>() });
+        Assert.Equal(HttpStatusCode.OK, unpinned.StatusCode);
+        var after = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/me");
+        Assert.Equal(0, after.GetProperty("pinnedMenus").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Pinned_menus_reject_values_that_are_not_plain_names()
+    {
+        await fixture.CreateUserAsync("pins-invalid@example.com", "Password123!", "Employee");
+        using var client = fixture.CreateClient();
+        await TenantApiHelpers.LoginAsync(client, "pins-invalid@example.com", "Password123!");
+
+        var response = await TenantApiHelpers.PutJsonWithAntiforgeryAsync(client, "/api/auth/me/pinned-menus", new { menus = new[] { "<script>" } });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Theme_settings_reject_values_that_are_not_swatch_names()
     {
         await fixture.CreateUserAsync("theme-invalid@example.com", "Password123!", "Employee");

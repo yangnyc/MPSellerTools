@@ -32,6 +32,14 @@ public static class TenantApiHelpers
         return await client.SendAsync(request);
     }
 
+    public static async Task<HttpResponseMessage> DeleteWithAntiforgeryAsync(HttpClient client, string url)
+    {
+        var token = await GetAntiforgeryTokenAsync(client);
+        var request = new HttpRequestMessage(HttpMethod.Delete, url);
+        request.Headers.Add("X-CSRF-TOKEN", token);
+        return await client.SendAsync(request);
+    }
+
     public static async Task<bool> LoginAsync(HttpClient client, string email, string password)
     {
         var response = await PostJsonWithAntiforgeryAsync(client, "/api/auth/login", new { email, password });

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -7,6 +8,9 @@ using MPSellerTools.Core.Tenancy;
 using MPSellerTools.Infrastructure.Hosting;
 using MPSellerTools.Infrastructure.Notifications;
 using MPSellerTools.Infrastructure.Tenants;
+using MPSellerTools.TenantHost.Marketplace;
+using MPSellerTools.TenantHost.Marketplace.Channels;
+using MPSellerTools.TenantHost.Services;
 using Serilog;
 
 // Content root must be pinned to the directory containing this assembly, not
@@ -115,10 +119,23 @@ builder.Services.AddAntiforgery(options =>
     options.HeaderName = "X-CSRF-TOKEN";
 });
 
+// The platform console manages this tenant's users by calling this instance
+// with the tenant's own platform access key — it is never given this
+// database's connection string (brief §4).
+var platformAccessKeyPath = PlatformAccessKey.PathFor(localDataDirectory, tenantOptions.Slug);
+builder.Services.AddSingleton(new PlatformAccessKeyHolder(PlatformAccessKey.LoadOrCreate(platformAccessKeyPath)));
+builder.Services.AddAuthentication()
+    .AddScheme<AuthenticationSchemeOptions, PlatformAccessAuthenticationHandler>(PlatformAccess.Scheme, null);
+
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy(Roles.TenantAdmin, policy => policy.RequireRole(Roles.TenantAdmin));
     options.AddPolicy(Roles.Employee, policy => policy.RequireRole(Roles.TenantAdmin, Roles.Employee));
+    // The only policy that looks at the platform access key, so the key
+    // reaches user management and no other endpoint.
+    options.AddPolicy(PlatformAccess.UserManagementPolicy, policy => policy
+        .AddAuthenticationSchemes(IdentityConstants.ApplicationScheme, PlatformAccess.Scheme)
+        .RequireRole(Roles.TenantAdmin, Roles.PlatformOperator));
 });
 
 // Role changes and blocking must revoke access immediately rather than
@@ -147,6 +164,34 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<MPSellerTools.TenantHost.Services.AuditLogger>();
+builder.Services.AddScoped<InvitationIssuer>();
+
+// eBay: one outgoing HTTP client, read-only calls on behalf of the connected seller.
+builder.Services.AddHttpClient(EbayClient.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddScoped<EbayClient>();
+builder.Services.AddScoped<EbaySync>();
+
+// The multichannel catalog: one adapter per channel behind a shared sync
+// queue kept in this tenant's own database. Nothing here reaches a
+// marketplace until Marketplace:LiveWritesEnabled and the account's own
+// switch are both on; until then every operation is a dry run.
+builder.Services.Configure<MarketplaceOptions>(builder.Configuration.GetSection(MarketplaceOptions.SectionName));
+builder.Services.AddHttpClient(ChannelHttp.AmazonClient, client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient(ChannelHttp.WalmartClient, client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddSingleton<ChannelTokenCache>();
+builder.Services.AddScoped<ChannelHttp>();
+builder.Services.AddScoped<ChannelSecrets>();
+builder.Services.AddScoped<IChannelAdapter, EbayChannelAdapter>();
+builder.Services.AddScoped<IChannelAdapter, AmazonChannelAdapter>();
+builder.Services.AddScoped<IChannelAdapter, WalmartChannelAdapter>();
+builder.Services.AddScoped<IChannelAdapter, WebsiteChannelAdapter>();
+builder.Services.AddScoped<InventoryService>();
+builder.Services.AddScoped<ListingService>();
+builder.Services.AddScoped<OrderIngestionService>();
+builder.Services.AddScoped<SyncEngine>();
+builder.Services.AddScoped<CatalogBackfill>();
+builder.Services.AddScoped<SyncHealthReader>();
+builder.Services.AddHostedService<ChannelSyncWorker>();
 
 var app = builder.Build();
 
@@ -188,7 +233,12 @@ app.Use(async (context, next) =>
         HttpMethods.IsOptions(context.Request.Method) ||
         HttpMethods.IsTrace(context.Request.Method);
 
-    if (isApi && !isSafeMethod)
+    // A request carrying the platform access key has no session cookie for a
+    // forged request to ride on, so there is nothing for antiforgery to protect.
+    var viaPlatformKey = isApi && !isSafeMethod &&
+        (await context.AuthenticateAsync(PlatformAccess.Scheme)).Succeeded;
+
+    if (isApi && !isSafeMethod && !viaPlatformKey)
     {
         var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
         try

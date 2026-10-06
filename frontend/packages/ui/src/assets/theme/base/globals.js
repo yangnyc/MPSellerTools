@@ -16,12 +16,24 @@ Coded by www.creative-tim.com
 // Material Dashboard 2 React Base Styles
 import colors from "assets/theme/base/colors";
 
-const { info, dark } = colors;
+const { info, dark, white } = colors;
+
+// The options of a native dropdown. MUI gives them the palette's paper colour
+// (white in every theme here) with a class selector, so this has to be more
+// specific than that to win.
+export const nativeOptionSelector = ["option", "optgroup"]
+  .map((tag) => `select.MuiNativeSelect-select:not([multiple]) ${tag}, select ${tag}`)
+  .join(", ");
 
 const globals = {
   html: {
     scrollBehavior: "smooth",
     overflowX: "hidden",
+  },
+  // An open dropdown's list, which the browser draws itself; see the dark theme's globals.
+  [nativeOptionSelector]: {
+    backgroundColor: white.main,
+    color: dark.main,
   },
   "*, *::before, *::after": {
     margin: 0,

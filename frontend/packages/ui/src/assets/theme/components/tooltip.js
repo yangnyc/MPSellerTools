@@ -31,7 +31,7 @@ const { borderRadius } = borders;
 const tooltip = {
   defaultProps: {
     arrow: true,
-    TransitionComponent: Fade,
+    slots: { transition: Fade },
   },
 
   styleOverrides: {

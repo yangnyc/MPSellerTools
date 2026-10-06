@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using MPSellerTools.Infrastructure.Tenants;
@@ -35,6 +36,12 @@ public class TenantHostFixture : WebApplicationFactory<Program>, IAsyncLifetime
 
     private readonly string _instanceConfigPath = Path.Combine(Path.GetTempPath(), $"mpst-test-config-{Guid.NewGuid():N}.json");
 
+    private string LocalDataDirectory => Path.Combine(Path.GetTempPath(), "mpst-tests", DatabaseName);
+
+    /// <summary>The key this instance accepts from the platform console, as the platform would read it.</summary>
+    public string PlatformAccessKey =>
+        Infrastructure.Hosting.PlatformAccessKey.TryRead(Infrastructure.Hosting.PlatformAccessKey.PathFor(LocalDataDirectory, Slug))!;
+
     private string ConnectionString =>
         $"Server=(localdb)\\MSSQLLocalDB;Database={DatabaseName};Trusted_Connection=True;TrustServerCertificate=True";
 
@@ -51,9 +58,37 @@ public class TenantHostFixture : WebApplicationFactory<Program>, IAsyncLifetime
         ClientOptions.BaseAddress = new Uri("https://localhost");
     }
 
+    /// <summary>Stands in for eBay: every call the host makes to eBay's APIs is answered by this.</summary>
+    public FakeEbay Ebay { get; } = new();
+
+    /// <summary>Method-aware answers for eBay's Inventory API; consulted before <see cref="Ebay"/>'s own.</summary>
+    public ChannelRouter EbayApi { get; } = new();
+
+    /// <summary>Stands in for Amazon's Selling Partner API.</summary>
+    public ChannelRouter Amazon { get; } = new();
+
+    /// <summary>Stands in for Walmart's Marketplace API.</summary>
+    public ChannelRouter Walmart { get; } = new();
+
+    /// <summary>
+    /// The host's "Marketplace" settings. The sync worker and the startup
+    /// backfill are off for every test host: tests that want them run them
+    /// by hand, so nothing happens behind a test's back.
+    /// </summary>
+    protected virtual object MarketplaceSettings => new { WorkerEnabled = false, AutoBackfill = false };
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+        Ebay.Intercept = EbayApi.Respond;
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddHttpClient(TenantHost.Services.EbayClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => Ebay);
+            services.AddHttpClient(TenantHost.Marketplace.Channels.ChannelHttp.AmazonClient)
+                .ConfigurePrimaryHttpMessageHandler(() => new FakeChannelApi(Amazon));
+            services.AddHttpClient(TenantHost.Marketplace.Channels.ChannelHttp.WalmartClient)
+                .ConfigurePrimaryHttpMessageHandler(() => new FakeChannelApi(Walmart));
+        });
     }
 
     public async Task InitializeAsync()
@@ -69,7 +104,8 @@ public class TenantHostFixture : WebApplicationFactory<Program>, IAsyncLifetime
                 DisplayName = "Test Tenant",
                 Url = "https://localhost:0",
             },
-            Hosting = new { LocalDataDirectory = Path.Combine(Path.GetTempPath(), "mpst-tests", DatabaseName) },
+            Hosting = new { LocalDataDirectory },
+            Marketplace = MarketplaceSettings,
         });
         await File.WriteAllTextAsync(_instanceConfigPath, json);
         Environment.SetEnvironmentVariable("MPST_INSTANCE_CONFIG_FILE", _instanceConfigPath);

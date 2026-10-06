@@ -7,6 +7,7 @@ export const TENANT_STATUS_TONE: Record<TenantStatus, KitTone> = {
   1: "success",
   2: "warning",
   3: "error",
+  4: "neutral",
 };
 
 export const JOB_STATUS_TONE: Record<ProvisioningJobStatus, KitTone> = {

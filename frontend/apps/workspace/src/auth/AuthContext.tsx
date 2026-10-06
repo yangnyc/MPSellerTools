@@ -49,8 +49,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(me);
   };
 
+  const loadTheme = async (themeName: string, darkMode?: boolean) => {
+    const mode = darkMode === undefined ? "" : `?dark=${darkMode}`;
+    const saved = await apiFetch<ThemeSettings | undefined>(`/api/auth/me/theme/${encodeURIComponent(themeName)}${mode}`);
+    return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : null;
+  };
+
+  // Shown at once and saved behind it; a save that fails puts the old pins back.
+  const savePinnedMenus = async (menus: string[]) => {
+    const before = user?.pinnedMenus ?? [];
+    setUser((current) => (current ? { ...current, pinnedMenus: menus } : current));
+    try {
+      const me = await apiFetch<CurrentUser>("/api/auth/me/pinned-menus", {
+        method: "PUT",
+        body: JSON.stringify({ menus }),
+      });
+      setUser(me);
+    } catch (err) {
+      setUser((current) => (current ? { ...current, pinnedMenus: before } : current));
+      throw err;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, status, login, logout, updateDisplayName, saveTheme }}>
+    <AuthContext.Provider
+      value={{ user, status, login, logout, updateDisplayName, saveTheme, loadTheme, savePinnedMenus }}
+    >
       {children}
     </AuthContext.Provider>
   );

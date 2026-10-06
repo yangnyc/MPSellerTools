@@ -26,8 +26,12 @@ function RequireAuth({ children, allowedRoles }: { children: ReactNode; allowedR
   return <>{children}</>;
 }
 
+// A sidenav group has no page of its own; its sub-items do.
+const withSubItems = (allRoutes: AppRoute[]): AppRoute[] =>
+  allRoutes.flatMap((route) => (route.collapse ? route.collapse : [route]));
+
 function renderProtectedRoutes(allRoutes: AppRoute[]) {
-  return allRoutes
+  return withSubItems(allRoutes)
     .filter((route) => route.type === "collapse" && route.route)
     .map((route) => (
       <Route
@@ -42,7 +46,7 @@ export default function App() {
   const [controller] = useMaterialUIController();
   const { layout, sidenavColor } = controller;
   const { pathname } = useLocation();
-  const { status, user } = useAuth();
+  const { status, user, savePinnedMenus } = useAuth();
 
   useEffect(() => {
     document.documentElement.scrollTop = 0;
@@ -55,7 +59,14 @@ export default function App() {
     <>
       {showChrome && (
         <>
-          <Sidenav color={sidenavColor} brandName="MP Seller Tools" routes={visibleRoutes} />
+          <Sidenav
+            color={sidenavColor}
+            brandName="MP Seller Tools"
+            routes={visibleRoutes}
+            pinnedGroups={user?.pinnedMenus ?? []}
+            // A failed save puts the checkbox back by itself.
+            onPinnedGroupsChange={(menus: string[]) => void savePinnedMenus(menus).catch(() => undefined)}
+          />
           <Configurator />
         </>
       )}

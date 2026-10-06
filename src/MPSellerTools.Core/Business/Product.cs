@@ -9,8 +9,24 @@ public class Product
 
     public required string Name { get; set; }
 
+    public string? Brand { get; set; }
+
+    /// <summary>Base description, shared by every channel that does not override it.</summary>
+    public string? Description { get; set; }
+
+    /// <summary>Internal category, mapped per marketplace by <see cref="Marketplace.CategoryMapping"/>.</summary>
+    public string? Category { get; set; }
+
+    /// <summary>
+    /// Price of the product's default variant. Kept in step with
+    /// <see cref="Marketplace.ProductVariant.Price"/> on every save.
+    /// </summary>
     public decimal Price { get; set; }
 
+    /// <summary>
+    /// On-hand stock of the default variant in the merchant warehouse. Kept
+    /// in step with its <see cref="Marketplace.InventoryBalance"/> on every save.
+    /// </summary>
     public int StockQuantity { get; set; }
 
     /// <summary>

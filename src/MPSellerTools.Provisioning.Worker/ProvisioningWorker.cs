@@ -152,8 +152,34 @@ public class ProvisioningWorker(
         var tenant = await db.Tenants.FindAsync([job.TenantId], cancellationToken)
             ?? throw new InvalidOperationException($"Job {jobId} references missing tenant {job.TenantId}.");
 
+        var tenantRemoved = false;
         try
         {
+            if (job.JobType == ProvisioningJobType.Delete)
+            {
+                await provisioningService.DeleteAsync(tenant, cancellationToken);
+
+                // The company leaves the registry together with its jobs (this
+                // one included), which only mean something next to their tenant.
+                // The audit trail stays, and carries the name the row no longer can.
+                var tenantJobs = await db.ProvisioningJobs.Where(j => j.TenantId == tenant.Id).ToListAsync(cancellationToken);
+                db.ProvisioningJobs.RemoveRange(tenantJobs);
+                db.Tenants.Remove(tenant);
+                db.AuditEntries.Add(new PlatformAuditEntry
+                {
+                    Id = Guid.NewGuid(),
+                    OccurredAtUtc = DateTime.UtcNow,
+                    ActorUserId = Guid.Empty,
+                    ActorEmail = "provisioning-worker",
+                    Action = "TenantDeleteSucceeded",
+                    TenantId = tenant.Id,
+                    Details = $"slug={tenant.Slug} name=\"{tenant.Name}\"",
+                });
+                await db.SaveChangesAsync(cancellationToken);
+                tenantRemoved = true;
+                return;
+            }
+
             switch (job.JobType)
             {
                 case ProvisioningJobType.CreateTenant:
@@ -164,6 +190,9 @@ public class ProvisioningWorker(
                     break;
                 case ProvisioningJobType.Resume:
                     await provisioningService.ResumeAsync(tenant, cancellationToken);
+                    break;
+                case ProvisioningJobType.Restart:
+                    await provisioningService.RestartAsync(tenant, cancellationToken);
                     break;
             }
 
@@ -193,10 +222,13 @@ public class ProvisioningWorker(
         }
         finally
         {
-            job.LeaseOwner = null;
-            job.LeaseExpiresAtUtc = null;
-            job.UpdatedAtUtc = DateTime.UtcNow;
-            await db.SaveChangesAsync(cancellationToken);
+            if (!tenantRemoved)
+            {
+                job.LeaseOwner = null;
+                job.LeaseExpiresAtUtc = null;
+                job.UpdatedAtUtc = DateTime.UtcNow;
+                await db.SaveChangesAsync(cancellationToken);
+            }
         }
     }
 }

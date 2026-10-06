@@ -657,12 +657,14 @@ export function KitDialog({
       onClose={onClose}
       fullWidth
       maxWidth={maxWidth}
-      PaperProps={{
-        sx: {
-          backgroundColor: c.surface,
-          backgroundImage: "none",
-          border: `1px solid ${c.border}`,
-          borderRadius: "16px",
+      slotProps={{
+        paper: {
+          sx: {
+            backgroundColor: c.surface,
+            backgroundImage: "none",
+            border: `1px solid ${c.border}`,
+            borderRadius: "16px",
+          },
         },
       }}
     >

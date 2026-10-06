@@ -15,7 +15,7 @@ using Microsoft.AspNetCore.Identity;
 namespace MPSellerTools.Provisioning.Worker;
 
 /// <summary>
-/// Implements the CreateTenant/Suspend/Resume job handlers (brief §10). Every
+/// Implements the CreateTenant/Suspend/Resume/Restart/Delete job handlers (brief §10). Every
 /// step is written to be safely re-run: a retried CreateTenant job that
 /// failed partway through does not create a second database, a second
 /// invitation, or a second OS process.
@@ -99,6 +99,11 @@ public class TenantProvisioningService(
             throw new InvalidOperationException($"Tenant {tenant.Id}'s database '{tenant.DatabaseName}' is not reachable.");
         }
 
+        // A tenant created by an earlier build may be behind on migrations, and its instance does
+        // not report ready until none are pending. Applying them is this worker's job, as at
+        // creation; migrations are additive, and this is the local database the worker itself made.
+        await tenantDb.Database.MigrateAsync(cancellationToken);
+
         var instanceConfigPath = WriteInstanceConfig(tenant, tenant.ApplicationInstanceId.Value, tenant.Url, connectionString);
 
         if (!supervisor.IsRunning(tenant))
@@ -112,6 +117,65 @@ public class TenantProvisioningService(
 
         tenant.Status = TenantStatus.Active;
         tenant.UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public async Task RestartAsync(Tenant tenant, CancellationToken cancellationToken)
+    {
+        supervisor.Stop(tenant);
+        tenant.ProcessId = null;
+        tenant.ProcessStartTimeUtc = null;
+        await ResumeAsync(tenant, cancellationToken);
+    }
+
+    /// <summary>
+    /// Stops the instance, drops its database and removes its local files. Safe
+    /// to re-run: each step is a no-op when a previous attempt already did it.
+    /// The caller removes the registry row once this returns.
+    /// </summary>
+    public async Task DeleteAsync(Tenant tenant, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Deleting tenant {Slug} ({TenantId})", tenant.Slug, tenant.Id);
+
+        if (!SlugValidator.IsValid(tenant.Slug))
+        {
+            // Same defense in depth as CreateTenantAsync: the slug names the
+            // database to drop and the directory to delete.
+            throw new InvalidOperationException($"Tenant {tenant.Id} has an invalid stored slug '{tenant.Slug}'.");
+        }
+
+        supervisor.Stop(tenant);
+        tenant.ProcessId = null;
+        tenant.ProcessStartTimeUtc = null;
+
+        // A provisioning run that failed partway may have created the database
+        // without recording its name, so fall back to the name it would have used.
+        var databaseName = tenant.DatabaseName ?? $"MPSellerTools_Tenant_{tenant.Slug.Replace('-', '_')}";
+        if (!databaseName.StartsWith("MPSellerTools_Tenant_", StringComparison.Ordinal) ||
+            !databaseName.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '_'))
+        {
+            throw new InvalidOperationException($"Tenant {tenant.Id} has an unexpected database name '{databaseName}'; refusing to drop it.");
+        }
+
+        var connectionString =
+            $"Server=(localdb)\\MSSQLLocalDB;Database={databaseName};Trusted_Connection=True;TrustServerCertificate=True";
+        await using (var tenantDb = CreateTenantDbContext(connectionString))
+        {
+            await tenantDb.Database.EnsureDeletedAsync(cancellationToken);
+        }
+
+        var instanceDirectory = Path.Combine(localDataDirectory, "tenants", tenant.Slug);
+        // The just-stopped process can hold its log file open for a moment.
+        for (var attempt = 1; Directory.Exists(instanceDirectory); attempt++)
+        {
+            try
+            {
+                Directory.Delete(instanceDirectory, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < 5)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            }
+        }
     }
 
     private static TenantDbContext CreateTenantDbContext(string connectionString)

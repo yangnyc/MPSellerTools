@@ -66,7 +66,7 @@ function MDSnackbar({
 
   return (
     <Snackbar
-      TransitionComponent={Fade}
+      slots={{ transition: Fade }}
       autoHideDuration={5000}
       anchorOrigin={{
         vertical: "bottom",
@@ -131,7 +131,7 @@ function MDSnackbar({
             </Icon>
           </MDBox>
         </MDBox>
-        <Divider sx={{ margin: 0 }} light={dividerColor} />
+        <Divider sx={{ margin: 0 }} className={dividerColor ? "MuiDivider-light" : undefined} />
         <MDBox
           p={1.5}
           sx={{

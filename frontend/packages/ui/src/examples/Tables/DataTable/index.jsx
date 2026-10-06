@@ -31,7 +31,6 @@ import TableBody from "@mui/material/TableBody";
 import TableContainer from "@mui/material/TableContainer";
 import TableRow from "@mui/material/TableRow";
 import Icon from "@mui/material/Icon";
-import Autocomplete from "@mui/material/Autocomplete";
 
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
@@ -46,8 +45,11 @@ import DataTableBodyCell from "examples/Tables/DataTable/DataTableBodyCell";
 // MP Seller Tools page kit colours (light/dark aware)
 import { useKit } from "examples/Kit/tokens";
 
+// The page size that stands for "All": every row on one page, however many arrive later.
+const ALL_ROWS = Number.MAX_SAFE_INTEGER;
+
 function DataTable({
-  entriesPerPage = { defaultValue: 10, entries: [5, 10, 15, 20, 25] },
+  entriesPerPage = { defaultValue: 10, entries: [5, 10, 15, 20, 25, 50, 100] },
   canSearch = false,
   showTotalEntries = true,
   table,
@@ -56,9 +58,7 @@ function DataTable({
   noEndBorder = false,
 }) {
   const defaultValue = entriesPerPage.defaultValue ? entriesPerPage.defaultValue : 10;
-  const entries = entriesPerPage.entries
-    ? entriesPerPage.entries.map((el) => el.toString())
-    : ["5", "10", "15", "20", "25"];
+  const entries = entriesPerPage.entries ? entriesPerPage.entries : [5, 10, 15, 20, 25, 50, 100];
   const { c } = useKit();
   const columns = useMemo(() => table.columns, [table]);
   const data = useMemo(() => table.rows, [table]);
@@ -91,8 +91,6 @@ function DataTable({
   // Set the default value for the entries per page when component mounts
   useEffect(() => setPageSize(defaultValue || 10), [defaultValue, setPageSize]);
 
-  // Set the entries per page value based on the select value
-  const setEntriesPerPage = (value) => setPageSize(value);
 
   // Render the paginations
   const renderPagination = pageOptions.map((option) => (
@@ -151,20 +149,27 @@ function DataTable({
         <MDBox display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5} px={3} py={2}>
           {entriesPerPage && (
             <MDBox display="flex" alignItems="center">
-              <Autocomplete
-                disableClearable
-                value={pageSize.toString()}
-                options={entries}
-                onChange={(event, newValue) => {
-                  setEntriesPerPage(parseInt(newValue, 10));
-                }}
+              {/* A native select, like every other one in the app: its list
+                  is drawn by the browser, so it stays readable in dark mode. */}
+              <MDInput
+                select
                 size="small"
-                sx={{ width: "5rem" }}
-                renderInput={(params) => <MDInput {...params} />}
-              />
-              <MDTypography variant="caption" color="secondary">
-                &nbsp;&nbsp;entries per page
-              </MDTypography>
+                SelectProps={{ native: true }}
+                inputProps={{ "aria-label": "Entries per page" }}
+                value={pageSize === ALL_ROWS ? "all" : pageSize.toString()}
+                onChange={({ target }) => setPageSize(target.value === "all" ? ALL_ROWS : Number(target.value))}
+                sx={{ minWidth: "5.5rem" }}
+              >
+                {entries.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+                <option value="all">All</option>
+              </MDInput>
+              <MDBox component="span" sx={{ ml: 1.25, fontSize: "0.8125rem", color: c.muted }}>
+                entries per page
+              </MDBox>
             </MDBox>
           )}
           {canSearch && (

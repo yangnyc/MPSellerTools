@@ -4,8 +4,15 @@ test.beforeEach(async ({ page }) => {
   page.on("pageerror", (error) => { throw error; });
   await page.route(/\/\/[^/]+\/api\//, async (route) => {
     const path = new URL(route.request().url()).pathname;
-    if (path === "/api/auth/me") {
-      await route.fulfill({ json: { id: "admin", email: "admin@example.test", displayName: "Admin", roles: ["PlatformAdmin"] } });
+    const me = { id: "admin", email: "admin@example.test", displayName: "Admin", roles: ["PlatformAdmin"] };
+    if (path === "/api/auth/me/theme" && route.request().method() === "PUT") {
+      // Like the host, answer a saved theme with the profile that now holds it;
+      // any other answer makes the page fall back to the default theme.
+      await route.fulfill({ json: { ...me, theme: route.request().postDataJSON() } });
+    } else if (path.startsWith("/api/auth/me/theme/")) {
+      await route.fulfill({ status: 204 });
+    } else if (path === "/api/auth/me") {
+      await route.fulfill({ json: me });
     } else if (path === "/api/tenants") {
       await route.fulfill({ json: Array.from({ length: 12 }, (_, i) => ({
         id: String(i), name: `Company ${i}`, slug: `company-${i}`, status: 1,
@@ -30,6 +37,28 @@ test("search stays controlled and row counts reflect filtered results", async ({
   await expect(page.getByText("Showing 1 to 10 of 12 entries")).toBeVisible();
   await page.getByText("chevron_right", { exact: true }).click();
   await expect(page.getByText("Showing 11 to 12 of 12 entries")).toBeVisible();
+});
+
+test("entries per page changes how many rows show, up to all of them", async ({ page }) => {
+  const table = page.locator(".MuiTableContainer-root");
+  const perPage = table.getByLabel("Entries per page");
+  await expect(table.locator("tbody tr")).toHaveCount(10);
+
+  await perPage.selectOption("5");
+  await expect(page.getByText("Showing 1 to 5 of 12 entries")).toBeVisible();
+  await expect(table.locator("tbody tr")).toHaveCount(5);
+  await page.getByText("chevron_right", { exact: true }).click();
+  await expect(page.getByText("Showing 6 to 10 of 12 entries")).toBeVisible();
+
+  // Fewer pages than the one being viewed: back to the first.
+  await perPage.selectOption("25");
+  await expect(page.getByText("Showing 1 to 12 of 12 entries")).toBeVisible();
+
+  await perPage.selectOption("5");
+  await perPage.selectOption({ label: "All" });
+  await expect(page.getByText("Showing 1 to 12 of 12 entries")).toBeVisible();
+  await expect(table.locator("tbody tr")).toHaveCount(12);
+  await expect(page.getByText("chevron_right", { exact: true })).toHaveCount(0);
 });
 
 test("sidebar icons follow text contrast and style survives resizing", async ({ page }) => {

@@ -7,4 +7,7 @@ public enum TenantStatus
     Active,
     Suspended,
     Failed,
+
+    /// <summary>Deletion was requested; the worker is removing the instance, its database and its files.</summary>
+    Deleting,
 }

@@ -5,8 +5,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MPSellerTools.Core.Business;
 using MPSellerTools.Core.Tenancy;
+using Microsoft.Extensions.Options;
 using MPSellerTools.Infrastructure.Tenants;
 using MPSellerTools.TenantHost.Contracts;
+using MPSellerTools.TenantHost.Marketplace;
 using MPSellerTools.TenantHost.Services;
 
 namespace MPSellerTools.TenantHost.Controllers;
@@ -14,8 +16,15 @@ namespace MPSellerTools.TenantHost.Controllers;
 [ApiController]
 [Route("api/orders")]
 [Authorize(Policy = Roles.Employee)]
-public class OrdersController(TenantDbContext db, AuditLogger audit) : ControllerBase
+public class OrdersController(
+    TenantDbContext db, AuditLogger audit, InventoryService inventory, IOptions<MarketplaceOptions> marketplace) : ControllerBase
 {
+    /// <summary>
+    /// Whether orders hold and deduct stock (Marketplace:InventoryAccountingEnabled).
+    /// Off, orders leave stock alone, as they did before stock was accounted for.
+    /// </summary>
+    private bool Accounting => marketplace.Value.InventoryAccountingEnabled;
+
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private bool IsTenantAdmin => User.IsInRole(Roles.TenantAdmin);
 
@@ -84,13 +93,27 @@ public class OrdersController(TenantDbContext db, AuditLogger audit) : Controlle
             db.Orders.Add(order);
             audit.Log("OrderCreated", $"orderNumber={order.OrderNumber}");
 
+            await using var transaction = Accounting ? await db.Database.BeginTransactionAsync() : null;
             try
             {
                 await db.SaveChangesAsync();
+                if (transaction is not null)
+                {
+                    if (await ReserveAsync(order) is { } shortfall)
+                    {
+                        await transaction.RollbackAsync();
+                        return Problem(shortfall, statusCode: StatusCodes.Status409Conflict);
+                    }
+                    await transaction.CommitAsync();
+                }
                 return CreatedAtAction(nameof(Get), new { id = order.Id }, await ToResponseAsync(order));
             }
             catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("IX_Orders_OrderNumber", StringComparison.OrdinalIgnoreCase) == true)
             {
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync();
+                }
                 db.ChangeTracker.Clear();
                 items = (await BuildItemsAsync(request.Items)).Items!;
             }
@@ -137,6 +160,8 @@ public class OrdersController(TenantDbContext db, AuditLogger audit) : Controlle
 
         audit.Log("OrderUpdated", $"orderNumber={order.OrderNumber}");
 
+        var open = order.Status is OrderStatus.New or OrderStatus.InProgress;
+        await using var transaction = Accounting && open ? await db.Database.BeginTransactionAsync() : null;
         try
         {
             await db.SaveChangesAsync();
@@ -144,6 +169,18 @@ public class OrdersController(TenantDbContext db, AuditLogger audit) : Controlle
         catch (DbUpdateConcurrencyException)
         {
             return Problem("This order was modified by someone else. Reload and try again.", statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (transaction is not null)
+        {
+            // The lines were replaced, so what the old ones held is freed and the new ones hold afresh.
+            await inventory.ReleaseOrderAsync(order.Id, HttpContext.RequestAborted);
+            if (await ReserveAsync(order) is { } shortfall)
+            {
+                await transaction.RollbackAsync();
+                return Problem(shortfall, statusCode: StatusCodes.Status409Conflict);
+            }
+            await transaction.CommitAsync();
         }
 
         return Ok(await ToResponseAsync(order));
@@ -170,6 +207,7 @@ public class OrdersController(TenantDbContext db, AuditLogger audit) : Controlle
 
         audit.Log("OrderStatusChanged", $"orderNumber={order.OrderNumber}; status={request.Status}");
 
+        await using var transaction = Accounting ? await db.Database.BeginTransactionAsync() : null;
         try
         {
             await db.SaveChangesAsync();
@@ -177,6 +215,20 @@ public class OrdersController(TenantDbContext db, AuditLogger audit) : Controlle
         catch (DbUpdateConcurrencyException)
         {
             return Problem("This order was modified by someone else. Reload and try again.", statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (transaction is not null)
+        {
+            // Completing ships what the order held; cancelling frees it. Either is a no-op the second time.
+            if (order.Status == OrderStatus.Completed)
+            {
+                await inventory.ShipOrderAsync(order.Id, HttpContext.RequestAborted);
+            }
+            else if (order.Status == OrderStatus.Cancelled)
+            {
+                await inventory.ReleaseOrderAsync(order.Id, HttpContext.RequestAborted);
+            }
+            await transaction.CommitAsync();
         }
 
         return Ok(await ToResponseAsync(order));
@@ -195,6 +247,9 @@ public class OrdersController(TenantDbContext db, AuditLogger audit) : Controlle
 
         var productIds = requestedItems.Select(i => i.ProductId).Distinct().ToList();
         var products = await db.Products.Where(p => productIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id);
+        // An order made here is for the product as such, which is its default variant.
+        var variants = await db.ProductVariants.Where(v => productIds.Contains(v.ProductId) && v.IsDefault)
+            .ToDictionaryAsync(v => v.ProductId, v => v.Id);
 
         var items = new List<OrderItem>();
         foreach (var line in requestedItems)
@@ -207,12 +262,38 @@ public class OrdersController(TenantDbContext db, AuditLogger audit) : Controlle
             {
                 Id = Guid.NewGuid(),
                 ProductId = product.Id,
+                VariantId = variants.TryGetValue(product.Id, out var variantId) ? variantId : null,
                 Quantity = line.Quantity,
                 UnitPrice = product.Price,
             });
         }
 
         return (items, null);
+    }
+
+    /// <summary>
+    /// Holds stock for each line through the same service marketplace orders
+    /// use. Returns why it could not, or null. The caller's transaction takes
+    /// back whatever was held when one line falls short.
+    /// </summary>
+    private async Task<string?> ReserveAsync(Order order)
+    {
+        foreach (var item in order.Items)
+        {
+            if (item.VariantId is not { } variantId)
+            {
+                return $"Product {item.ProductId} has no variant to take stock from yet; run the catalog backfill.";
+            }
+
+            var result = await inventory.ReserveAsync(
+                variantId, item.Quantity, OrderIngestionService.ReservationKey(order.Id, item.Id), order.Id,
+                honorSafetyStock: true, expiresAtUtc: null, HttpContext.RequestAborted);
+            if (result == ReserveResult.Insufficient)
+            {
+                return $"Not enough stock for product {item.ProductId}.";
+            }
+        }
+        return null;
     }
 
     private async Task<bool> IsActiveUserAsync(Guid userId) =>

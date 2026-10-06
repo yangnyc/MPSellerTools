@@ -3,7 +3,9 @@
 // A theme is a whole look: the page kit's colours (examples/Kit/tokens.js)
 // and the MUI theme (assets/themes) are both keyed by these ids. The id is
 // what gets saved on the user's profile, so it must stay lowercase a–z (the
-// hosts validate it the same way as the sidenav swatch names).
+// hosts validate it the same way as the sidenav swatch names). "ocean" is
+// older than its colours: it was renamed and recoloured, and keeping the id
+// keeps every saved profile working.
 //
 // `preset` is the light/dark and sidenav choice applied when the theme is
 // picked; the user can still change those afterwards.
@@ -12,17 +14,24 @@ export const defaultThemeName = "ocean";
 export const themeOptions = [
   {
     id: "ocean",
-    name: "Ocean",
-    description: "Navy, sky and indigo. The original look.",
-    swatch: ["#0F172A", "#0284C7", "#4338CA"],
+    name: "Default",
+    description: "Purple, plum and coral.",
+    swatch: ["#4B4453", "#845EC2", "#FF8066"],
     preset: { darkMode: false, whiteSidenav: false, sidenavTint: null, sidenavColor: "steel" },
   },
   {
-    id: "noir",
-    name: "Noir Gold",
-    description: "Minimalist black with gold accents.",
-    swatch: ["#0A0A0A", "#D4AF37", "#F5F1E6"],
+    id: "stepwise",
+    name: "Navy Amber",
+    description: "Dark navy with one warm amber accent.",
+    swatch: ["#081729", "#102A4D", "#F0B429"],
     preset: { darkMode: true, whiteSidenav: false, sidenavTint: null, sidenavColor: "gold" },
+  },
+  {
+    id: "matrix",
+    name: "Matrix",
+    description: "Green phosphor on black, like a Unix terminal.",
+    swatch: ["#000000", "#008F11", "#00FF41"],
+    preset: { darkMode: true, whiteSidenav: false, sidenavTint: null, sidenavColor: "mint" },
   },
 ];
 

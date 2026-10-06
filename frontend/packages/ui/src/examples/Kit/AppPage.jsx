@@ -182,16 +182,18 @@ function AppNavbar({ user, onLogout, consoleName, profileHref }) {
           onClose={closeMenu}
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
-          PaperProps={{
-            sx: {
-              mt: 1,
-              minWidth: 240,
-              p: 0.5,
-              borderRadius: "14px",
-              backgroundColor: c.surface,
-              backgroundImage: "none",
-              border: `1px solid ${c.border}`,
-              boxShadow: c.shadow,
+          slotProps={{
+            paper: {
+              sx: {
+                mt: 1,
+                minWidth: 240,
+                p: 0.5,
+                borderRadius: "14px",
+                backgroundColor: c.surface,
+                backgroundImage: "none",
+                border: `1px solid ${c.border}`,
+                boxShadow: c.shadow,
+              },
             },
           }}
         >

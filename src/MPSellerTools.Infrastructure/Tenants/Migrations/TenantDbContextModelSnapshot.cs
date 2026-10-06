@@ -75,6 +75,62 @@ namespace MPSellerTools.Infrastructure.Tenants.Migrations
                     b.ToTable("CompanySettings");
                 });
 
+            modelBuilder.Entity("MPSellerTools.Core.Business.EbayConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ClientSecretProtected")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<DateTime?>("ConnectedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Environment")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastOrderSyncAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastProductSyncAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastSyncError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("PendingState")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("RefreshTokenExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RefreshTokenProtected")
+                        .HasMaxLength(4096)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RuName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("EbayConnections");
+                });
+
             modelBuilder.Entity("MPSellerTools.Core.Business.Invitation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -115,6 +171,63 @@ namespace MPSellerTools.Infrastructure.Tenants.Migrations
                     b.ToTable("Invitations");
                 });
 
+            modelBuilder.Entity("MPSellerTools.Core.Business.Listing", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("AvailableQuantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Currency")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("FirstSeenAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("LastSyncedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Marketplace")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<decimal?>("Price")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("SoldQuantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Url")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("Channel", "ExternalId")
+                        .IsUnique();
+
+                    b.ToTable("Listings");
+                });
+
             modelBuilder.Entity("MPSellerTools.Core.Business.Order", b =>
                 {
                     b.Property<Guid>("Id")
@@ -124,8 +237,23 @@ namespace MPSellerTools.Infrastructure.Tenants.Migrations
                     b.Property<Guid?>("AssignedUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ChannelAccountId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("Currency")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("EbayOrderId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ExternalOrderId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("OrderNumber")
                         .IsRequired()
@@ -147,8 +275,16 @@ namespace MPSellerTools.Infrastructure.Tenants.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("EbayOrderId")
+                        .IsUnique()
+                        .HasFilter("[EbayOrderId] IS NOT NULL");
+
                     b.HasIndex("OrderNumber")
                         .IsUnique();
+
+                    b.HasIndex("ChannelAccountId", "ExternalOrderId")
+                        .IsUnique()
+                        .HasFilter("[ChannelAccountId] IS NOT NULL AND [ExternalOrderId] IS NOT NULL");
 
                     b.ToTable("Orders");
                 });
@@ -159,6 +295,10 @@ namespace MPSellerTools.Infrastructure.Tenants.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("ExternalLineId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uniqueidentifier");
 
@@ -168,14 +308,23 @@ namespace MPSellerTools.Infrastructure.Tenants.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
+                    b.Property<string>("SellerSku")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<decimal>("UnitPrice")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("VariantId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
                     b.HasIndex("OrderId");
 
                     b.HasIndex("ProductId");
+
+                    b.HasIndex("VariantId");
 
                     b.ToTable("OrderItems");
                 });
@@ -186,8 +335,19 @@ namespace MPSellerTools.Infrastructure.Tenants.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Brand")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsArchived")
                         .HasColumnType("bit");
@@ -258,6 +418,935 @@ namespace MPSellerTools.Infrastructure.Tenants.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("WorkItems");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.CategoryMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ChannelMarketId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ExternalCategoryId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("InternalCategory")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("RequirementsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("RequirementsRetrievedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RequirementsSource")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("RequirementsVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChannelMarketId", "InternalCategory")
+                        .IsUnique();
+
+                    b.ToTable("CategoryMappings");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ChannelAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CredentialsProtected")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Environment")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("InventorySyncEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("LastOrderImportAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("LiveWritesEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("OrderImportEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("PriceConflictPolicy")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SellerId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("SettingsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Channel", "Name")
+                        .IsUnique();
+
+                    b.ToTable("ChannelAccounts");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ChannelListing", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AttributesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("ChannelMarketId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("ConfirmedContentVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ConfirmedInventoryVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ConfirmedPriceVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ContentOverridesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("ContentVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DesiredState")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ExternalCategoryId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("FulfillmentMode")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("HasPriceConflict")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("InventoryVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("IssuesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ObservedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("ObservedPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("ObservedQuantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ObservedStatus")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PriceOverride")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<long>("PriceVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("QuantityCap")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SellerSku")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VariantId");
+
+                    b.HasIndex("ChannelMarketId", "SellerSku")
+                        .IsUnique();
+
+                    b.HasIndex("ChannelMarketId", "VariantId")
+                        .IsUnique();
+
+                    b.ToTable("ChannelListings", t =>
+                        {
+                            t.HasCheckConstraint("CK_ChannelListings_PriceOverride", "[PriceOverride] IS NULL OR [PriceOverride] >= 0");
+
+                            t.HasCheckConstraint("CK_ChannelListings_QuantityCap", "[QuantityCap] IS NULL OR [QuantityCap] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ChannelMarket", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ChannelAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("MarketplaceCode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChannelAccountId", "MarketplaceCode")
+                        .IsUnique();
+
+                    b.ToTable("ChannelMarkets");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ExternalReference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ChannelAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ChannelMarketId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsTestOnly")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("OwnerType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ResourceType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChannelAccountId", "ResourceType", "Value");
+
+                    b.HasIndex("OwnerType", "OwnerId", "ResourceType")
+                        .IsUnique();
+
+                    b.ToTable("ExternalReferences");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.InboxEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ChannelAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("ReceivedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChannelAccountId", "EventKey")
+                        .IsUnique();
+
+                    b.ToTable("InboxEvents");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.InventoryBalance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("OnHand")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Reserved")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SafetyStock")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VariantId");
+
+                    b.HasIndex("LocationId", "VariantId")
+                        .IsUnique();
+
+                    b.ToTable("InventoryBalances", t =>
+                        {
+                            t.HasCheckConstraint("CK_InventoryBalances_NonNegative", "[OnHand] >= 0 AND [Reserved] >= 0 AND [SafetyStock] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.InventoryLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ChannelAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<bool>("IsExternallyOwned")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("InventoryLocations");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("0a000000-0000-0000-0000-000000000001"),
+                            Code = "MAIN",
+                            IsExternallyOwned = false,
+                            Kind = 0,
+                            Name = "Main warehouse"
+                        });
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.InventoryMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("OnHandDelta")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("ReservedDelta")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("[IdempotencyKey] IS NOT NULL");
+
+                    b.HasIndex("VariantId", "OccurredAtUtc");
+
+                    b.ToTable("InventoryMovements");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.InventoryReservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("VariantId");
+
+                    b.HasIndex("Status", "ExpiresAtUtc");
+
+                    b.ToTable("InventoryReservations", t =>
+                        {
+                            t.HasCheckConstraint("CK_InventoryReservations_Quantity", "[Quantity] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ListingGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ChannelMarketId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GroupKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("VariationAttributesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("ChannelMarketId", "GroupKey")
+                        .IsUnique();
+
+                    b.ToTable("ListingGroups");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ListingGroupMember", b =>
+                {
+                    b.Property<Guid>("ListingGroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ChannelListingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("ListingGroupId", "ChannelListingId");
+
+                    b.HasIndex("ChannelListingId")
+                        .IsUnique();
+
+                    b.ToTable("ListingGroupMembers");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.MediaAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AltText")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MediaAssets");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.OrderLineIssue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ChannelAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ExternalLineId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ExternalOrderId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Reason")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SellerSku")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ResolvedAtUtc");
+
+                    b.HasIndex("ChannelAccountId", "ExternalOrderId", "ExternalLineId", "Reason")
+                        .IsUnique()
+                        .HasFilter("[ChannelAccountId] IS NOT NULL");
+
+                    b.ToTable("OrderLineIssues");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.OutboxEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DispatchedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DispatchedAtUtc");
+
+                    b.ToTable("OutboxEvents");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ProductIdentifier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid?>("VariantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "Type")
+                        .IsUnique()
+                        .HasFilter("[ProductId] IS NOT NULL");
+
+                    b.HasIndex("Type", "Value");
+
+                    b.HasIndex("VariantId", "Type")
+                        .IsUnique()
+                        .HasFilter("[VariantId] IS NOT NULL");
+
+                    b.ToTable("ProductIdentifiers", t =>
+                        {
+                            t.HasCheckConstraint("CK_ProductIdentifiers_Owner", "([ProductId] IS NOT NULL AND [VariantId] IS NULL) OR ([ProductId] IS NULL AND [VariantId] IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ProductMedia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MediaAssetId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("VariantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MediaAssetId");
+
+                    b.HasIndex("VariantId");
+
+                    b.HasIndex("ProductId", "Position");
+
+                    b.ToTable("ProductMedia");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ProductVariant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Condition")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("DimensionUnit")
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<decimal?>("Height")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("Length")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("OptionsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Sku")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("WeightUnit")
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<decimal?>("WeightValue")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("Width")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ProductVariants_ProductId_Default")
+                        .HasFilter("[IsDefault] = 1");
+
+                    b.HasIndex("Sku")
+                        .IsUnique();
+
+                    b.HasIndex("ProductId", "IsArchived");
+
+                    b.ToTable("ProductVariants", t =>
+                        {
+                            t.HasCheckConstraint("CK_ProductVariants_Price", "[Price] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.SyncAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("ErrorClass")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ExternalRequestId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime>("FinishedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("HttpStatus")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("SyncJobId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SyncJobId");
+
+                    b.ToTable("SyncAttempts");
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.SyncJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ChannelAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ChannelListingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("DryRun")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ErrorClass")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ExternalSubmissionId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime?>("LeaseExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LeaseOwner")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("NextAttemptAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Operation")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<long>("TargetVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChannelAccountId", "Operation")
+                        .IsUnique()
+                        .HasDatabaseName("IX_SyncJobs_PendingPerAccount")
+                        .HasFilter("[Status] = 0 AND [ChannelListingId] IS NULL");
+
+                    b.HasIndex("ChannelListingId", "Operation")
+                        .IsUnique()
+                        .HasDatabaseName("IX_SyncJobs_PendingPerListing")
+                        .HasFilter("[Status] = 0 AND [ChannelListingId] IS NOT NULL");
+
+                    b.HasIndex("Status", "NextAttemptAtUtc");
+
+                    b.ToTable("SyncJobs");
                 });
 
             modelBuilder.Entity("MPSellerTools.Infrastructure.Tenants.TenantUser", b =>
@@ -468,6 +1557,23 @@ namespace MPSellerTools.Infrastructure.Tenants.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("MPSellerTools.Core.Business.Listing", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Business.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Business.Order", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.ChannelAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("MPSellerTools.Core.Business.OrderItem", b =>
                 {
                     b.HasOne("MPSellerTools.Core.Business.Order", null)
@@ -481,6 +1587,181 @@ namespace MPSellerTools.Infrastructure.Tenants.Migrations
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("MPSellerTools.Core.Marketplace.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.CategoryMapping", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.ChannelMarket", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelMarketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ChannelListing", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.ChannelMarket", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelMarketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MPSellerTools.Core.Marketplace.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ChannelMarket", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.ChannelAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ExternalReference", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.ChannelAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.InboxEvent", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.ChannelAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.InventoryBalance", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.InventoryLocation", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MPSellerTools.Core.Marketplace.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.InventoryReservation", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ListingGroup", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.ChannelMarket", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelMarketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MPSellerTools.Core.Business.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ListingGroupMember", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.ChannelListing", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelListingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MPSellerTools.Core.Marketplace.ListingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("ListingGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ProductIdentifier", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Business.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MPSellerTools.Core.Marketplace.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ProductMedia", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.MediaAsset", null)
+                        .WithMany()
+                        .HasForeignKey("MediaAssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MPSellerTools.Core.Business.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MPSellerTools.Core.Marketplace.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.ProductVariant", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Business.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.SyncAttempt", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.SyncJob", null)
+                        .WithMany()
+                        .HasForeignKey("SyncJobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MPSellerTools.Core.Marketplace.SyncJob", b =>
+                {
+                    b.HasOne("MPSellerTools.Core.Marketplace.ChannelAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MPSellerTools.Core.Marketplace.ChannelListing", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelListingId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

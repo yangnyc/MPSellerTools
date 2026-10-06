@@ -13,7 +13,7 @@ Coded by www.creative-tim.com
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
-import { useEffect } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 // react-router-dom components
 import { useLocation, NavLink } from "react-router-dom";
@@ -23,6 +23,8 @@ import PropTypes from "prop-types";
 
 // @mui material components
 import List from "@mui/material/List";
+import Collapse from "@mui/material/Collapse";
+import Checkbox from "@mui/material/Checkbox";
 import Divider from "@mui/material/Divider";
 import Link from "@mui/material/Link";
 import Icon from "@mui/material/Icon";
@@ -45,11 +47,24 @@ import {
   setMiniSidenav,
 } from "context";
 
-function Sidenav({ color: _color = "info", brand = "", brandName, routes, ...rest }) {
+
+function Sidenav({ color: _color = "info", brand = "", brandName, routes, pinnedGroups = [], onPinnedGroupsChange = null, ...rest }) {
   const [controller, dispatch] = useMaterialUIController();
   const { miniSidenav, whiteSidenav, sidenavTint, darkMode } = controller;
   const location = useLocation();
   const collapseName = location.pathname.split("/")[1];
+  // Groups the user has opened or closed by hand; any other group is open
+  // only while the current page is one of its sub-items.
+  const [groupOpen, setGroupOpen] = useState({});
+
+  // A pinned group stays open, and its arrow no longer closes it. Which
+  // groups are pinned is the app's to keep (on the user's profile).
+  const setGroupPinned = (key, pinned) => {
+    const others = pinnedGroups.filter((item) => item !== key);
+    // Unpinning closes the group; its arrow opens it again.
+    setGroupOpen((groups) => ({ ...groups, [key]: pinned }));
+    onPinnedGroupsChange(pinned ? [...others, key] : others);
+  };
   const tintIsLightBackground = sidenavTint && sidenavTintsNeedingDarkText.includes(sidenavTint);
 
   // whiteSidenav is always a solid white background regardless of darkMode
@@ -70,7 +85,7 @@ function Sidenav({ color: _color = "info", brand = "", brandName, routes, ...res
   // here instead of relying on the color prop alone.
   const textColorSx = textColor === "dark" ? { color: ({ palette }) => palette.dark.main } : undefined;
 
-  // Divider's `light` styleOverride draws a white-based line (for dark
+  // The MuiDivider-light class draws a white-based line (for dark
   // backgrounds); the default draws a dark-based line (for light
   // backgrounds) — see assets/theme(-dark)/components/divider.js. Follows
   // the same background reasoning as textColor above: whiteSidenav is
@@ -99,10 +114,77 @@ function Sidenav({ color: _color = "info", brand = "", brandName, routes, ...res
   }, [dispatch, location]);
 
   // Render all the routes from the routes.js (All the visible items on the Sidenav)
-  const renderRoutes = routes.map(({ type, name, icon, title, noCollapse, key, href, route }) => {
+  const renderRoutes = routes.map(({ type, name, icon, title, noCollapse, key, href, route, collapse }) => {
     let returnValue;
 
-    if (type === "collapse") {
+    if (type === "collapse" && collapse) {
+      // A group: a route with sub-items under `collapse` and no page of its own.
+      // The current sub-item is the one whose route is the page or the closest
+      // parent of it, so /tenants/42 still lights up the /tenants item while
+      // /tenants/bulk lights up only its own.
+      const current = collapse
+        .filter((item) => location.pathname === item.route || location.pathname.startsWith(`${item.route}/`))
+        .sort((a, b) => b.route.length - a.route.length)[0];
+      const containsCurrent = Boolean(current);
+      const pinned = pinnedGroups.includes(key);
+      const open = pinned || (groupOpen[key] ?? containsCurrent);
+      const toggle = () => setGroupOpen((groups) => ({ ...groups, [key]: !open }));
+      const pinCheckbox = (
+        <Checkbox
+          size="small"
+          checked={pinned}
+          title={pinned ? "Unpin: let this menu close" : "Pin: keep this menu open"}
+          // The checkbox sits inside the row that toggles the group.
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+          onChange={(event) => setGroupPinned(key, event.target.checked)}
+          slotProps={{ input: { "aria-label": `Keep ${name} open` } }}
+          sx={{ p: 0.25 }}
+        />
+      );
+
+      returnValue = (
+        <Fragment key={key}>
+          {pinned ? (
+            // Not a button while pinned: there is nothing for the row to do,
+            // and the checkbox inside it has to stay usable.
+            <SidenavCollapse name={name} icon={icon} expandIcon="expand_less" trailing={pinCheckbox} inert />
+          ) : (
+            <SidenavCollapse
+              name={name}
+              icon={icon}
+              active={containsCurrent && !open}
+              expandIcon={open ? "expand_less" : "expand_more"}
+              trailing={onPinnedGroupsChange ? pinCheckbox : null}
+              role="button"
+              tabIndex={0}
+              aria-expanded={open}
+              onClick={toggle}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  toggle();
+                }
+              }}
+            />
+          )}
+          <Collapse in={open} unmountOnExit>
+            <List disablePadding>
+              {collapse.map((item) => (
+                <NavLink key={item.key} to={item.route}>
+                  <SidenavCollapse
+                    name={item.name}
+                    icon={item.icon}
+                    active={item === current}
+                    nested
+                  />
+                </NavLink>
+              ))}
+            </List>
+          </Collapse>
+        </Fragment>
+      );
+    } else if (type === "collapse") {
       returnValue = href ? (
         <Link
           href={href}
@@ -142,7 +224,24 @@ function Sidenav({ color: _color = "info", brand = "", brandName, routes, ...res
         </MDTypography>
       );
     } else if (type === "divider") {
-      returnValue = <Divider key={key} light={lightDivider} />;
+      // A solid hairline between groups of entries, inset like the entries
+      // themselves. The theme's own divider fades out at both ends and is
+      // too faint to read as a separator here, so its gradient is replaced.
+      returnValue = (
+        <Divider
+          key={key}
+          sx={({ palette, functions: { rgba, pxToRem } }) => {
+            const onDarkBackground = darkMode ? palette.text.main : palette.white.main;
+            return {
+              height: pxToRem(1),
+              margin: `${pxToRem(12)} ${pxToRem(16)}`,
+              opacity: 1,
+              backgroundImage: "none !important",
+              backgroundColor: rgba(lightDivider ? onDarkBackground : palette.dark.main, lightDivider ? 0.45 : 0.25),
+            };
+          }}
+        />
+      );
     }
     return returnValue;
   });
@@ -185,7 +284,7 @@ function Sidenav({ color: _color = "info", brand = "", brandName, routes, ...res
           </MDBox>
         </MDBox>
       </MDBox>
-      <Divider light={lightDivider} />
+      <Divider className={lightDivider ? "MuiDivider-light" : undefined} />
       <List>{renderRoutes}</List>
     </SidenavRoot>
   );
@@ -197,6 +296,8 @@ Sidenav.propTypes = {
   brand: PropTypes.string,
   brandName: PropTypes.string.isRequired,
   routes: PropTypes.arrayOf(PropTypes.object).isRequired,
+  pinnedGroups: PropTypes.arrayOf(PropTypes.string),
+  onPinnedGroupsChange: PropTypes.func,
 };
 
 export default Sidenav;

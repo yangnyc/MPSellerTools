@@ -4,20 +4,26 @@
   "private": true,
   "type": "module",
   "peerDependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.4"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
-    "@mui/icons-material": "^5.18.0",
-    "@mui/material": "^5.18.0",
+    "@mui/icons-material": "^9.4.0",
+    "@mui/material": "^9.4.0",
+    "@mui/system": "^9.4.0",
     "chart.js": "^4.5.1",
-    "chroma-js": "^2.6.0",
+    "chroma-js": "^3.2.0",
     "prop-types": "^15.8.1",
     "react-chartjs-2": "^5.3.1",
     "react-table": "^7.8.0",
     "regenerator-runtime": "^0.14.1"
+  },
+  "overrides": {
+    "react-table": {
+      "react": "$react"
+    }
   }
 }

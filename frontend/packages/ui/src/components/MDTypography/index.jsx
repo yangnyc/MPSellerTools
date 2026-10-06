@@ -18,6 +18,10 @@ import { forwardRef } from "react";
 // prop-types is a library for typechecking of props
 import PropTypes from "prop-types";
 
+// MUI 9 no longer reads layout props (display, mt, lineHeight, ...) off
+// Typography, so they are moved into `sx` here.
+import { unstable_extendSxProp as extendSxProp } from "@mui/system";
+
 // Custom styles for MDTypography
 import MDTypographyRoot from "components/MDTypography/MDTypographyRoot";
 
@@ -43,7 +47,7 @@ const MDTypography = forwardRef(
 
     return (
       <MDTypographyRoot
-        {...rest}
+        {...extendSxProp(rest)}
         ref={ref}
         ownerState={{
           color,

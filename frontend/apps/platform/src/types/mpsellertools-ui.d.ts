@@ -51,6 +51,7 @@ declare module "examples/Kit" {
   export function formatDateTime(iso: string): string;
   export function timeAgo(iso: string): string;
   export function roleLabel(role: string): string;
+  export function downloadCsv(filename: string, headers: string[], rows: (string | number | null | undefined)[][]): void;
   export const IconTile: React.ComponentType<any>;
   export const Surface: React.ComponentType<any>;
   export const Section: React.ComponentType<any>;
@@ -65,5 +66,6 @@ declare module "examples/Kit" {
   export const Identity: React.ComponentType<any>;
   export const DetailList: React.ComponentType<any>;
   export const KitDialog: React.ComponentType<any>;
+  export const SimpleTable: React.ComponentType<any>;
   export const AppPage: React.ComponentType<any>;
 }

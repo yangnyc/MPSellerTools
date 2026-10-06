@@ -37,7 +37,19 @@ import sidenavTintsNeedingDarkText from "examples/Sidenav/sidenavTintContrast";
 // Material Dashboard 2 React context
 import { useMaterialUIController } from "context";
 
-function SidenavCollapse({ icon, name, active = false, ...rest }) {
+// `expandIcon` marks an item that opens a group of sub-items (see Sidenav),
+// `trailing` is a control shown before it, `inert` makes the row itself
+// unclickable, and `nested` indents an item that sits inside a group.
+function SidenavCollapse({
+  icon,
+  name,
+  active = false,
+  expandIcon = null,
+  trailing = null,
+  inert = false,
+  nested = false,
+  ...rest
+}) {
   const [controller] = useMaterialUIController();
   const { miniSidenav, whiteSidenav, sidenavTint, darkMode, sidenavColor } = controller;
   const tintIsLightBackground = sidenavTint && sidenavTintsNeedingDarkText.includes(sidenavTint);
@@ -54,8 +66,8 @@ function SidenavCollapse({ icon, name, active = false, ...rest }) {
     <ListItem component="li">
       <MDBox
         {...rest}
-        sx={(theme) =>
-          collapseItem(theme, {
+        sx={(theme) => ({
+          ...collapseItem(theme, {
             active,
             whiteSidenav,
             tintIsLightBackground,
@@ -63,8 +75,10 @@ function SidenavCollapse({ icon, name, active = false, ...rest }) {
             sidenavColor,
             accentMatchesTint,
             accentNeedsDarkText,
-          })
-        }
+          }),
+          ...(nested && !miniSidenav ? { paddingLeft: theme.functions.pxToRem(22) } : null),
+          ...(inert ? { cursor: "default", "&:hover, &:focus": { backgroundColor: "transparent" } } : null),
+        })}
       >
         <ListItemIcon
           sx={(theme) =>
@@ -94,6 +108,31 @@ function SidenavCollapse({ icon, name, active = false, ...rest }) {
             })
           }
         />
+
+        {trailing && (
+          <MDBox
+            sx={(theme) => ({
+              display: "flex",
+              marginLeft: "auto",
+              [theme.breakpoints.up("xl")]: { display: miniSidenav ? "none" : "flex" },
+            })}
+          >
+            {trailing}
+          </MDBox>
+        )}
+
+        {expandIcon && (
+          <Icon
+            sx={(theme) => ({
+              marginLeft: trailing ? theme.functions.pxToRem(4) : "auto",
+              fontSize: `${theme.functions.pxToRem(18)} !important`,
+              opacity: inert ? 0.5 : 1,
+              [theme.breakpoints.up("xl")]: { display: miniSidenav ? "none" : "inline-block" },
+            })}
+          >
+            {expandIcon}
+          </Icon>
+        )}
       </MDBox>
     </ListItem>
   );
@@ -104,6 +143,10 @@ SidenavCollapse.propTypes = {
   icon: PropTypes.node.isRequired,
   name: PropTypes.string.isRequired,
   active: PropTypes.bool,
+  expandIcon: PropTypes.string,
+  trailing: PropTypes.node,
+  inert: PropTypes.bool,
+  nested: PropTypes.bool,
 };
 
 export default SidenavCollapse;

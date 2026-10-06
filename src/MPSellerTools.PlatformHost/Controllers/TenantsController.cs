@@ -25,6 +25,18 @@ public class TenantsController(PlatformDbContext db, UserManager<PlatformUser> u
         return Ok(tenants);
     }
 
+    [HttpGet("runtime")]
+    public async Task<IActionResult> Runtime()
+    {
+        var tenants = await db.Tenants
+            .OrderBy(t => t.Name)
+            .Select(t => new TenantRuntimeResponse(
+                t.Id, t.Name, t.Slug, t.Status, t.Url, t.Port, t.DatabaseName,
+                t.ApplicationInstanceId, t.ProcessId, t.ProcessStartTimeUtc, t.UpdatedAtUtc))
+            .ToListAsync();
+        return Ok(tenants);
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id)
     {
@@ -178,6 +190,9 @@ public class TenantsController(PlatformDbContext db, UserManager<PlatformUser> u
     [HttpPost("{id:guid}/resume")]
     public Task<IActionResult> Resume(Guid id) => EnqueueLifecycleJob(id, ProvisioningJobType.Resume, TenantStatus.Suspended);
 
+    [HttpPost("{id:guid}/restart")]
+    public Task<IActionResult> Restart(Guid id) => EnqueueLifecycleJob(id, ProvisioningJobType.Restart, TenantStatus.Active);
+
     [HttpPost("{id:guid}/retry-provisioning")]
     public async Task<IActionResult> RetryProvisioning(Guid id)
     {
@@ -223,6 +238,70 @@ public class TenantsController(PlatformDbContext db, UserManager<PlatformUser> u
         }
 
         await db.SaveChangesAsync();
+        return Accepted();
+    }
+
+    /// <summary>
+    /// Queues the permanent removal of a company: its instance, its database and
+    /// its local files. The caller must repeat the slug, so a mistyped id or a
+    /// replayed request cannot delete a company by accident.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, [FromQuery] string? confirmSlug)
+    {
+        var tenant = await db.Tenants.FindAsync(id);
+        if (tenant is null)
+        {
+            return NotFound();
+        }
+        if (!string.Equals(confirmSlug?.Trim(), tenant.Slug, StringComparison.Ordinal))
+        {
+            return Problem("Type the company's slug exactly to confirm the deletion.", statusCode: StatusCodes.Status400BadRequest);
+        }
+        if (tenant.Status is TenantStatus.Provisioning or TenantStatus.Deleting)
+        {
+            return Problem(
+                tenant.Status == TenantStatus.Deleting
+                    ? "This company is already being deleted."
+                    : "This company is still being provisioned. Wait until that finishes, then delete it.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var actorId = userManager.GetUserId(User) is { } uid ? Guid.Parse(uid) : Guid.Empty;
+        var now = DateTime.UtcNow;
+
+        tenant.Status = TenantStatus.Deleting;
+        tenant.FailureReason = null;
+        tenant.UpdatedAtUtc = now;
+        db.ProvisioningJobs.Add(new ProvisioningJob
+        {
+            Id = Guid.NewGuid(),
+            TenantId = id,
+            JobType = ProvisioningJobType.Delete,
+            Status = ProvisioningJobStatus.Pending,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+        });
+        db.AuditEntries.Add(new PlatformAuditEntry
+        {
+            Id = Guid.NewGuid(),
+            OccurredAtUtc = now,
+            ActorUserId = actorId,
+            ActorEmail = User.Identity?.Name ?? "unknown",
+            Action = "TenantDeleteRequested",
+            TenantId = tenant.Id,
+            Details = $"slug={tenant.Slug} name=\"{tenant.Name}\"",
+        });
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Problem("This company changed while you were deleting it. Reload and try again.", statusCode: StatusCodes.Status409Conflict);
+        }
+
         return Accepted();
     }
 

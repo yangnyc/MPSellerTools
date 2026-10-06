@@ -7,6 +7,20 @@ public class Order
     /// <summary>Unique within this tenant's database.</summary>
     public required string OrderNumber { get; set; }
 
+    /// <summary>
+    /// The eBay order id, for an order imported from eBay; null for one
+    /// created here. Unique, so importing again updates rather than duplicates.
+    /// </summary>
+    public string? EbayOrderId { get; set; }
+
+    /// <summary>The channel account an imported order came through; null for one created here.</summary>
+    public Guid? ChannelAccountId { get; set; }
+
+    /// <summary>The channel's order id. Unique within the account, so importing again never duplicates.</summary>
+    public string? ExternalOrderId { get; set; }
+
+    public string? Currency { get; set; }
+
     public OrderStatus Status { get; set; } = OrderStatus.New;
 
     /// <summary>Employee/TenantAdmin responsible for this order; null until assigned.</summary>
