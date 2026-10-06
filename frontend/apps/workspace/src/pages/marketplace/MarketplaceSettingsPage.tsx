@@ -9,7 +9,15 @@ import { InlineAlert, PageHeader, Section, StateBlock, StatusPill, formatDateTim
 import PageShell from "../../components/PageShell";
 import { useSnackbar } from "../../components/useSnackbar";
 import { ApiError } from "../../lib/api";
-import { ChannelsApi, SyncApi, type ChannelAccount, type ChannelAccountUpdate, type Marketplace, type PriceConflictPolicy } from "../../api/channels";
+import {
+  ChannelsApi,
+  SyncApi,
+  type CategoryMapping,
+  type ChannelAccount,
+  type ChannelAccountUpdate,
+  type Marketplace,
+  type PriceConflictPolicy,
+} from "../../api/channels";
 
 const message = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message : fallback);
 
@@ -40,6 +48,9 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [mappings, setMappings] = useState<CategoryMapping[]>([]);
+  const [internalCategory, setInternalCategory] = useState("");
+  const [externalCategory, setExternalCategory] = useState("");
 
   const show = useCallback((found: ChannelAccount | null) => {
     setAccount(found);
@@ -48,9 +59,11 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
 
   const load = useCallback(
     () =>
-      ChannelsApi.list()
-        .then((accounts) => {
-          show(accounts.find((a) => a.channel === marketplace.kind) ?? null);
+      Promise.all([ChannelsApi.list(), ChannelsApi.categoryMappings()])
+        .then(([accounts, allMappings]) => {
+          const found = accounts.find((a) => a.channel === marketplace.kind) ?? null;
+          show(found);
+          setMappings(allMappings.filter((m) => found?.markets.some((market) => market.id === m.channelMarketId)));
           setLoadError(null);
         })
         .catch((err) => setLoadError(message(err, `Failed to load ${name}.`)))
@@ -90,6 +103,16 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
       await load();
       notify(`${name} credentials saved.`, "success");
     }, "Could not save the credentials.");
+
+  const saveMapping = () =>
+    run("mapping", async () => {
+      if (!account?.markets[0]) return;
+      await ChannelsApi.saveCategoryMapping(account.markets[0].id, internalCategory.trim(), externalCategory.trim());
+      setInternalCategory("");
+      setExternalCategory("");
+      await load();
+      notify("Category saved.", "success");
+    }, "Could not save the category.");
 
   const importOrders = () =>
     run("import", async () => {
@@ -272,6 +295,35 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
                     </Box>
                   </Box>
                 )}
+              </Section>
+
+              <Section icon="category" title="Categories" subtitle={`Where each of your own categories goes on ${name}. A product needs this before it can be published.`}>
+                <Box sx={{ display: "grid", gap: 2 }}>
+                  {mappings.length === 0 && <Box sx={hint}>No categories mapped yet.</Box>}
+                  {mappings.map((mapping) => (
+                    <Box key={mapping.id} sx={{ display: "flex", justifyContent: "space-between", gap: 2, fontSize: "0.875rem" }}>
+                      <Box sx={{ fontWeight: 500, color: c.text }}>{mapping.internalCategory}</Box>
+                      <Box sx={{ color: c.muted, overflowWrap: "anywhere", textAlign: "right" }}>{mapping.externalCategoryId}</Box>
+                    </Box>
+                  ))}
+                  <Box
+                    component="form"
+                    noValidate
+                    onSubmit={(e: React.FormEvent) => {
+                      e.preventDefault();
+                      if (internalCategory.trim() && externalCategory.trim()) saveMapping();
+                    }}
+                    sx={{ display: "grid", gap: 2, pt: 2, borderTop: `1px solid ${c.border}` }}
+                  >
+                    <MDInput label="Your category" fullWidth value={internalCategory} onChange={(e: Change) => setInternalCategory(e.target.value)} helperText="As written on the product. Saving one already listed replaces it." />
+                    <MDInput label={marketplace.categoryLabel} fullWidth value={externalCategory} onChange={(e: Change) => setExternalCategory(e.target.value)} />
+                    <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                      <MDButton type="submit" variant="outlined" color="info" disabled={!internalCategory.trim() || !externalCategory.trim() || !!busy}>
+                        {busy === "mapping" ? "Saving…" : "Save category"}
+                      </MDButton>
+                    </Box>
+                  </Box>
+                </Box>
               </Section>
 
               <Section icon="receipt_long" title="Orders" subtitle={account.lastOrderImportAtUtc ? `Last read ${formatDateTime(account.lastOrderImportAtUtc)}` : "Never read yet"}>

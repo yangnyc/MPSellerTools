@@ -23,6 +23,7 @@ import PageShell from "../components/PageShell";
 import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
 import ConfirmDialog from "../components/ConfirmDialog";
+import ProductDetailsDialog from "../components/ProductDetailsDialog";
 import { ApiError } from "../lib/api";
 import { parseProductsCsv } from "../lib/csv";
 import { ProductsApi } from "../api/resources";
@@ -55,6 +56,7 @@ export default function ProductsPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const [archiveTarget, setArchiveTarget] = useState<Product | null>(null);
+  const [detailsId, setDetailsId] = useState<string | null>(null);
 
   // A chosen file is checked by the server first (a dry run); only confirming saves anything.
   const fileInput = useRef<HTMLInputElement>(null);
@@ -239,6 +241,16 @@ export default function ProductsPage() {
               disableGlobalFilter: true,
               Cell: ({ row }: { row: { original: Product } }) => (
                 <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5 }}>
+                  <Tooltip title="Description, barcodes and images">
+                    <IconButton
+                      size="small"
+                      onClick={() => setDetailsId(row.original.id)}
+                      aria-label={`Details of ${row.original.name}`}
+                      sx={{ color: c.muted }}
+                    >
+                      <Icon fontSize="small">description</Icon>
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title="Edit">
                     <IconButton
                       size="small"
@@ -446,6 +458,8 @@ export default function ProductsPage() {
           </Box>
         )}
       </KitDialog>
+
+      {detailsId && <ProductDetailsDialog key={detailsId} productId={detailsId} onClose={() => setDetailsId(null)} />}
 
       <ConfirmDialog
         open={!!archiveTarget}

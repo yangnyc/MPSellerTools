@@ -198,3 +198,85 @@ test("each marketplace has its own listings page, showing only what that marketp
   await expect(page.getByRole("heading", { name: "Walmart listings" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Set up Walmart" })).toHaveAttribute("href", "/walmart");
 });
+test("a product's description, barcode and image are entered from the catalog, and its category is mapped per marketplace", async ({ page }) => {
+  const product = { id: "p1", sku: "MUG-BLUE", name: "Blue mug", price: 12, stockQuantity: 4, isArchived: false, rowVersion: "AAAA" };
+  const detail = { id: "p1", sku: "MUG-BLUE", name: "Blue mug", brand: null, description: null, category: null, variants: [], identifiers: [], media: [] };
+  const described = { ...detail, brand: "Mugco", category: "Mugs", description: "A blue mug." };
+  await mockApi(
+    page,
+    { "/api/products": [product], "/api/catalog/products/p1": detail, "/api/channels": [account({})] },
+    {
+      "/api/catalog/products/p1/content": described,
+      "/api/catalog/products/p1/identifiers": { ...described, identifiers: [{ id: "i1", type: 1, value: "000012345678", variantId: null }] },
+      "/api/catalog/products/p1/media": { ...described, media: [{ id: "m1", url: "https://img.example.com/mug.jpg", altText: null, variantId: null, purpose: 0, position: 0 }] },
+    }
+  );
+  await page.goto("/products");
+  await page.getByRole("button", { name: "Details of Blue mug" }).click();
+  const dialog = page.getByRole("dialog");
+
+  await dialog.getByLabel("Brand").fill("Mugco");
+  await dialog.getByLabel("Category").fill("Mugs");
+  await dialog.getByLabel("Description").fill("A blue mug.");
+  await dialog.getByRole("button", { name: "Save details" }).click();
+  await expect(page.getByText("Details saved.")).toBeVisible();
+
+  await expect(dialog.getByRole("button", { name: "Save identifiers" })).toBeDisabled();
+  await dialog.getByLabel("UPC").fill("000012345678");
+  await dialog.getByRole("button", { name: "Save identifiers" }).click();
+  await expect(page.getByText("Identifiers saved.")).toBeVisible();
+
+  await dialog.getByLabel("Image address").fill("https://img.example.com/mug.jpg");
+  await dialog.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(dialog.getByText("Main")).toBeVisible();
+
+  expect(writes).toEqual([
+    'PUT /api/catalog/products/p1/content {"brand":"Mugco","description":"A blue mug.","category":"Mugs"}',
+    'PUT /api/catalog/products/p1/identifiers {"type":1,"value":"000012345678"}',
+    'POST /api/catalog/products/p1/media {"url":"https://img.example.com/mug.jpg","purpose":0,"position":0}',
+  ]);
+
+  await page.goto("/amazon/settings");
+  await expect(page.getByText("No categories mapped yet.")).toBeVisible();
+  await page.getByLabel("Your category").fill("Mugs");
+  await page.getByLabel("Amazon product type").fill("DRINKING_CUP");
+  await page.getByRole("button", { name: "Save category" }).click();
+  await expect(page.getByText("Category saved.")).toBeVisible();
+  expect(writes.at(-1)).toBe('PUT /api/channels/category-mappings {"channelMarketId":"m-amazon","internalCategory":"Mugs","externalCategoryId":"DRINKING_CUP"}');
+});
+test("a listing's own price, cap, title and ASIN are edited on its marketplace page, with a check of what is still missing", async ({ page }) => {
+  const draft = { ...listing, desiredState: 0, observedStatus: 0, externalCategoryId: null, contentOverrides: {}, priceOverride: null, fulfillmentMode: 0, quantityCap: null, references: {}, hasPriceConflict: false, observedPrice: null };
+  await mockApi(
+    page,
+    { "/api/channels": [account({})], "/api/channel-listings": [draft] },
+    {
+      "/api/channel-listings": draft,
+      "/api/channel-listings/l1/validate": { valid: false, issues: [{ channel: 1, path: "category", code: "required", message: "Map the product's category to an Amazon product type." }] },
+      "/api/channel-listings/l1/preview": { operation: 0, liveWrites: false, issues: [], requests: [{ method: "PUT", url: "https://sandbox.example/listings/MUG-BLUE", body: { productType: "DRINKING_CUP" } }] },
+    }
+  );
+  await page.goto("/amazon");
+  await page.getByRole("button", { name: "Edit MUG-BLUE" }).click();
+  const dialog = page.getByRole("dialog");
+
+  await dialog.getByLabel("Price on Amazon").fill("-1");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(dialog.getByText("The price is a number, 0 or more.")).toBeVisible();
+  expect(writes).toEqual([]);
+
+  await dialog.getByLabel("Title on Amazon").fill("Blue mug, 12 oz");
+  await dialog.getByLabel("Price on Amazon").fill("14.5");
+  await dialog.getByLabel("Quantity cap").fill("3");
+  await dialog.getByLabel("ASIN").fill("B00TEST001");
+  await dialog.getByRole("button", { name: "Check" }).click();
+  await expect(dialog.getByText("Map the product's category to an Amazon product type.")).toBeVisible();
+  expect(writes).toEqual([
+    'PUT /api/channel-listings {"channelMarketId":"m-amazon","variantId":"v1","sellerSku":"MUG-BLUE","fulfillmentMode":0,"externalCategoryId":null,"content":{"title":{"value":"Blue mug, 12 oz"}},"priceOverride":14.5,"quantityCap":3,"existingCatalogItemId":"B00TEST001"}',
+    "POST /api/channel-listings/l1/validate",
+  ]);
+
+  await dialog.getByRole("button", { name: "Preview" }).click();
+  await expect(dialog.getByText("Live writes are off: publishing builds this and sends nothing to Amazon.")).toBeVisible();
+  await expect(dialog.getByText("PUT https://sandbox.example/listings/MUG-BLUE")).toBeVisible();
+  await expect(dialog.getByText('"productType": "DRINKING_CUP"')).toBeVisible();
+});

@@ -7,6 +7,7 @@ import MDInput from "components/MDInput";
 import DataTable from "examples/Tables/DataTable";
 import { Identity, InlineAlert, PageHeader, Section, StateBlock, StatusPill, formatMoney, useKit, type KitTone } from "examples/Kit";
 import PageShell from "../../components/PageShell";
+import ListingEditDialog from "./ListingEditDialog";
 import { useSnackbar } from "../../components/useSnackbar";
 import { ApiError } from "../../lib/api";
 import {
@@ -42,6 +43,7 @@ export default function MarketplaceListingsPage({ marketplace }: { marketplace: 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [sellerId, setSellerId] = useState("");
+  const [editing, setEditing] = useState<ChannelListing | null>(null);
 
   const load = useCallback(
     () =>
@@ -134,16 +136,22 @@ export default function MarketplaceListingsPage({ marketplace }: { marketplace: 
         id: "actions",
         accessor: "id",
         align: "right" as const,
-        Cell: ({ row }: CellProps) =>
-          row.original.desiredState === 1 ? (
-            <MDButton variant="outlined" color="secondary" size="small" disabled={!!busy} onClick={() => deactivate(row.original)}>
-              Take off sale
+        Cell: ({ row }: CellProps) => (
+          <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
+            <MDButton variant="text" color="info" size="small" disabled={!!busy} onClick={() => setEditing(row.original)} aria-label={`Edit ${row.original.sellerSku}`}>
+              Edit
             </MDButton>
-          ) : (
-            <MDButton variant="outlined" color="info" size="small" disabled={!!busy} onClick={() => publish(row.original)}>
-              Publish
-            </MDButton>
-          ),
+            {row.original.desiredState === 1 ? (
+              <MDButton variant="outlined" color="secondary" size="small" disabled={!!busy} onClick={() => deactivate(row.original)}>
+                Take off sale
+              </MDButton>
+            ) : (
+              <MDButton variant="outlined" color="info" size="small" disabled={!!busy} onClick={() => publish(row.original)}>
+                Publish
+              </MDButton>
+            )}
+          </Box>
+        ),
       },
     ];
     return { columns, rows: listings };
@@ -217,6 +225,7 @@ export default function MarketplaceListingsPage({ marketplace }: { marketplace: 
           </Section>
         </Box>
       )}
+      {editing && <ListingEditDialog key={editing.id} listing={editing} marketplace={marketplace} onClose={() => setEditing(null)} onSaved={load} />}
     </PageShell>
   );
 }

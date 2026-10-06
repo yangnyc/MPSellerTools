@@ -27,6 +27,8 @@ export type Marketplace = {
   settings: { key: string; label: string; help: string }[];
   // Whether its catalog can be searched for an item to offer on.
   catalogSearch: boolean;
+  // What the marketplace calls the place a category maps to.
+  categoryLabel: string;
 };
 
 export const EBAY: Marketplace = {
@@ -47,6 +49,7 @@ export const EBAY: Marketplace = {
     { key: "returnPolicyId", label: "Return policy ID", help: "Your eBay return business policy." },
   ],
   catalogSearch: false,
+  categoryLabel: "eBay category ID",
 };
 
 export const AMAZON: Marketplace = {
@@ -64,6 +67,7 @@ export const AMAZON: Marketplace = {
   ],
   settings: [],
   catalogSearch: true,
+  categoryLabel: "Amazon product type",
 };
 
 export const WALMART: Marketplace = {
@@ -80,6 +84,7 @@ export const WALMART: Marketplace = {
   ],
   settings: [{ key: "itemSpecVersion", label: "Item spec version", help: "The version of Walmart's item spec your feeds are built for. Leave empty for the default." }],
   catalogSearch: false,
+  categoryLabel: "Walmart product type",
 };
 
 export type PriceConflictPolicy = 0 | 1 | 2; // RestoreLocal, ImportRemote, ReportConflict
@@ -137,6 +142,16 @@ export type ChannelListing = {
   marketplaceCode: string;
   variantId: string;
   sellerSku: string;
+  // The listing's own settings; null where it follows the product or the category mapping.
+  externalCategoryId: string | null;
+  contentOverrides: Record<string, { value?: string | null; cleared?: boolean }>;
+  priceOverride: number | null;
+  fulfillmentMode: 0 | 1; // Merchant, ChannelFulfilled
+  quantityCap: number | null;
+  // Ids the marketplace gave it, or the seller supplied: CatalogItem (an ASIN), Offer, Listing.
+  references: Record<string, string>;
+  hasPriceConflict: boolean;
+  observedPrice: number | null;
   effectiveTitle: string | null;
   effectivePrice: number;
   effectiveQuantity: number;
@@ -147,11 +162,52 @@ export type ChannelListing = {
 
 export type ListingValidation = { valid: boolean; issues: ListingIssue[] };
 
+// What publishing would send, built without sending anything.
+export type ListingPreview = { liveWrites: boolean; issues: ListingIssue[]; requests: { method: string; url: string; body: unknown }[] };
+
+// null: follow the product (title, price) or the category mapping, or have no cap. An empty ASIN removes it.
+export type ListingEdit = {
+  title: string | null;
+  priceOverride: number | null;
+  quantityCap: number | null;
+  externalCategoryId: string | null;
+  existingCatalogItemId: string;
+};
+
 // liveWrites false: the queued work is carried out as a dry run and nothing reaches the channel.
 export type ListingQueued = { listingId: string; desiredState: ListingDesiredState; liveWrites: boolean };
 
 export type CatalogVariant = { id: string; sku: string; name: string | null; isDefault: boolean; isArchived: boolean };
-export type CatalogProduct = { id: string; sku: string; name: string; variants: CatalogVariant[] };
+
+export type ProductIdentifierType = 0 | 1 | 2 | 3 | 4; // Gtin, Upc, Ean, Isbn, Mpn
+export const IDENTIFIER_LABELS: Record<ProductIdentifierType, string> = { 0: "GTIN", 1: "UPC", 2: "EAN", 3: "ISBN", 4: "MPN" };
+
+// variantId null: the identifier or image belongs to the whole product.
+export type CatalogIdentifier = { id: string; type: ProductIdentifierType; value: string; variantId: string | null };
+export type CatalogMedia = { id: string; url: string; altText: string | null; variantId: string | null; purpose: 0 | 1 | 2; position: number };
+
+// The product with what the marketplaces are told about it, beyond its SKU, name, price and stock.
+export type CatalogProduct = {
+  id: string;
+  sku: string;
+  name: string;
+  brand: string | null;
+  description: string | null;
+  category: string | null;
+  variants: CatalogVariant[];
+  identifiers: CatalogIdentifier[];
+  media: CatalogMedia[];
+};
+
+// Where one of the company's own categories goes on one marketplace.
+export type CategoryMapping = {
+  id: string;
+  channelMarketId: string;
+  internalCategory: string;
+  externalCategoryId: string;
+  requirementsSource: string | null;
+  requirementsRetrievedAtUtc: string | null;
+};
 
 export const ChannelsApi = {
   list: () => apiFetch<ChannelAccount[]>("/api/channels"),
@@ -171,6 +227,13 @@ export const ChannelsApi = {
     }),
   addMarket: (accountId: string, marketplaceCode: string) =>
     apiFetch<ChannelMarket>(`/api/channels/${accountId}/markets`, { method: "POST", body: JSON.stringify({ marketplaceCode }) }),
+  categoryMappings: () => apiFetch<CategoryMapping[]>("/api/channels/category-mappings"),
+  // Saving the same internal category again for the marketplace replaces where it goes.
+  saveCategoryMapping: (channelMarketId: string, internalCategory: string, externalCategoryId: string) =>
+    apiFetch<CategoryMapping>("/api/channels/category-mappings", {
+      method: "PUT",
+      body: JSON.stringify({ channelMarketId, internalCategory, externalCategoryId }),
+    }),
   update: (accountId: string, data: ChannelAccountUpdate) =>
     apiFetch<ChannelAccount>(`/api/channels/${accountId}`, { method: "PUT", body: JSON.stringify(data) }),
   // Write-only: what is saved is never sent back.
@@ -319,6 +382,18 @@ export const SyncApi = {
 
 export const CatalogApi = {
   product: (id: string) => apiFetch<CatalogProduct>(`/api/catalog/products/${id}`),
+  updateContent: (id: string, data: { brand: string | null; description: string | null; category: string | null }) =>
+    apiFetch<CatalogProduct>(`/api/catalog/products/${id}/content`, { method: "PUT", body: JSON.stringify(data) }),
+  // An empty value removes the identifier.
+  setIdentifier: (id: string, type: ProductIdentifierType, value: string) =>
+    apiFetch<CatalogProduct>(`/api/catalog/products/${id}/identifiers`, { method: "PUT", body: JSON.stringify({ type, value }) }),
+  // The first image is the main one; the rest are its gallery, in the order they were added.
+  addImage: (id: string, url: string, position: number) =>
+    apiFetch<CatalogProduct>(`/api/catalog/products/${id}/media`, {
+      method: "POST",
+      body: JSON.stringify({ url, purpose: position === 0 ? 0 : 1, position }),
+    }),
+  removeImage: (mediaId: string) => apiFetch<void>(`/api/catalog/media/${mediaId}`, { method: "DELETE" }),
 };
 
 export const ChannelListingsApi = {
@@ -333,6 +408,23 @@ export const ChannelListingsApi = {
       method: "PUT",
       body: JSON.stringify({ channelMarketId, variantId, fulfillmentMode: 0, existingCatalogItemId }),
     }),
+  // Everything not in `edit` (seller SKU, fulfillment, attributes, other overrides) is sent back as it is.
+  save: (listing: ChannelListing, edit: ListingEdit) =>
+    apiFetch<ChannelListing>("/api/channel-listings", {
+      method: "PUT",
+      body: JSON.stringify({
+        channelMarketId: listing.channelMarketId,
+        variantId: listing.variantId,
+        sellerSku: listing.sellerSku,
+        fulfillmentMode: listing.fulfillmentMode,
+        externalCategoryId: edit.externalCategoryId,
+        content: { title: edit.title === null ? null : { value: edit.title } },
+        priceOverride: edit.priceOverride,
+        quantityCap: edit.quantityCap,
+        existingCatalogItemId: edit.existingCatalogItemId,
+      }),
+    }),
+  preview: (id: string) => apiFetch<ListingPreview>(`/api/channel-listings/${id}/preview`, { method: "POST" }),
   validate: (id: string) => apiFetch<ListingValidation>(`/api/channel-listings/${id}/validate`, { method: "POST" }),
   publish: (id: string) => apiFetch<ListingQueued>(`/api/channel-listings/${id}/publish`, { method: "POST" }),
   deactivate: (id: string) => apiFetch<ListingQueued>(`/api/channel-listings/${id}/deactivate`, { method: "POST" }),

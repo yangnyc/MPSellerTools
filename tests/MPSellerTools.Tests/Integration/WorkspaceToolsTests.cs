@@ -237,6 +237,53 @@ public class WorkspaceToolsTests(MarketplaceFixture fixture) : IClassFixture<Mar
     }
 
     [Fact]
+    public async Task A_listings_own_title_price_cap_and_asin_are_saved_and_read_back_in_the_shape_the_edit_page_uses()
+    {
+        using var admin = await fixture.AdminAsync("tools-listing-edit@example.com");
+        var (_, variantId) = await fixture.CreateProductAsync(admin, "EDIT-1", price: 20m, stock: 10);
+        var (_, marketId) = await fixture.CreateAccountAsync(admin, (int)SalesChannel.Amazon, "Edit store", "ATVPDKIKX0DER", sellerId: "SELLER1");
+        var listingId = await fixture.SaveListingAsync(admin, marketId, variantId);
+
+        var saved = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PutJsonWithAntiforgeryAsync(admin, "/api/channel-listings", new
+        {
+            channelMarketId = marketId,
+            variantId,
+            sellerSku = "EDIT-1",
+            fulfillmentMode = 0,
+            externalCategoryId = "DRINKING_CUP",
+            content = new { title = new { value = "A title for Amazon" } },
+            priceOverride = 24.5m,
+            quantityCap = 3,
+            existingCatalogItemId = "B00EDIT001",
+        }));
+        Assert.Equal(listingId, saved.GetProperty("id").GetGuid());
+        Assert.Equal("A title for Amazon", saved.GetProperty("contentOverrides").GetProperty("title").GetProperty("value").GetString());
+        Assert.Equal("B00EDIT001", saved.GetProperty("references").GetProperty("CatalogItem").GetString());
+        Assert.Equal(("A title for Amazon", 24.5m, 3), (saved.GetProperty("effectiveTitle").GetString(), saved.GetProperty("effectivePrice").GetDecimal(), saved.GetProperty("effectiveQuantity").GetInt32()));
+
+        // Emptied again, it follows the product: its title, its price, all of its stock, and no ASIN.
+        var cleared = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PutJsonWithAntiforgeryAsync(admin, "/api/channel-listings", new
+        {
+            channelMarketId = marketId,
+            variantId,
+            sellerSku = "EDIT-1",
+            fulfillmentMode = 0,
+            externalCategoryId = (string?)null,
+            content = new Dictionary<string, object?> { ["title"] = null },
+            priceOverride = (decimal?)null,
+            quantityCap = (int?)null,
+            existingCatalogItemId = "",
+        }));
+        Assert.False(cleared.GetProperty("contentOverrides").TryGetProperty("title", out _));
+        Assert.False(cleared.GetProperty("references").TryGetProperty("CatalogItem", out _));
+        Assert.Equal(("Product EDIT-1", 20m, 10), (cleared.GetProperty("effectiveTitle").GetString(), cleared.GetProperty("effectivePrice").GetDecimal(), cleared.GetProperty("effectiveQuantity").GetInt32()));
+
+        var preview = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, $"/api/channel-listings/{listingId}/preview", new { }));
+        Assert.True(preview.GetProperty("requests").GetArrayLength() >= 1);
+        Assert.Equal("PUT", preview.GetProperty("requests")[0].GetProperty("method").GetString());
+    }
+
+    [Fact]
     public async Task Calls_to_a_channel_are_paced_and_another_channel_does_not_wait_for_them()
     {
         using var limiter = new ChannelRateLimiter(Options.Create(new MarketplaceOptions { RequestsPerSecond = 2, RequestBurst = 2 }));
