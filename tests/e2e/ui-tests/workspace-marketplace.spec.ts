@@ -245,7 +245,13 @@ test("a product's description, barcode and image are entered from the catalog, a
   expect(writes.at(-1)).toBe('PUT /api/channels/category-mappings {"channelMarketId":"m-amazon","internalCategory":"Mugs","externalCategoryId":"DRINKING_CUP"}');
 });
 test("a listing's own price, cap, title and ASIN are edited on its marketplace page, with a check of what is still missing", async ({ page }) => {
-  const draft = { ...listing, desiredState: 0, observedStatus: 0, externalCategoryId: null, contentOverrides: {}, priceOverride: null, fulfillmentMode: 0, quantityCap: null, references: {}, hasPriceConflict: false, observedPrice: null };
+  const draft = {
+    ...listing, desiredState: 0, observedStatus: 0, externalCategoryId: null, contentOverrides: {}, priceOverride: null, fulfillmentMode: 0, quantityCap: null,
+    references: {}, hasPriceConflict: false, observedPrice: null,
+    availableImages: [{ id: "img-1", url: "https://img.example.com/front.jpg" }, { id: "img-2", url: "https://img.example.com/back.jpg" }, { id: "img-3", url: "https://img.example.com/box.jpg" }],
+    imageIds: null, effectiveImageUrls: [],
+    imageRules: { minImages: 0, maxImages: 2, mainImage: "The main picture is on white.", formats: "JPEG or PNG.", size: "1000 px or more.", source: "the test" },
+  };
   await mockApi(
     page,
     { "/api/channels": [account({})], "/api/channel-listings": [draft] },
@@ -271,9 +277,22 @@ test("a listing's own price, cap, title and ASIN are edited on its marketplace p
   await dialog.getByRole("button", { name: "Check" }).click();
   await expect(dialog.getByText("Map the product's category to an Amazon product type.")).toBeVisible();
   expect(writes).toEqual([
-    'PUT /api/channel-listings {"channelMarketId":"m-amazon","variantId":"v1","sellerSku":"MUG-BLUE","fulfillmentMode":0,"externalCategoryId":null,"content":{"title":{"value":"Blue mug, 12 oz"}},"priceOverride":14.5,"quantityCap":3,"existingCatalogItemId":"B00TEST001"}',
+    'PUT /api/channel-listings {"channelMarketId":"m-amazon","variantId":"v1","sellerSku":"MUG-BLUE","fulfillmentMode":0,"externalCategoryId":null,"content":{"title":{"value":"Blue mug, 12 oz"}},"priceOverride":14.5,"quantityCap":3,"existingCatalogItemId":"B00TEST001","imageIds":[]}',
     "POST /api/channel-listings/l1/validate",
   ]);
+
+  // Pictures: the marketplace's own limit is shown, and three is one too many until one is left out.
+  await expect(dialog.getByText("Up to 2 pictures. The main picture is on white. JPEG or PNG. 1000 px or more.")).toBeVisible();
+  await expect(dialog.getByText("3 pictures would be sent and Amazon takes 2.")).toBeVisible();
+  await dialog.getByLabel("Send all of the product's pictures, in the product's order").uncheck();
+  await dialog.getByLabel("Send https://img.example.com/front.jpg").uncheck();
+  await expect(dialog.getByText("3 pictures would be sent")).toHaveCount(0);
+  // The back of the product becomes the main picture; then the box is moved ahead of it.
+  await dialog.getByRole("button", { name: "Move picture 2 up" }).click();
+  writes = [];
+  await dialog.getByRole("button", { name: "Check" }).click();
+  await expect.poll(() => writes.length).toBe(2);
+  expect(writes[0]).toContain('"imageIds":["img-3","img-2"]');
 
   await dialog.getByRole("button", { name: "Preview" }).click();
   await expect(dialog.getByText("Live writes are off: publishing builds this and sends nothing to Amazon.")).toBeVisible();

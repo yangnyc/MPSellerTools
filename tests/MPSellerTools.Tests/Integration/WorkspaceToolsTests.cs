@@ -284,6 +284,60 @@ public class WorkspaceToolsTests(MarketplaceFixture fixture) : IClassFixture<Mar
     }
 
     [Fact]
+    public async Task A_listing_sends_the_pictures_chosen_for_its_marketplace_in_their_order_and_too_many_stop_it_being_published()
+    {
+        using var admin = await fixture.AdminAsync("tools-pictures@example.com");
+        var (productId, variantId) = await fixture.CreateProductAsync(admin, "PICS-1");
+        // Eleven pictures in all: one more than Amazon's nine with room to spare for choosing.
+        JsonElement catalog = default;
+        for (var i = 1; i <= 10; i++)
+        {
+            catalog = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PostJsonWithAntiforgeryAsync(
+                admin, $"/api/catalog/products/{productId}/media", new { url = $"https://images.example.com/PICS-1-{i}.jpg", purpose = 1, position = i }));
+        }
+        var media = catalog.GetProperty("media").EnumerateArray().ToDictionary(m => m.GetProperty("url").GetString()!, m => m.GetProperty("id").GetGuid());
+        var (_, marketId) = await fixture.CreateAccountAsync(admin, (int)SalesChannel.Amazon, "Pictures store", "ATVPDKIKX0DER", sellerId: "SELLER1");
+        var listingId = await fixture.SaveListingAsync(admin, marketId, variantId);
+
+        object Save(object? imageIds) => new { channelMarketId = marketId, variantId, sellerSku = "PICS-1", fulfillmentMode = 0, imageIds };
+        Task<JsonElement> ListingAsync() => admin.GetFromJsonAsync<JsonElement>($"/api/channel-listings/{listingId}");
+        async Task<List<string>> ProblemsAsync() =>
+            (await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, $"/api/channel-listings/{listingId}/validate", new { })))
+                .GetProperty("issues").EnumerateArray().Select(i => i.GetProperty("code").GetString()!).ToList();
+
+        // Following the product: all eleven, which is more than Amazon takes, and the listing says so.
+        var following = await ListingAsync();
+        Assert.Equal(JsonValueKind.Null, following.GetProperty("imageIds").ValueKind);
+        Assert.Equal((11, 11, 9), (following.GetProperty("availableImages").GetArrayLength(), following.GetProperty("effectiveImageUrls").GetArrayLength(), following.GetProperty("imageRules").GetProperty("maxImages").GetInt32()));
+        Assert.Contains("too_many", await ProblemsAsync());
+
+        // Two chosen, the gallery one first: that is what is sent, in that order.
+        var second = media["https://images.example.com/PICS-1-2.jpg"];
+        var main = media["https://images.example.com/PICS-1.jpg"];
+        var saved = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PutJsonWithAntiforgeryAsync(admin, "/api/channel-listings", Save(new[] { second, main })));
+        Assert.Equal(
+            ["https://images.example.com/PICS-1-2.jpg", "https://images.example.com/PICS-1.jpg"],
+            saved.GetProperty("effectiveImageUrls").EnumerateArray().Select(u => u.GetString()));
+        Assert.DoesNotContain("too_many", await ProblemsAsync());
+        var preview = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, $"/api/channel-listings/{listingId}/preview", new { }));
+        var attributes = preview.GetProperty("requests")[0].GetProperty("body").GetProperty("attributes");
+        Assert.Equal("https://images.example.com/PICS-1-2.jpg", attributes.GetProperty("main_product_image_locator")[0].GetProperty("media_location").GetString());
+        Assert.False(attributes.TryGetProperty("other_product_image_locator_2", out _));
+
+        // A save that says nothing about pictures keeps the choice; another product's picture, or one twice, is refused.
+        await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PutJsonWithAntiforgeryAsync(admin, "/api/channel-listings", Save(null)));
+        Assert.Equal(2, (await ListingAsync()).GetProperty("effectiveImageUrls").GetArrayLength());
+        Assert.Equal(HttpStatusCode.BadRequest, (await TenantApiHelpers.PutJsonWithAntiforgeryAsync(admin, "/api/channel-listings", Save(new[] { Guid.NewGuid() }))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await TenantApiHelpers.PutJsonWithAntiforgeryAsync(admin, "/api/channel-listings", Save(new[] { main, main }))).StatusCode);
+
+        // A chosen picture removed from the product drops out; an empty choice goes back to all of the product's.
+        Assert.Equal(HttpStatusCode.NoContent, (await TenantApiHelpers.DeleteWithAntiforgeryAsync(admin, $"/api/catalog/media/{second}")).StatusCode);
+        Assert.Equal(["https://images.example.com/PICS-1.jpg"], (await ListingAsync()).GetProperty("effectiveImageUrls").EnumerateArray().Select(u => u.GetString()));
+        var back = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PutJsonWithAntiforgeryAsync(admin, "/api/channel-listings", Save(Array.Empty<Guid>())));
+        Assert.Equal((JsonValueKind.Null, 10), (back.GetProperty("imageIds").ValueKind, back.GetProperty("effectiveImageUrls").GetArrayLength()));
+    }
+
+    [Fact]
     public async Task Calls_to_a_channel_are_paced_and_another_channel_does_not_wait_for_them()
     {
         using var limiter = new ChannelRateLimiter(Options.Create(new MarketplaceOptions { RequestsPerSecond = 2, RequestBurst = 2 }));

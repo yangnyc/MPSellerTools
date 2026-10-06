@@ -152,6 +152,12 @@ export type ChannelListing = {
   references: Record<string, string>;
   hasPriceConflict: boolean;
   observedPrice: number | null;
+  // Every picture of the product this listing could use, and the ones chosen for this marketplace
+  // in the order they are sent; imageIds null means all of them, in the product's own order.
+  availableImages: ListingImage[];
+  imageIds: string[] | null;
+  effectiveImageUrls: string[];
+  imageRules: ImageRules;
   effectiveTitle: string | null;
   effectivePrice: number;
   effectiveQuantity: number;
@@ -159,6 +165,12 @@ export type ChannelListing = {
   observedStatus: ListingObservedStatus;
   issues: ListingIssue[] | null;
 };
+
+export type ListingImage = { id: string; url: string };
+
+// What the marketplace asks of a listing's pictures. Only the counts are checked by the server:
+// the pictures are addresses, so the rest is guidance. `source` says where the figures come from.
+export type ImageRules = { minImages: number; maxImages: number; mainImage: string; formats: string; size: string; source: string };
 
 export type ListingValidation = { valid: boolean; issues: ListingIssue[] };
 
@@ -172,6 +184,8 @@ export type ListingEdit = {
   quantityCap: number | null;
   externalCategoryId: string | null;
   existingCatalogItemId: string;
+  // The product's pictures to send, in order; empty to send all of them in the product's own order.
+  imageIds: string[];
 };
 
 // liveWrites false: the queued work is carried out as a dry run and nothing reaches the channel.
@@ -422,6 +436,7 @@ export const ChannelListingsApi = {
         priceOverride: edit.priceOverride,
         quantityCap: edit.quantityCap,
         existingCatalogItemId: edit.existingCatalogItemId,
+        imageIds: edit.imageIds,
       }),
     }),
   preview: (id: string) => apiFetch<ListingPreview>(`/api/channel-listings/${id}/preview`, { method: "POST" }),

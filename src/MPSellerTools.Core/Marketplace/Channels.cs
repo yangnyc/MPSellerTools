@@ -195,6 +195,13 @@ public class ChannelListing
     /// </summary>
     public string? ContentOverridesJson { get; set; }
 
+    /// <summary>
+    /// The product's pictures chosen for this marketplace, as a JSON array of
+    /// <see cref="ProductMedia"/> ids in the order they are sent. Null sends
+    /// all of the product's pictures in the product's own order.
+    /// </summary>
+    public string? ImageSelectionJson { get; set; }
+
     /// <summary>Category-specific attributes as a JSON object of name to value.</summary>
     public string? AttributesJson { get; set; }
 

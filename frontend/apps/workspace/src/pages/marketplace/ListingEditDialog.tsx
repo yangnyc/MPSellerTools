@@ -1,5 +1,9 @@
 import { useState } from "react";
 import Box from "@mui/material/Box";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Icon from "@mui/material/Icon";
+import IconButton from "@mui/material/IconButton";
 import MDButton from "components/MDButton";
 import MDInput from "components/MDInput";
 import { InlineAlert, KitDialog, formatMoney, useKit } from "examples/Kit";
@@ -34,6 +38,8 @@ export default function ListingEditDialog({
   const [cap, setCap] = useState(listing.quantityCap === null ? "" : String(listing.quantityCap));
   const [category, setCategory] = useState(listing.externalCategoryId ?? "");
   const [catalogItemId, setCatalogItemId] = useState(listing.references.CatalogItem ?? "");
+  // The pictures chosen for this marketplace, in order; null while the listing sends all of the product's.
+  const [chosen, setChosen] = useState<string[] | null>(listing.imageIds);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // null until a check was asked for; an empty list is a listing that is ready.
@@ -64,6 +70,7 @@ export default function ListingEditDialog({
       quantityCap: capValue,
       externalCategoryId: category.trim() || null,
       existingCatalogItemId: catalogItemId.trim(),
+      imageIds: chosen ?? [],
     });
     onSaved();
   };
@@ -91,6 +98,24 @@ export default function ListingEditDialog({
     });
 
   const hint = { fontSize: "0.8125rem", lineHeight: 1.5, color: c.muted };
+
+  const rules = listing.imageRules;
+  const available = listing.availableImages;
+  // Chosen pictures first, in their order, then the ones left out.
+  const pictures = chosen
+    ? [...chosen.map((id) => available.find((image) => image.id === id)).filter((image) => !!image), ...available.filter((image) => !chosen.includes(image.id))]
+    : available;
+  const sent = chosen ? chosen.filter((id) => available.some((image) => image.id === id)).length : available.length;
+  const toggle = (id: string) => setChosen((current) => (current ?? []).includes(id) ? (current ?? []).filter((x) => x !== id) : [...(current ?? []), id]);
+  const move = (id: string, by: -1 | 1) =>
+    setChosen((current) => {
+      const next = [...(current ?? [])];
+      const from = next.indexOf(id);
+      const to = from + by;
+      if (from < 0 || to < 0 || to >= next.length) return current;
+      [next[from], next[to]] = [next[to], next[from]];
+      return next;
+    });
 
   return (
     <KitDialog
@@ -160,6 +185,68 @@ export default function ListingEditDialog({
             onChange={(e: Change) => setCatalogItemId(e.target.value)}
             helperText={`Makes this an offer on an item ${name} already sells.`}
           />
+        )}
+      </Box>
+
+      <Box sx={{ mt: 3, pt: 3, borderTop: `1px solid ${c.border}` }}>
+        <Box sx={{ mb: 0.5, fontSize: "0.875rem", fontWeight: 700, color: c.text }}>Pictures on {name}</Box>
+        <Box sx={hint}>
+          {rules.minImages > 0 ? `At least ${rules.minImages}, up` : "Up"} to {rules.maxImages} pictures. {rules.mainImage} {rules.formats} {rules.size}
+        </Box>
+        <Box sx={{ ...hint, mt: 0.5, fontSize: "0.75rem" }}>
+          Only the number of pictures is checked here; the rest is for you to follow. From: {rules.source}.
+        </Box>
+
+        {available.length === 0 ? (
+          <Box sx={{ ...hint, mt: 2 }}>This product has no pictures yet. Add them in the product's details on the Products page.</Box>
+        ) : (
+          <>
+            <FormControlLabel
+              sx={{ mt: 1 }}
+              control={<Checkbox size="small" checked={chosen === null} onChange={(e: Change) => setChosen(e.target.checked ? null : available.map((image) => image.id))} />}
+              label={<Box component="span" sx={{ fontSize: "0.875rem", color: c.text }}>Send all of the product's pictures, in the product's order</Box>}
+            />
+            {sent > rules.maxImages && (
+              <InlineAlert tone="warning" sx={{ my: 1.5 }}>
+                {sent} pictures would be sent and {name} takes {rules.maxImages}. {chosen ? "Leave some out." : "Untick the box above and choose which to send."}
+              </InlineAlert>
+            )}
+            <Box sx={{ display: "grid", gap: 1, mt: 1 }}>
+              {pictures.map((image) => {
+                const position = chosen ? chosen.indexOf(image.id) : available.indexOf(image);
+                const included = position >= 0;
+                return (
+                  <Box key={image.id} sx={{ display: "flex", alignItems: "center", gap: 1.5, opacity: included ? 1 : 0.55 }}>
+                    {chosen && (
+                      <Checkbox size="small" checked={included} onChange={() => toggle(image.id)} slotProps={{ input: { "aria-label": `Send ${image.url}` } }} />
+                    )}
+                    <Box
+                      component="img"
+                      src={image.url}
+                      alt=""
+                      sx={{ flexShrink: 0, width: 44, height: 44, objectFit: "cover", borderRadius: "8px", border: `1px solid ${c.border}`, backgroundColor: c.surfaceAlt }}
+                    />
+                    <Box sx={{ flex: 1, minWidth: 0, fontSize: "0.8125rem", color: c.muted, overflowWrap: "anywhere" }}>
+                      <Box component="span" sx={{ fontWeight: 500, color: c.text }}>
+                        {!included ? "Not sent" : position === 0 ? "Main" : `Picture ${position + 1}`}
+                      </Box>{" "}
+                      {image.url}
+                    </Box>
+                    {chosen && included && (
+                      <>
+                        <IconButton size="small" disabled={position === 0} onClick={() => move(image.id, -1)} aria-label={`Move picture ${position + 1} up`} sx={{ color: c.muted }}>
+                          <Icon fontSize="small">arrow_upward</Icon>
+                        </IconButton>
+                        <IconButton size="small" disabled={position === chosen.length - 1} onClick={() => move(image.id, 1)} aria-label={`Move picture ${position + 1} down`} sx={{ color: c.muted }}>
+                          <Icon fontSize="small">arrow_downward</Icon>
+                        </IconButton>
+                      </>
+                    )}
+                  </Box>
+                );
+              })}
+            </Box>
+          </>
         )}
       </Box>
 

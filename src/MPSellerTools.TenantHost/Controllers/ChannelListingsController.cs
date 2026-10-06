@@ -128,7 +128,17 @@ public class ChannelListingsController(
             }
         }
 
-        var before = (listing.ContentOverridesJson, listing.AttributesJson, listing.ExternalCategoryId, listing.SellerSku);
+        if (request.ImageIds is { } chosen)
+        {
+            var own = await db.ProductMedia.AsNoTracking()
+                .Where(m => m.ProductId == variant.ProductId && (m.VariantId == null || m.VariantId == variant.Id)).Select(m => m.Id).ToListAsync(cancellationToken);
+            if (chosen.Count != chosen.Distinct().Count() || chosen.Any(id => !own.Contains(id)))
+            {
+                return Problem("Choose each picture once, from this product's own pictures.", statusCode: StatusCodes.Status400BadRequest);
+            }
+        }
+
+        var before = (listing.ContentOverridesJson, listing.AttributesJson, listing.ExternalCategoryId, listing.SellerSku, listing.ImageSelectionJson);
         var (priceBefore, stockBefore) = (listing.PriceOverride, (listing.QuantityCap, listing.FulfillmentMode));
         listing.SellerSku = sellerSku;
         listing.ContentOverridesJson = overrides.ToJson();
@@ -136,13 +146,16 @@ public class ChannelListingsController(
             : request.Attributes.Count == 0 ? null
             : JsonSerializer.Serialize(new SortedDictionary<string, string>(request.Attributes));
         listing.ExternalCategoryId = string.IsNullOrWhiteSpace(request.ExternalCategoryId) ? null : request.ExternalCategoryId.Trim();
+        listing.ImageSelectionJson = request.ImageIds is null ? listing.ImageSelectionJson
+            : request.ImageIds.Count == 0 ? null
+            : JsonSerializer.Serialize(request.ImageIds);
         listing.PriceOverride = request.PriceOverride;
         listing.FulfillmentMode = request.FulfillmentMode;
         listing.QuantityCap = request.QuantityCap;
         listing.UpdatedAtUtc = now;
 
         var catalogItemChanged = await SetCatalogItemAsync(listing, account, market, request.ExistingCatalogItemId, now, cancellationToken);
-        if (isNew || catalogItemChanged || before != (listing.ContentOverridesJson, listing.AttributesJson, listing.ExternalCategoryId, listing.SellerSku))
+        if (isNew || catalogItemChanged || before != (listing.ContentOverridesJson, listing.AttributesJson, listing.ExternalCategoryId, listing.SellerSku, listing.ImageSelectionJson))
         {
             Raise(OutboxEvent.ListingContentChanged, listing.Id, now);
         }
@@ -478,7 +491,8 @@ public class ChannelListingsController(
             new ListingVersions(l.ContentVersion, l.ConfirmedContentVersion),
             new ListingVersions(l.PriceVersion, l.ConfirmedPriceVersion),
             new ListingVersions(l.InventoryVersion, l.ConfirmedInventoryVersion),
-            issues, bundle.Work.References);
+            issues, bundle.Work.References,
+            bundle.AvailableImages, bundle.ImageSelection, s.ImageUrls, ChannelImageRules.For(bundle.Context.Account.Channel));
     }
 }
 

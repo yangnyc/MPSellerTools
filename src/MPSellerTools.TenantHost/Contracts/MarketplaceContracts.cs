@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MPSellerTools.Core.Business;
 using MPSellerTools.Core.Marketplace;
+using MPSellerTools.TenantHost.Marketplace;
 using MPSellerTools.TenantHost.Marketplace.Channels;
 
 namespace MPSellerTools.TenantHost.Contracts;
@@ -136,6 +137,9 @@ public record SaveCategoryMappingRequest(
 /// {"value":...} or {"cleared":true} sets an override.
 /// <see cref="ExistingCatalogItemId"/> is an id the seller already holds for
 /// the channel's catalog item (an ASIN), for offering on an existing item.
+/// <see cref="ImageIds"/> left out keeps the listing's choice of pictures, an
+/// empty list goes back to sending all of the product's, and a list of the
+/// product's picture ids sends those, in that order.
 /// </summary>
 public record SaveChannelListingRequest(
     Guid ChannelMarketId,
@@ -147,7 +151,8 @@ public record SaveChannelListingRequest(
     decimal? PriceOverride,
     FulfillmentMode FulfillmentMode,
     int? QuantityCap,
-    string? ExistingCatalogItemId);
+    string? ExistingCatalogItemId,
+    List<Guid>? ImageIds = null);
 
 public record ListingVersions(long Desired, long Confirmed);
 
@@ -180,7 +185,11 @@ public record ChannelListingResponse(
     ListingVersions Price,
     ListingVersions Inventory,
     JsonElement? Issues,
-    IReadOnlyDictionary<ExternalResourceType, string> References);
+    IReadOnlyDictionary<ExternalResourceType, string> References,
+    IReadOnlyList<ListingImage> AvailableImages,
+    IReadOnlyList<Guid>? ImageIds,
+    IReadOnlyList<string> EffectiveImageUrls,
+    ImageRules ImageRules);
 
 public record ListingValidationResponse(bool Valid, IReadOnlyList<ValidationIssue> Issues, string? RequirementsSource, string? RequirementsVersion);
 

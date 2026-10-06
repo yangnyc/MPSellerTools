@@ -154,3 +154,23 @@ Payload tests assert the field names listed as verified above. They are
 product type JSON Schemas, Walmart item spec, eBay OpenAPI): doing that needs
 the schema files for the chosen product types, which is the first thing to
 do once product types are decided.
+
+## Pictures per marketplace
+
+A product has one set of pictures. Each listing either sends all of them in
+the product's order, or a chosen, ordered subset (`imageIds` on the listing;
+the edit dialog on each marketplace's products page). The first one sent is
+the main picture.
+
+| Channel | Sent as | Limit enforced | Shown as guidance only |
+| --- | --- | --- | --- |
+| eBay | `product.imageUrls` | 1 to 24 | https address; JPEG, PNG, GIF, TIFF, BMP or WebP; 500 px or more on the longest side |
+| Amazon | `main_product_image_locator`, `other_product_image_locator_1` to `_8` | up to 9 | main picture on pure white; JPEG, PNG, TIFF or non-animated GIF; 1000 px or more |
+| Walmart | `mainImageUrl`, `productSecondaryImageURL` | 1 to 10 | main picture on white; JPEG or PNG up to 5 MB; square, 1500 px or more |
+
+All of these figures are *from prior knowledge* of the marketplaces' public
+documentation and are **unverified**: they live in
+`MPSellerTools.Core/Marketplace/ImageRules.cs` and should be checked against
+the current docs before being relied on. Only the counts are enforced
+(validation code `too_many`, and the adapters' existing "needs an image").
+Pictures are addresses, so size, format and background are not measured.
