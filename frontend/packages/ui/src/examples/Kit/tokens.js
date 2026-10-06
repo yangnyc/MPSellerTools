@@ -5,8 +5,11 @@
 // the active named theme (context/themes.js) and its light or dark mode here,
 // so pages never branch on the theme or on darkMode themselves.
 //
-// "ocean" uses the Classy palette (#845EC2 #4B4453 #B0A8B9 #C34A36 #FF8066)
-// and tints and shades of it. The other themes are described at their blocks.
+// "ocean" is navy and steel blue with warm accents: navy #192755 and
+// #0B1733, pale blue #ABC6D3, coral #F36152, crimson #B71443 and amber
+// #FEB663, with tints and shades of them. The action colour #3B6695 is the
+// palette's steel blue (#728FAD) darkened until links and white button text
+// read on it. Green stays the colour of success; the palette has none. The other themes are described at their blocks.
 import { useMemo } from "react";
 
 import { useMaterialUIController } from "context";
@@ -17,70 +20,70 @@ const kitThemes = {
     palettes: {
       light: {
         surface: "#FFFFFF",
-        surfaceAlt: "#F8F7FA",
-        border: "#E3DEE8",
-        borderStrong: "#CCC5D3",
-        text: "#332E39",
-        muted: "#7D7486",
-        subtle: "#8F869A",
-        hover: "rgba(75, 68, 83, 0.05)",
-        accent: "#845EC2",
-        shadow: "0 1px 2px rgba(42, 37, 47, 0.04), 0 12px 28px -18px rgba(42, 37, 47, 0.18)",
+        surfaceAlt: "#F6F9FB",
+        border: "#DCE6EE",
+        borderStrong: "#C3D3DF",
+        text: "#0B1733",
+        muted: "#546B88",
+        subtle: "#64799A",
+        hover: "rgba(25, 39, 85, 0.05)",
+        accent: "#3B6695",
+        shadow: "0 1px 2px rgba(11, 23, 51, 0.04), 0 12px 28px -18px rgba(11, 23, 51, 0.18)",
         navbar: "rgba(255, 255, 255, 0.82)",
       },
       dark: {
-        surface: "#4B4453",
-        surfaceAlt: "rgba(42, 37, 47, 0.45)",
-        border: "rgba(176, 168, 185, 0.18)",
-        borderStrong: "rgba(176, 168, 185, 0.32)",
-        text: "#F5F2F8",
-        muted: "#B0A8B9",
-        subtle: "#A9A0B3",
-        hover: "rgba(176, 168, 185, 0.08)",
-        // #845EC2 lightened, to stay readable on the #4B4453 surface.
-        accent: "#BFA6EA",
-        shadow: "0 1px 2px rgba(20, 16, 24, 0.3), 0 12px 28px -18px rgba(20, 16, 24, 0.7)",
-        navbar: "rgba(75, 68, 83, 0.82)",
+        surface: "#192755",
+        surfaceAlt: "rgba(11, 23, 51, 0.45)",
+        border: "rgba(171, 198, 211, 0.18)",
+        borderStrong: "rgba(171, 198, 211, 0.32)",
+        text: "#F4F7FA",
+        muted: "#ABC6D3",
+        subtle: "#9DB4C9",
+        hover: "rgba(171, 198, 211, 0.08)",
+        // #3B6695 lightened, to stay readable on the #192755 surface.
+        accent: "#A6C3E3",
+        shadow: "0 1px 2px rgba(5, 10, 25, 0.3), 0 12px 28px -18px rgba(5, 10, 25, 0.7)",
+        navbar: "rgba(25, 39, 85, 0.82)",
       },
     },
     tones: {
       light: {
-        info: { fg: "#6E4BAA", bg: "#EDE5F8", solid: "#845EC2" },
-        primary: { fg: "#4B4453", bg: "#ECE9EF", solid: "#4B4453" },
+        info: { fg: "#2D5178", bg: "#E3EDF6", solid: "#3B6695" },
+        primary: { fg: "#192755", bg: "#E6ECF3", solid: "#192755" },
         success: { fg: "#047857", bg: "#D1FAE5", solid: "#059669" },
-        warning: { fg: "#B24A33", bg: "#FFE9E3", solid: "#FF8066" },
-        error: { fg: "#9E3324", bg: "#F9E1DC", solid: "#C34A36" },
-        neutral: { fg: "#4B4453", bg: "#F1EEF4", solid: "#7D7486" },
+        warning: { fg: "#A93425", bg: "#FDE8E4", solid: "#F36152" },
+        error: { fg: "#8F0F34", bg: "#F9E0E7", solid: "#B71443" },
+        neutral: { fg: "#192755", bg: "#EDF2F7", solid: "#546B88" },
       },
       dark: {
-        info: { fg: "#C9B4EF", bg: "rgba(132, 94, 194, 0.24)", solid: "#A07FD6" },
-        primary: { fg: "#D8D2DE", bg: "rgba(176, 168, 185, 0.16)", solid: "#B0A8B9" },
+        info: { fg: "#B9D0EA", bg: "rgba(59, 102, 149, 0.24)", solid: "#4A78A9" },
+        primary: { fg: "#D3E0EA", bg: "rgba(171, 198, 211, 0.16)", solid: "#ABC6D3" },
         success: { fg: "#6EE7B7", bg: "rgba(52, 211, 153, 0.14)", solid: "#34D399" },
-        warning: { fg: "#FFB3A1", bg: "rgba(255, 128, 102, 0.16)", solid: "#FF8066" },
-        error: { fg: "#F4AA9D", bg: "rgba(195, 74, 54, 0.28)", solid: "#D9624E" },
-        neutral: { fg: "#D8D2DE", bg: "rgba(176, 168, 185, 0.16)", solid: "#B0A8B9" },
+        warning: { fg: "#F8B6A6", bg: "rgba(243, 97, 82, 0.16)", solid: "#F36152" },
+        error: { fg: "#F4A9BC", bg: "rgba(183, 20, 67, 0.28)", solid: "#CF3560" },
+        neutral: { fg: "#D3E0EA", bg: "rgba(171, 198, 211, 0.16)", solid: "#ABC6D3" },
       },
     },
     // The fills below are fixed in both modes.
-    accentGradient: "linear-gradient(135deg, #845EC2 0%, #4B4453 100%)",
+    accentGradient: "linear-gradient(135deg, #3B6695 0%, #192755 100%)",
     onAccent: "#fff",
     hero: {
       background: [
-        "radial-gradient(36rem 22rem at 8% 0%, rgba(132, 94, 194, 0.34), transparent 60%)",
-        "radial-gradient(32rem 22rem at 96% 100%, rgba(255, 128, 102, 0.2), transparent 60%)",
-        "linear-gradient(155deg, #2A252F 0%, #3A3440 50%, #4B4453 100%)",
+        "radial-gradient(36rem 22rem at 8% 0%, rgba(59, 102, 149, 0.34), transparent 60%)",
+        "radial-gradient(32rem 22rem at 96% 100%, rgba(243, 97, 82, 0.2), transparent 60%)",
+        "linear-gradient(155deg, #08112A 0%, #121F45 50%, #192755 100%)",
       ].join(", "),
-      border: "rgba(176, 168, 185, 0.18)",
-      grid: "rgba(176, 168, 185, 0.09)",
-      eyebrow: "#FF8066",
-      subtitle: "rgba(241, 238, 244, 0.85)",
+      border: "rgba(171, 198, 211, 0.18)",
+      grid: "rgba(171, 198, 211, 0.09)",
+      eyebrow: "#FEB663",
+      subtitle: "rgba(237, 242, 247, 0.85)",
     },
     avatarFills: [
-      "linear-gradient(135deg, #845EC2, #4B4453)",
-      "linear-gradient(135deg, #C34A36, #4B4453)",
-      "linear-gradient(135deg, #A07FD6, #845EC2)",
-      "linear-gradient(135deg, #E8674C, #C34A36)",
-      "linear-gradient(135deg, #7D7486, #4B4453)",
+      "linear-gradient(135deg, #3B6695, #192755)",
+      "linear-gradient(135deg, #B71443, #192755)",
+      "linear-gradient(135deg, #4A78A9, #3B6695)",
+      "linear-gradient(135deg, #F36152, #B71443)",
+      "linear-gradient(135deg, #546B88, #192755)",
     ],
     onAvatar: "#fff",
   },

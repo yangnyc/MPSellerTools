@@ -21,12 +21,12 @@ Coded by www.creative-tim.com
 
 const colors = {
   background: {
-    default: "#F8F7FA",
+    default: "#F6F9FB",
   },
 
   text: {
-    main: "#4B4453",
-    focus: "#4B4453",
+    main: "#192755",
+    focus: "#192755",
   },
 
   transparent: {
@@ -46,18 +46,18 @@ const colors = {
   },
 
   primary: {
-    main: "#4B4453",
-    focus: "#3A3440",
+    main: "#192755",
+    focus: "#121F45",
   },
 
   secondary: {
-    main: "#7D7486",
-    focus: "#4B4453",
+    main: "#546B88",
+    focus: "#192755",
   },
 
   info: {
-    main: "#845EC2",
-    focus: "#6E4BAA",
+    main: "#3B6695",
+    focus: "#2D5178",
   },
 
   success: {
@@ -65,79 +65,80 @@ const colors = {
     focus: "#047857",
   },
 
-  // #FF8066 darkened, so an outlined button's text reads on white.
+  // The coral (#F36152) darkened, so an outlined button's text reads on white.
   warning: {
-    main: "#D9583B",
-    focus: "#B24A33",
+    main: "#C63D2E",
+    focus: "#A93425",
   },
 
   error: {
-    main: "#C34A36",
-    focus: "#9E3324",
+    main: "#B71443",
+    focus: "#8F0F34",
   },
 
   light: {
-    main: "#F1EEF4",
-    focus: "#F1EEF4",
+    main: "#EDF2F7",
+    focus: "#EDF2F7",
   },
 
   dark: {
-    main: "#4B4453",
-    focus: "#332E39",
+    main: "#192755",
+    focus: "#0B1733",
   },
 
   grey: {
-    100: "#F8F7FA",
-    200: "#F1EEF4",
-    300: "#E3DEE8",
-    400: "#CCC5D3",
-    500: "#B0A8B9",
-    600: "#7D7486",
-    700: "#4B4453",
-    800: "#3A3440",
-    900: "#332E39",
+    100: "#F6F9FB",
+    200: "#EDF2F7",
+    300: "#DCE6EE",
+    400: "#C3D3DF",
+    500: "#ABC6D3",
+    600: "#546B88",
+    700: "#192755",
+    800: "#121F45",
+    900: "#0B1733",
   },
 
   gradients: {
     primary: {
-      main: "#6A6173",
-      state: "#3A3440",
+      main: "#33426F",
+      state: "#121F45",
     },
 
     secondary: {
-      main: "#B0A8B9",
-      state: "#7D7486",
+      main: "#ABC6D3",
+      state: "#546B88",
     },
 
     info: {
-      main: "#A07FD6",
-      state: "#845EC2",
+      main: "#4A78A9",
+      state: "#3B6695",
     },
 
     // Dark enough for the white text on a success button.
     success: {
-      main: "#0E9F6E",
+      main: "#06805B",
       state: "#047857",
     },
 
+    // The coral darkened, so the white text on a warning button reads.
     warning: {
-      main: "#FF9C87",
-      state: "#FF8066",
+      main: "#D2432F",
+      state: "#C63D2E",
     },
 
     error: {
-      main: "#D9624E",
-      state: "#C34A36",
+      main: "#CF3560",
+      state: "#B71443",
     },
 
     light: {
-      main: "#F1EEF4",
-      state: "#E3DEE8",
+      main: "#EDF2F7",
+      state: "#DCE6EE",
     },
 
     dark: {
-      main: "#3A3440",
-      state: "#332E39",
+      main: "#121F45",
+      state: "#0B1733",
     },
 
     // Sidenav accent swatches — muted tones tuned to sit well against the
@@ -259,18 +260,18 @@ const colors = {
 
   badgeColors: {
     primary: {
-      background: "#ECE9EF",
-      text: "#3A3440",
+      background: "#E6ECF3",
+      text: "#121F45",
     },
 
     secondary: {
-      background: "#F1EEF4",
-      text: "#4B4453",
+      background: "#EDF2F7",
+      text: "#192755",
     },
 
     info: {
-      background: "#EDE5F8",
-      text: "#6E4BAA",
+      background: "#E3EDF6",
+      text: "#2D5178",
     },
 
     success: {
@@ -279,38 +280,38 @@ const colors = {
     },
 
     warning: {
-      background: "#FFE9E3",
-      text: "#B24A33",
+      background: "#FDE8E4",
+      text: "#A93425",
     },
 
     error: {
-      background: "#F9E1DC",
-      text: "#9E3324",
+      background: "#F9E0E7",
+      text: "#8F0F34",
     },
 
     light: {
       background: "#ffffff",
-      text: "#CCC5D3",
+      text: "#C3D3DF",
     },
 
     dark: {
-      background: "#B0A8B9",
-      text: "#332E39",
+      background: "#ABC6D3",
+      text: "#0B1733",
     },
   },
 
   coloredShadows: {
-    primary: "#4B4453",
-    secondary: "#7D7486",
-    info: "#845EC2",
+    primary: "#192755",
+    secondary: "#546B88",
+    info: "#3B6695",
     success: "#059669",
-    warning: "#FF8066",
-    error: "#C34A36",
-    light: "#CCC5D3",
-    dark: "#332E39",
+    warning: "#F36152",
+    error: "#B71443",
+    light: "#C3D3DF",
+    dark: "#0B1733",
   },
 
-  inputBorderColor: "#CCC5D3",
+  inputBorderColor: "#C3D3DF",
 
   tabs: {
     indicator: { boxShadow: "#ddd" },

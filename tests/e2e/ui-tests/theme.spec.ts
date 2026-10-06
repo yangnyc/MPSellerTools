@@ -49,7 +49,7 @@ const themePicker = (page: Page) => page.getByLabel("Theme", { exact: true });
 test("picking a theme in display settings restyles the app and saves its name to the profile", async ({ page }) => {
   const saves = await mockApi(page, null);
   const body = page.locator("body");
-  await expect(body).toHaveCSS("background-color", "rgb(248, 247, 250)");
+  await expect(body).toHaveCSS("background-color", "rgb(246, 249, 251)");
 
   await page.getByLabel("Display settings").click();
   await expect(themePicker(page)).toHaveValue("ocean");
@@ -89,7 +89,7 @@ test("a theme name saved on the profile is applied on load, and one saved withou
   const saves = await mockApi(page, {
     darkMode: false, whiteSidenav: false, sidenavTint: null, sidenavColor: "steel", fixedNavbar: true,
   });
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(248, 247, 250)");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(246, 249, 251)");
   await page.getByLabel("Display settings").click();
   await expect(themePicker(page)).toHaveValue("ocean");
   // Nothing changed, so nothing is written back.

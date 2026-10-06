@@ -1,7 +1,8 @@
 // The MUI theme for each named theme (context/themes.js) and mode.
 //
 // "ocean" is the base pair in assets/theme and assets/theme-dark, coloured
-// with the Classy palette (#845EC2 #4B4453 #B0A8B9 #C34A36 #FF8066). The
+// in navy and steel blue with coral, crimson and amber accents (see
+// examples/Kit/tokens.js for the palette). The
 // others are built on top of that pair by overriding its palette and the few
 // component styles that have the base colours baked in — they share every
 // size, spacing, and typography decision with the base.

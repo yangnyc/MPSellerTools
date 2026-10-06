@@ -15,8 +15,8 @@ export const themeOptions = [
   {
     id: "ocean",
     name: "Default",
-    description: "Purple, plum and coral.",
-    swatch: ["#4B4453", "#845EC2", "#FF8066"],
+    description: "Navy and steel blue, with coral.",
+    swatch: ["#192755", "#3B6695", "#F36152"],
     preset: { darkMode: false, whiteSidenav: false, sidenavTint: null, sidenavColor: "steel" },
   },
   {
