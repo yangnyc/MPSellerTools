@@ -356,6 +356,42 @@ public class AmazonChannelAdapter(ChannelHttp http, ChannelSecrets secrets, Chan
         return new CategoryRequirements { Source = schema ?? url, Version = version };
     }
 
+    /// <summary>
+    /// Finds existing catalog items through searchCatalogItems of the Catalog
+    /// Items API (2022-04-01), by keywords or, for a barcode, by identifier.
+    /// A read: it changes nothing on Amazon.
+    /// </summary>
+    public async Task<IReadOnlyList<CatalogSearchResult>> SearchCatalogAsync(ChannelContext context, string query, CancellationToken cancellationToken)
+    {
+        var term = query.Trim();
+        var barcode = term.All(char.IsAsciiDigit) ? term.Length switch { 12 => "UPC", 13 => "EAN", 14 => "GTIN", _ => null } : null;
+        var url = $"{BaseUrl(context)}/catalog/2022-04-01/items?marketplaceIds={Uri.EscapeDataString(context.Market.MarketplaceCode)}"
+            + (barcode is null
+                ? $"&keywords={Uri.EscapeDataString(term)}"
+                : $"&identifiers={Uri.EscapeDataString(term)}&identifiersType={barcode}")
+            + "&includedData=summaries&pageSize=10";
+        var response = await SendAsync(context, HttpMethod.Get, url, null, cancellationToken);
+        if (!response.Body.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var results = new List<CatalogSearchResult>();
+        foreach (var item in items.EnumerateArray())
+        {
+            if (Text(item, "asin") is not { } asin)
+            {
+                continue;
+            }
+
+            var summary = item.TryGetProperty("summaries", out var summaries) && summaries.ValueKind == JsonValueKind.Array
+                ? summaries.EnumerateArray().FirstOrDefault(x => Text(x, "marketplaceId") == context.Market.MarketplaceCode)
+                : default;
+            results.Add(new CatalogSearchResult(asin, Text(summary, "itemName"), Text(summary, "brand")));
+        }
+        return results;
+    }
+
     private static ChannelOrder? ToOrder(JsonElement order)
     {
         var id = Text(order, "orderId");

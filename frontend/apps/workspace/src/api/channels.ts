@@ -1,0 +1,339 @@
+import { apiFetch } from "../lib/api";
+
+// Mirrors MarketplaceContracts.cs in MPSellerTools.TenantHost.Contracts: the
+// company's sales channels and how its products are offered on them.
+
+export type ChannelKind = 0 | 1 | 2 | 3; // Ebay, Amazon, Walmart, Website
+
+// What the workspace needs to know to give a marketplace its pages: the same
+// two pages serve every marketplace, told apart only by this.
+export type Marketplace = {
+  kind: ChannelKind;
+  name: string;
+  // The marketplace's own code for its United States site.
+  marketplaceCode: string;
+  // Where its pages live, e.g. "/amazon".
+  path: string;
+  icon: string;
+  // Whether the marketplace identifies the seller by an id entered here.
+  asksSellerId: boolean;
+  // What a draft still needs before it can be published, in the marketplace's own terms.
+  publishNeeds: string;
+  // The secrets the account is saved with here; empty when they are kept elsewhere.
+  credentials: { key: string; label: string }[];
+  // Where the secrets are kept instead, when not here.
+  credentialsNote?: string;
+  // The account's non-secret settings the marketplace's adapter reads.
+  settings: { key: string; label: string; help: string }[];
+  // Whether its catalog can be searched for an item to offer on.
+  catalogSearch: boolean;
+};
+
+export const EBAY: Marketplace = {
+  kind: 0,
+  name: "eBay",
+  marketplaceCode: "EBAY_US",
+  // "/ebay" itself is the connection page, where the keys and the seller's consent live.
+  path: "/ebay/products",
+  icon: "storefront",
+  asksSellerId: false,
+  publishNeeds: "eBay also needs a description, a category, an image, and the account's policies and location before the draft can be published.",
+  credentials: [],
+  credentialsNote: "eBay's keys and the seller's consent are saved on the eBay connection page.",
+  settings: [
+    { key: "merchantLocationKey", label: "Inventory location key", help: "The key of the location your stock ships from, as created in your eBay account." },
+    { key: "fulfillmentPolicyId", label: "Shipping policy ID", help: "Your eBay fulfillment (shipping) business policy." },
+    { key: "paymentPolicyId", label: "Payment policy ID", help: "Your eBay payment business policy." },
+    { key: "returnPolicyId", label: "Return policy ID", help: "Your eBay return business policy." },
+  ],
+  catalogSearch: false,
+};
+
+export const AMAZON: Marketplace = {
+  kind: 1,
+  name: "Amazon",
+  marketplaceCode: "ATVPDKIKX0DER",
+  path: "/amazon",
+  icon: "shopping_cart",
+  asksSellerId: true,
+  publishNeeds: "Amazon also needs a description, a category and a UPC or ASIN before the draft can be published.",
+  credentials: [
+    { key: "clientId", label: "LWA client ID" },
+    { key: "clientSecret", label: "LWA client secret" },
+    { key: "refreshToken", label: "Refresh token" },
+  ],
+  settings: [],
+  catalogSearch: true,
+};
+
+export const WALMART: Marketplace = {
+  kind: 2,
+  name: "Walmart",
+  marketplaceCode: "WALMART_US",
+  path: "/walmart",
+  icon: "local_mall",
+  asksSellerId: false,
+  publishNeeds: "Walmart also needs a brand, a category, an image and a GTIN or UPC before the draft can be published.",
+  credentials: [
+    { key: "clientId", label: "Client ID" },
+    { key: "clientSecret", label: "Client secret" },
+  ],
+  settings: [{ key: "itemSpecVersion", label: "Item spec version", help: "The version of Walmart's item spec your feeds are built for. Leave empty for the default." }],
+  catalogSearch: false,
+};
+
+export type PriceConflictPolicy = 0 | 1 | 2; // RestoreLocal, ImportRemote, ReportConflict
+
+// Everything about an account that can be changed after it was added. Credentials are saved separately.
+export type ChannelAccountUpdate = {
+  channel: ChannelKind;
+  name: string;
+  environment: 0 | 1;
+  sellerId: string | null;
+  settings: Record<string, string>;
+  isEnabled: boolean;
+  liveWritesEnabled: boolean;
+  inventorySyncEnabled: boolean;
+  orderImportEnabled: boolean;
+  priceConflictPolicy: PriceConflictPolicy;
+};
+
+export type CatalogSearchResult = { catalogItemId: string; title: string | null; brand: string | null };
+
+export type ChannelMarket = { id: string; marketplaceCode: string; language: string; currency: string };
+
+// Credentials are never part of it, only whether any are saved.
+export type ChannelAccount = {
+  id: string;
+  channel: ChannelKind;
+  name: string;
+  environment: 0 | 1; // Sandbox, Production
+  sellerId: string | null;
+  // Non-secret settings, such as eBay's policy ids.
+  settings: Record<string, string> | null;
+  hasCredentials: boolean;
+  isEnabled: boolean;
+  liveWritesEnabled: boolean;
+  // What actually applies: the account's own switch and the host's together.
+  effectiveLiveWrites: boolean;
+  inventorySyncEnabled: boolean;
+  orderImportEnabled: boolean;
+  priceConflictPolicy: PriceConflictPolicy;
+  lastOrderImportAtUtc: string | null;
+  lastError: string | null;
+  markets: ChannelMarket[];
+};
+
+export type ListingDesiredState = 0 | 1 | 2; // Draft, Active, Inactive
+export type ListingObservedStatus = 0 | 1 | 2 | 3 | 4 | 5; // Unknown, NotListed, Processing, Live, Inactive, Rejected
+
+export type ListingIssue = { channel: ChannelKind; path: string; code: string; message: string };
+
+export type ChannelListing = {
+  id: string;
+  channelMarketId: string;
+  channelAccountId: string;
+  channel: ChannelKind;
+  marketplaceCode: string;
+  variantId: string;
+  sellerSku: string;
+  effectiveTitle: string | null;
+  effectivePrice: number;
+  effectiveQuantity: number;
+  desiredState: ListingDesiredState;
+  observedStatus: ListingObservedStatus;
+  issues: ListingIssue[] | null;
+};
+
+export type ListingValidation = { valid: boolean; issues: ListingIssue[] };
+
+// liveWrites false: the queued work is carried out as a dry run and nothing reaches the channel.
+export type ListingQueued = { listingId: string; desiredState: ListingDesiredState; liveWrites: boolean };
+
+export type CatalogVariant = { id: string; sku: string; name: string | null; isDefault: boolean; isArchived: boolean };
+export type CatalogProduct = { id: string; sku: string; name: string; variants: CatalogVariant[] };
+
+export const ChannelsApi = {
+  list: () => apiFetch<ChannelAccount[]>("/api/channels"),
+  // A new account never writes to its channel until that is switched on for it.
+  create: (data: { channel: ChannelKind; name: string; sellerId: string | null }) =>
+    apiFetch<ChannelAccount>("/api/channels", {
+      method: "POST",
+      body: JSON.stringify({
+        ...data,
+        environment: 0,
+        isEnabled: true,
+        liveWritesEnabled: false,
+        inventorySyncEnabled: false,
+        orderImportEnabled: false,
+        priceConflictPolicy: 2,
+      }),
+    }),
+  addMarket: (accountId: string, marketplaceCode: string) =>
+    apiFetch<ChannelMarket>(`/api/channels/${accountId}/markets`, { method: "POST", body: JSON.stringify({ marketplaceCode }) }),
+  update: (accountId: string, data: ChannelAccountUpdate) =>
+    apiFetch<ChannelAccount>(`/api/channels/${accountId}`, { method: "PUT", body: JSON.stringify(data) }),
+  // Write-only: what is saved is never sent back.
+  setCredentials: (accountId: string, credentials: Record<string, string>) =>
+    apiFetch<void>(`/api/channels/${accountId}/credentials`, { method: "PUT", body: JSON.stringify({ credentials }) }),
+  // Asks the marketplace itself, so it needs live access to be on for the account.
+  catalogSearch: (accountId: string, query: string) =>
+    apiFetch<CatalogSearchResult[]>(`/api/channels/${accountId}/catalog-search?q=${encodeURIComponent(query)}`),
+};
+
+export type InventoryItem = {
+  variantId: string;
+  productId: string;
+  sku: string;
+  productName: string;
+  variantName: string | null;
+  price: number;
+  onHand: number;
+  reserved: number;
+  safetyStock: number;
+  availableToSell: number;
+  updatedAtUtc: string | null;
+};
+
+// accountingEnabled false: orders leave stock alone, so nothing is ever reserved.
+export type InventoryOverview = { accountingEnabled: boolean; items: InventoryItem[] };
+
+export type InventoryMovementType = 0 | 1 | 2 | 3 | 4; // Adjustment, Reserve, Release, Ship, ReturnReceipt
+
+export type InventoryMovement = {
+  id: string;
+  variantId: string;
+  sku: string;
+  type: InventoryMovementType;
+  onHandDelta: number;
+  reservedDelta: number;
+  reference: string | null;
+  occurredAtUtc: string;
+};
+
+export const InventoryApi = {
+  overview: () => apiFetch<InventoryOverview>("/api/catalog/inventory"),
+  movements: (variantId?: string) =>
+    apiFetch<InventoryMovement[]>(`/api/catalog/inventory/movements${variantId ? `?variantId=${variantId}` : ""}`),
+  adjust: (variantId: string, onHand: number, safetyStock: number) =>
+    apiFetch<void>(`/api/catalog/variants/${variantId}/inventory`, { method: "PUT", body: JSON.stringify({ onHand, safetyStock }) }),
+  // The receipt reference makes it safe to send twice: the same one is counted once.
+  receiveReturn: (variantId: string, quantity: number, receiptId: string) =>
+    apiFetch<{ recorded: boolean }>("/api/catalog/returns", { method: "POST", body: JSON.stringify({ variantId, quantity, receiptId }) }),
+};
+
+export type SyncOperation = 0 | 1 | 2 | 3 | 4 | 5; // Content, Price, Inventory, Deactivate, OrderImport, Reconcile
+export const SYNC_OPERATION_LABELS: Record<SyncOperation, string> = {
+  0: "Listing content",
+  1: "Price",
+  2: "Stock",
+  3: "Take off sale",
+  4: "Order import",
+  5: "Reconcile",
+};
+
+// Pending, Running, AwaitingRemote, Succeeded, Failed, NeedsCorrection, DryRunCompleted, Cancelled
+export type SyncJobStatus = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type SyncErrorClass = 0 | 1 | 2 | 3 | 4; // None, Transient, Authorization, DataCorrection, Permanent
+
+export type SyncAttempt = {
+  number: number;
+  startedAtUtc: string;
+  finishedAtUtc: string;
+  outcome: SyncJobStatus;
+  errorClass: SyncErrorClass;
+  httpStatus: number | null;
+  externalRequestId: string | null;
+  detail: string | null;
+};
+
+export type SyncJob = {
+  id: string;
+  channelAccountId: string;
+  // Null for account-wide work such as an order import.
+  channelListingId: string | null;
+  operation: SyncOperation;
+  status: SyncJobStatus;
+  attempts: number;
+  maxAttempts: number;
+  nextAttemptAtUtc: string;
+  externalSubmissionId: string | null;
+  errorClass: SyncErrorClass;
+  lastError: string | null;
+  dryRun: boolean;
+  createdAtUtc: string;
+  completedAtUtc: string | null;
+  // Only on a single job, not in the list.
+  attemptHistory: SyncAttempt[] | null;
+};
+
+export type AccountHealth = {
+  id: string;
+  channel: ChannelKind;
+  name: string;
+  liveWrites: boolean;
+  lastOrderImportAtUtc: string | null;
+  // Orders have not been read recently enough for stock sent to this channel to be trusted.
+  ordersStale: boolean;
+  lastError: string | null;
+  openOrderIssues: number;
+};
+
+export type SyncHealth = {
+  undispatchedEvents: number;
+  pendingJobs: number;
+  runningJobs: number;
+  awaitingRemoteJobs: number;
+  failedJobs: number;
+  needsCorrectionJobs: number;
+  expiredLeases: number;
+  retriedJobs: number;
+  oldestPendingAtUtc: string | null;
+  lastSuccessAtUtc: string | null;
+  accounts: AccountHealth[];
+};
+
+export type OrderLineIssueReason = 0 | 1 | 2; // UnknownSku, AmbiguousSku, InventoryShortfall
+
+export type OrderLineIssue = {
+  id: string;
+  channelAccountId: string | null;
+  externalOrderId: string;
+  externalLineId: string;
+  sellerSku: string | null;
+  quantity: number;
+  reason: OrderLineIssueReason;
+  orderId: string | null;
+  createdAtUtc: string;
+  resolvedAtUtc: string | null;
+};
+
+export const SyncApi = {
+  health: () => apiFetch<SyncHealth>("/api/channels/sync/health"),
+  jobs: (take = 200) => apiFetch<SyncJob[]>(`/api/channels/sync/jobs?take=${take}`),
+  job: (id: string) => apiFetch<SyncJob>(`/api/channels/sync/jobs/${id}`),
+  orderIssues: () => apiFetch<OrderLineIssue[]>("/api/channels/order-issues"),
+  resolveOrderIssue: (id: string) => apiFetch<void>(`/api/channels/order-issues/${id}/resolve`, { method: "POST" }),
+  importOrders: (accountId: string) => apiFetch<{ jobId: string }>(`/api/channels/${accountId}/import-orders`, { method: "POST" }),
+};
+
+export const CatalogApi = {
+  product: (id: string) => apiFetch<CatalogProduct>(`/api/catalog/products/${id}`),
+};
+
+export const ChannelListingsApi = {
+  list: (accountId: string) => apiFetch<ChannelListing[]>(`/api/channel-listings?accountId=${accountId}`),
+  all: () => apiFetch<ChannelListing[]>("/api/channel-listings"),
+  // Sends the listing's current state again after a failure or a correction.
+  retry: (id: string) => apiFetch<ListingQueued>(`/api/channel-listings/${id}/retry`, { method: "POST" }),
+  // Creates the variant's listing on the marketplace as a draft; saving never publishes.
+  // existingCatalogItemId: the marketplace's own item (an ASIN) to make the offer on, when there is one.
+  add: (channelMarketId: string, variantId: string, existingCatalogItemId?: string) =>
+    apiFetch<ChannelListing>("/api/channel-listings", {
+      method: "PUT",
+      body: JSON.stringify({ channelMarketId, variantId, fulfillmentMode: 0, existingCatalogItemId }),
+    }),
+  validate: (id: string) => apiFetch<ListingValidation>(`/api/channel-listings/${id}/validate`, { method: "POST" }),
+  publish: (id: string) => apiFetch<ListingQueued>(`/api/channel-listings/${id}/publish`, { method: "POST" }),
+  deactivate: (id: string) => apiFetch<ListingQueued>(`/api/channel-listings/${id}/deactivate`, { method: "POST" }),
+};

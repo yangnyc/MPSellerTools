@@ -16,6 +16,7 @@ public class ChannelSyncWorker(IServiceScopeFactory scopes, IOptions<Marketplace
     : BackgroundService
 {
     private readonly string _workerId = $"{Environment.MachineName}:{Environment.ProcessId}";
+    private DateTime _lowStockCheckedAtUtc = DateTime.MinValue;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -68,6 +69,17 @@ public class ChannelSyncWorker(IServiceScopeFactory scopes, IOptions<Marketplace
                 var engine = services.GetRequiredService<SyncEngine>();
                 await engine.ScheduleRecurringAsync(stoppingToken);
                 await engine.RunOnceAsync(_workerId, stoppingToken);
+
+                // Stock moves far more slowly than the queue; once a minute is plenty for the alerts.
+                if (DateTime.UtcNow - _lowStockCheckedAtUtc >= TimeSpan.FromMinutes(1))
+                {
+                    _lowStockCheckedAtUtc = DateTime.UtcNow;
+                    var tasks = await services.GetRequiredService<LowStockMonitor>().RunAsync(stoppingToken);
+                    if (tasks > 0)
+                    {
+                        logger.LogInformation("Low stock: {Tasks} restocking task(s) created", tasks);
+                    }
+                }
             });
         }
         while (await WaitAsync(timer, stoppingToken));

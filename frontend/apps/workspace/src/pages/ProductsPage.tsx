@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
@@ -14,6 +14,7 @@ import {
   StatCard,
   StateBlock,
   StatusPill,
+  downloadCsv,
   formatMoney,
   useKit,
   type KitTone,
@@ -23,8 +24,9 @@ import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { ApiError } from "../lib/api";
+import { parseProductsCsv } from "../lib/csv";
 import { ProductsApi } from "../api/resources";
-import type { Product } from "../api/types";
+import type { ImportProductRow, ImportProductsResult, Product } from "../api/types";
 
 type ProductFormState = { sku: string; name: string; price: string; stockQuantity: string };
 const emptyForm: ProductFormState = { sku: "", name: "", price: "", stockQuantity: "" };
@@ -53,6 +55,12 @@ export default function ProductsPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const [archiveTarget, setArchiveTarget] = useState<Product | null>(null);
+
+  // A chosen file is checked by the server first (a dry run); only confirming saves anything.
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [importRows, setImportRows] = useState<ImportProductRow[] | null>(null);
+  const [importPreview, setImportPreview] = useState<ImportProductsResult | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const fetchData = useCallback(() => {
     ProductsApi.list()
@@ -136,6 +144,42 @@ export default function ProductsPage() {
       load();
     } catch (err) {
       notify(err instanceof ApiError ? err.message : "Archive failed.", "error");
+    }
+  };
+
+  const exportCsv = () =>
+    downloadCsv(
+      "products.csv",
+      ["SKU", "Name", "Price", "Stock"],
+      (products ?? []).map((p) => [p.sku, p.name, p.price, p.stockQuantity])
+    );
+
+  const chooseFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Cleared so that choosing the same file again, after fixing it, is noticed.
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const rows = parseProductsCsv(await file.text());
+      setImportPreview(await ProductsApi.importRows(rows, true));
+      setImportRows(rows);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "The file could not be read.", "error");
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!importRows) return;
+    setImporting(true);
+    try {
+      const result = await ProductsApi.importRows(importRows, false);
+      notify(`Import finished: ${result.created} added, ${result.updated} updated.`, "success");
+      setImportRows(null);
+      load();
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : "Import failed.", "error");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -241,9 +285,18 @@ export default function ProductsPage() {
         }
         actions={
           isTenantAdmin && (
-            <MDButton variant="gradient" color="info" onClick={openCreate} startIcon={<Icon>add</Icon>}>
-              Add product
-            </MDButton>
+            <>
+              <input ref={fileInput} type="file" accept=".csv,text/csv" hidden aria-label="Products CSV file" onChange={chooseFile} />
+              <MDButton variant="outlined" color="info" onClick={() => fileInput.current?.click()} startIcon={<Icon>file_upload</Icon>}>
+                Import CSV
+              </MDButton>
+              <MDButton variant="outlined" color="info" disabled={!products?.length} onClick={exportCsv} startIcon={<Icon>file_download</Icon>}>
+                Export CSV
+              </MDButton>
+              <MDButton variant="gradient" color="info" onClick={openCreate} startIcon={<Icon>add</Icon>}>
+                Add product
+              </MDButton>
+            </>
           )
         }
       />
@@ -343,6 +396,55 @@ export default function ProductsPage() {
             onChange={setField("stockQuantity")}
           />
         </Box>
+      </KitDialog>
+
+      <KitDialog
+        open={!!importRows}
+        onClose={() => setImportRows(null)}
+        icon="file_upload"
+        title="Import products"
+        subtitle="Products are matched by SKU. Nothing has been saved yet."
+        actions={
+          <>
+            <MDButton variant="text" color="secondary" onClick={() => setImportRows(null)}>
+              Cancel
+            </MDButton>
+            <MDButton
+              variant="gradient"
+              color="info"
+              disabled={importing || !importPreview || importPreview.created + importPreview.updated === 0}
+              onClick={confirmImport}
+            >
+              {importing ? "Importing…" : "Import"}
+            </MDButton>
+          </>
+        }
+      >
+        {importPreview && (
+          <Box sx={{ display: "grid", gap: 2 }}>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              <StatusPill tone="success" label={`${importPreview.created} to add`} />
+              <StatusPill tone="info" label={`${importPreview.updated} to update`} />
+              <StatusPill tone="neutral" label={`${importPreview.unchanged} unchanged`} />
+              {importPreview.errors.length > 0 && <StatusPill tone="error" label={`${importPreview.errors.length} left out`} />}
+            </Box>
+            {importPreview.errors.length > 0 && (
+              <InlineAlert tone="warning" title="These rows will be left out">
+                <Box component="ul" sx={{ m: 0, pl: 2.5, maxHeight: 220, overflowY: "auto" }}>
+                  {importPreview.errors.map((error) => (
+                    <li key={error.row}>
+                      Row {error.row + 1}
+                      {error.sku ? ` (${error.sku})` : ""}: {error.message}
+                    </li>
+                  ))}
+                </Box>
+              </InlineAlert>
+            )}
+            <Box sx={{ fontSize: "0.8125rem", lineHeight: 1.5, color: c.muted }}>
+              An update replaces the product's name, price and stock with the file's. Products that are not in the file are left as they are.
+            </Box>
+          </Box>
+        )}
       </KitDialog>
 
       <ConfirmDialog

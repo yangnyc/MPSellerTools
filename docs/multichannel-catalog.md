@@ -284,5 +284,6 @@ removing it would be a separate, destructive step that nothing here performs.
 - Inbound webhooks/notifications. State is polled; `InboxEvent` is in the
   schema for deduplicating them when they are added.
 - The FBA/WFS lifecycle, a rules engine, multi-seller SaaS features.
-- A workspace UI for any of this. Everything is reachable through the
-  documented admin API.
+- A workspace UI for category mappings, listing groups and per-listing
+  overrides; those stay API-only. Listings, account settings, the sync queue
+  and inventory have pages (see `marketplace-operations.md`).

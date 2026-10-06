@@ -7,6 +7,12 @@ import TasksPage from "./pages/TasksPage";
 import UsersPage from "./pages/UsersPage";
 import SettingsPage from "./pages/SettingsPage";
 import EbayPage from "./pages/EbayPage";
+import MarketplaceListingsPage from "./pages/marketplace/MarketplaceListingsPage";
+import MarketplaceAddProductPage from "./pages/marketplace/MarketplaceAddProductPage";
+import MarketplaceSettingsPage from "./pages/marketplace/MarketplaceSettingsPage";
+import SyncQueuePage from "./pages/marketplace/SyncQueuePage";
+import InventoryPage from "./pages/InventoryPage";
+import { AMAZON, EBAY, WALMART, type Marketplace } from "./api/channels";
 import AuditPage from "./pages/AuditPage";
 import ProfilePage from "./pages/ProfilePage";
 import UserBulkPage from "./pages/advanced/UserBulkPage";
@@ -18,7 +24,7 @@ import UserActivityPage from "./pages/advanced/UserActivityPage";
 
 // Sidenav + router entries shared by TenantAdmin and Employee (brief §8).
 // Routes without a `roles` restriction are visible to both; TenantAdmin-only
-// entries (Users, eBay, Settings, Audit) are filtered out of the Employee's sidenav
+// entries (Users, Inventory, the marketplaces, Sync queue, Settings, Audit) are filtered out of the Employee's sidenav
 // and, independently, rejected by the backend even if a request reaches the
 // API directly (brief §5/§8's "direct requests to restricted APIs must also
 // be denied").
@@ -33,6 +39,60 @@ export type AppRoute = {
   // Sub-items: makes this an expandable sidenav group with no page of its own.
   collapse?: AppRoute[];
 };
+
+// A marketplace's sidenav group: its products, the page that adds a product to
+// it, what it reports as posted, and its account settings. `first` goes ahead of those, for a page only
+// that marketplace has.
+function marketplaceGroup(marketplace: Marketplace, first: AppRoute[] = []): AppRoute {
+  const key = marketplace.name.toLowerCase();
+  return {
+    type: "collapse",
+    name: marketplace.name,
+    key,
+    icon: <Icon fontSize="small">{marketplace.icon}</Icon>,
+    roles: ["TenantAdmin"],
+    collapse: [
+      ...first,
+      {
+        type: "collapse",
+        name: `Products on ${marketplace.name}`,
+        key: `${key}-listings`,
+        icon: <Icon fontSize="small">view_list</Icon>,
+        route: marketplace.path,
+        component: <MarketplaceListingsPage key={key} marketplace={marketplace} />,
+        roles: ["TenantAdmin"],
+      },
+      {
+        type: "collapse",
+        name: "Add product",
+        key: `${key}-add-product`,
+        icon: <Icon fontSize="small">add_shopping_cart</Icon>,
+        route: `${marketplace.path}/add-product`,
+        component: <MarketplaceAddProductPage key={key} marketplace={marketplace} />,
+        roles: ["TenantAdmin"],
+      },
+      // What the marketplace itself reports as posted: the Listings page, narrowed to this one.
+      {
+        type: "collapse",
+        name: "Listings",
+        key: `${key}-posted`,
+        icon: <Icon fontSize="small">sell</Icon>,
+        route: `/${key}/listings`,
+        component: <ListingsPage key={key} marketplace={marketplace} />,
+        roles: ["TenantAdmin"],
+      },
+      {
+        type: "collapse",
+        name: "Settings",
+        key: `${key}-settings`,
+        icon: <Icon fontSize="small">tune</Icon>,
+        route: `${marketplace.path}/settings`,
+        component: <MarketplaceSettingsPage key={key} marketplace={marketplace} />,
+        roles: ["TenantAdmin"],
+      },
+    ],
+  };
+}
 
 const routes: AppRoute[] = [
   {
@@ -69,11 +129,34 @@ const routes: AppRoute[] = [
   },
   {
     type: "collapse",
-    name: "eBay",
-    key: "ebay",
-    icon: <Icon fontSize="small">storefront</Icon>,
-    route: "/ebay",
-    component: <EbayPage />,
+    name: "Inventory",
+    key: "inventory",
+    icon: <Icon fontSize="small">warehouse</Icon>,
+    route: "/inventory",
+    component: <InventoryPage />,
+    roles: ["TenantAdmin"],
+  },
+  // eBay's keys and the seller's consent have a page of their own, where eBay sends the seller back to.
+  marketplaceGroup(EBAY, [
+    {
+      type: "collapse",
+      name: "Connection",
+      key: "ebay-connection",
+      icon: <Icon fontSize="small">link</Icon>,
+      route: "/ebay",
+      component: <EbayPage />,
+      roles: ["TenantAdmin"],
+    },
+  ]),
+  marketplaceGroup(AMAZON),
+  marketplaceGroup(WALMART),
+  {
+    type: "collapse",
+    name: "Sync queue",
+    key: "sync",
+    icon: <Icon fontSize="small">sync</Icon>,
+    route: "/sync",
+    component: <SyncQueuePage />,
     roles: ["TenantAdmin"],
   },
   // Between the lines: following up on the work, apart from the selling above.

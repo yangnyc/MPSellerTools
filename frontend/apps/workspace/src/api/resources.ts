@@ -8,11 +8,14 @@ import type {
   EbayProductImport,
   EbayStatus,
   ForcePasswordResetResponse,
+  ImportProductRow,
+  ImportProductsResult,
   Listings,
   Order,
   OrderStatus,
   PendingInvitation,
   Product,
+  SalesChannel,
   TaskStatus,
   TenantDashboard,
   UserSummary,
@@ -30,10 +33,14 @@ export const ProductsApi = {
   update: (id: string, data: { name: string; price: number; stockQuantity: number; rowVersion: string }) =>
     apiFetch<Product>(`/api/products/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   archive: (id: string) => apiFetch<void>(`/api/products/${id}/archive`, { method: "POST" }),
+  // Matched by SKU: new SKUs are created, known ones updated. A dry run only reports.
+  importRows: (rows: ImportProductRow[], dryRun: boolean) =>
+    apiFetch<ImportProductsResult>(`/api/products/import?dryRun=${dryRun}`, { method: "POST", body: JSON.stringify({ rows }) }),
 };
 
 export const ListingsApi = {
-  list: () => apiFetch<Listings>("/api/listings"),
+  // With a channel, only that marketplace's postings.
+  list: (channel?: SalesChannel) => apiFetch<Listings>(channel === undefined ? "/api/listings" : `/api/listings?channel=${channel}`),
 };
 
 export const OrdersApi = {
@@ -83,7 +90,7 @@ export const UsersApi = {
 
 export const SettingsApi = {
   get: () => apiFetch<CompanySettings>("/api/settings"),
-  update: (data: { companyName: string; rowVersion: string }) =>
+  update: (data: { companyName: string; lowStockThreshold: number | null; lowStockAssigneeId: string | null; rowVersion: string }) =>
     apiFetch<CompanySettings>("/api/settings", { method: "PUT", body: JSON.stringify(data) }),
 };
 

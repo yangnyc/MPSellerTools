@@ -30,6 +30,7 @@ import {
   type ListingStatus,
   type Listings,
 } from "../api/types";
+import { AMAZON, EBAY, type Marketplace } from "../api/channels";
 import { LISTING_STATUS_TONE } from "../lib/status";
 
 type StatusFilter = "all" | ListingStatus;
@@ -37,9 +38,11 @@ type StatusFilter = "all" | ListingStatus;
 const LISTING_STATUSES: ListingStatus[] = [0, 1, 2];
 
 // "EBAY_US" → "eBay US"; a channel with no marketplace is just its own name.
+// Amazon names its sites by an id rather than a region, so only the one this workspace sets up is spelled out.
 function siteName(listing: Listing) {
   const channel = SALES_CHANNEL_LABELS[listing.channel];
-  const region = listing.marketplace?.replace(/^EBAY_/, "").replaceAll("_", " ");
+  if (listing.marketplace === AMAZON.marketplaceCode) return `${channel} US`;
+  const region = listing.marketplace?.replace(/^(EBAY|WALMART)_/, "").replaceAll("_", " ");
   return region ? `${channel} ${region}` : channel;
 }
 
@@ -54,7 +57,11 @@ function sitePrice(listing: Listing) {
   }
 }
 
-export default function ListingsPage() {
+// Every posting, or with `marketplace` only that marketplace's: the same page sits in each marketplace's menu.
+export default function ListingsPage({ marketplace }: { marketplace?: Marketplace }) {
+  // eBay is the one site that can be read on request; the others report through the sync queue.
+  const readsEbay = !marketplace || marketplace.kind === EBAY.kind;
+  const where = marketplace?.name ?? "your marketplaces";
   const { user, logout } = useAuth();
   const { notify } = useSnackbar();
   const { c } = useKit();
@@ -67,11 +74,11 @@ export default function ListingsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const fetchData = useCallback(() => {
-    ListingsApi.list()
+    ListingsApi.list(marketplace?.kind)
       .then((value) => { setData(value); setError(null); })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load listings."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [marketplace?.kind]);
 
   useEffect(fetchData, [fetchData]);
 
@@ -177,8 +184,8 @@ export default function ListingsPage() {
     </MDButton>
   );
   const connectButton = (
-    <MDButton component={RouterLink} to="/ebay" variant="gradient" color="info" size="small">
-      Set up eBay
+    <MDButton component={RouterLink} to={!marketplace || marketplace.kind === EBAY.kind ? "/ebay" : marketplace.path} variant="gradient" color="info" size="small">
+      Set up {marketplace?.name ?? "eBay"}
     </MDButton>
   );
 
@@ -186,17 +193,17 @@ export default function ListingsPage() {
     <PageShell>
       <PageHeader
         icon="sell"
-        title="Listings"
+        title={marketplace ? `${marketplace.name} listings` : "Listings"}
         subtitle={
           data?.lastSyncedAtUtc ? (
             <span title={formatDateTime(data.lastSyncedAtUtc)}>
-              Your products as posted on eBay, read {timeAgo(data.lastSyncedAtUtc)}.
+              Your products as posted on {where}, read {timeAgo(data.lastSyncedAtUtc)}.
             </span>
           ) : (
-            "Your products as posted on eBay."
+            `Your products as posted on ${where}.`
           )
         }
-        actions={isTenantAdmin && data?.connected && refreshButton("medium")}
+        actions={isTenantAdmin && readsEbay && data?.connected && refreshButton("medium")}
       />
 
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 3, mb: 3 }}>
@@ -225,7 +232,13 @@ export default function ListingsPage() {
             icon="sell"
             title="Nothing posted yet"
             message={
-              !data?.connected
+              marketplace && !readsEbay
+                ? data?.connected
+                  ? `${marketplace.name} has not reported any of your products as on sale yet. A product shows up here once ${marketplace.name} confirms it.`
+                  : isTenantAdmin
+                    ? `Add ${marketplace.name} as a sales channel and the products it reports as on sale show up here.`
+                    : `${marketplace.name} is not set up yet. A company admin can add it.`
+                : !data?.connected
                 ? isTenantAdmin
                   ? "Connect your eBay account and the products you have posted there show up here."
                   : "No e-commerce site is connected yet. A company admin can connect eBay."
@@ -233,7 +246,7 @@ export default function ListingsPage() {
                   ? "eBay reported no posted items. Only items listed through eBay's inventory tools can be read, not listings made by hand on the eBay site."
                   : "eBay reported no posted items the last time it was read."
             }
-            action={isTenantAdmin && (data?.connected ? refreshButton("small") : connectButton)}
+            action={isTenantAdmin && (!data?.connected ? connectButton : readsEbay && refreshButton("small"))}
           />
         )}
         {!loading && !error && (listings?.length ?? 0) > 0 && (

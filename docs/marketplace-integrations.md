@@ -44,7 +44,7 @@ Sources:
 | `JSON_LISTINGS_FEED` (schema 2.0) | bulk submissions | Verified: header `sellerId`, `version: "2.0"`, messages with `messageId`, `sku`, `operationType`, max 25,000. The **payload builder** exists and is tested; **submitting a feed through the Feeds API 2021-06-30 is not implemented** — listings go one per call |
 | XML / flat-file listing feeds | — | Not used: unsupported since 2025-07-31 (verified) |
 | Login with Amazon token exchange (`https://api.amazon.com/auth/o2/token`, `grant_type=refresh_token`), `x-amz-access-token` header, regional endpoints | authentication | **From prior knowledge** |
-| Catalog Items API 2022-04-01 `searchCatalogItems` | finding an existing ASIN | Not implemented. The seller supplies the ASIN (`existingCatalogItemId` on the listing) |
+| Catalog Items API 2022-04-01 `searchCatalogItems` | finding an existing ASIN | Implemented *from prior knowledge*, unverified against Amazon: `keywords`, or `identifiers` + `identifiersType` (UPC/EAN/GTIN by length) for a barcode, `includedData=summaries`, `pageSize=10`; reads `items[].asin` and the marketplace's `summaries[].itemName`/`brand`. Needs live access on. The seller can still type the ASIN in |
 | Notifications (`LISTINGS_ITEM_STATUS_CHANGE`, `LISTINGS_ITEM_ISSUES_CHANGE`) | — | Not implemented; status is polled |
 
 Behaviour to know:

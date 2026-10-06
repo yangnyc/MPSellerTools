@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MPSellerTools.Core.Business;
 using MPSellerTools.Core.Marketplace;
 using MPSellerTools.Core.Tenancy;
@@ -21,7 +22,8 @@ namespace MPSellerTools.TenantHost.Controllers;
 [ApiController]
 [Route("api/catalog")]
 [Authorize(Policy = Roles.Employee)]
-public class CatalogController(TenantDbContext db, InventoryService inventory, CatalogBackfill backfill, AuditLogger audit) : ControllerBase
+public class CatalogController(
+    TenantDbContext db, InventoryService inventory, CatalogBackfill backfill, IOptions<MarketplaceOptions> options, AuditLogger audit) : ControllerBase
 {
     [HttpGet("products/{id:guid}")]
     public async Task<IActionResult> GetProduct(Guid id, CancellationToken cancellationToken)
@@ -229,6 +231,45 @@ public class CatalogController(TenantDbContext db, InventoryService inventory, C
         db.OutboxEvents.Add(new OutboxEvent { Type = OutboxEvent.ProductContentChanged, SubjectId = media.ProductId, CreatedAtUtc = DateTime.UtcNow });
         await db.SaveChangesAsync(cancellationToken);
         return NoContent();
+    }
+
+    /// <summary>Every sellable variant with its stock in the merchant warehouse.</summary>
+    [HttpGet("inventory")]
+    [Authorize(Policy = Roles.TenantAdmin)]
+    public async Task<IActionResult> Inventory(CancellationToken cancellationToken)
+    {
+        var rows = await (
+            from variant in db.ProductVariants.AsNoTracking()
+            join product in db.Products.AsNoTracking() on variant.ProductId equals product.Id
+            join b in db.InventoryBalances.AsNoTracking().Where(b => b.LocationId == InventoryLocation.DefaultId)
+                on variant.Id equals b.VariantId into balances
+            from balance in balances.DefaultIfEmpty()
+            where !variant.IsArchived && !product.IsArchived
+            orderby variant.Sku
+            select new { variant, product.Name, balance }).ToListAsync(cancellationToken);
+
+        return Ok(new InventoryOverviewResponse(
+            options.Value.InventoryAccountingEnabled,
+            rows.Select(r => new InventoryItemResponse(
+                r.variant.Id, r.variant.ProductId, r.variant.Sku, r.Name, r.variant.Name, r.variant.Price,
+                r.balance?.OnHand ?? 0, r.balance?.Reserved ?? 0, r.balance?.SafetyStock ?? 0, r.balance?.AvailableToSell ?? 0,
+                r.balance?.UpdatedAtUtc)).ToList()));
+    }
+
+    /// <summary>The stock ledger, newest first: every count, hold, shipment, release and return.</summary>
+    [HttpGet("inventory/movements")]
+    [Authorize(Policy = Roles.TenantAdmin)]
+    public async Task<IActionResult> Movements([FromQuery] Guid? variantId, [FromQuery] int take = 100, CancellationToken cancellationToken = default)
+    {
+        var movements = await (
+            from movement in db.InventoryMovements.AsNoTracking()
+            join variant in db.ProductVariants.AsNoTracking() on movement.VariantId equals variant.Id
+            where variantId == null || movement.VariantId == variantId
+            orderby movement.OccurredAtUtc descending
+            select new InventoryMovementResponse(
+                movement.Id, movement.VariantId, variant.Sku, movement.Type, movement.OnHandDelta, movement.ReservedDelta, movement.Reference, movement.OccurredAtUtc))
+            .Take(Math.Clamp(take, 1, 500)).ToListAsync(cancellationToken);
+        return Ok(movements);
     }
 
     /// <summary>Counted stock and the safety buffer of one variant in the merchant warehouse.</summary>

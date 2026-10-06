@@ -296,6 +296,45 @@ public class ChannelsController(
         return Ok(ToResponse(mapping));
     }
 
+    /// <summary>
+    /// Looks an item up in the channel's own catalog, so a listing can be an
+    /// offer on what is already there. Amazon only, and only with live access
+    /// on: it is a call to the marketplace, though one that changes nothing.
+    /// </summary>
+    [HttpGet("{id:guid}/catalog-search")]
+    public async Task<IActionResult> CatalogSearch(Guid id, [FromQuery] string? q, CancellationToken cancellationToken)
+    {
+        var query = q?.Trim() ?? "";
+        if (query.Length is < 2 or > 200)
+        {
+            return Problem("Search for a product name or a barcode of 2 to 200 characters.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var account = await db.ChannelAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        var market = await db.ChannelMarkets.AsNoTracking().OrderBy(m => m.MarketplaceCode).FirstOrDefaultAsync(m => m.ChannelAccountId == id, cancellationToken);
+        if (account is null || market is null)
+        {
+            return NotFound();
+        }
+        if (listings.AdapterFor(account) is not AmazonChannelAdapter amazon)
+        {
+            return Problem($"Searching the catalog is not available for {account.Channel}.", statusCode: StatusCodes.Status501NotImplemented);
+        }
+        if (!(options.Value.LiveWritesEnabled && account.LiveWritesEnabled))
+        {
+            return Problem("Live access to this channel is switched off; enter the ASIN by hand or switch it on.", statusCode: StatusCodes.Status409Conflict);
+        }
+
+        try
+        {
+            return Ok(await amazon.SearchCatalogAsync(ListingService.ContextFor(account, market), query, cancellationToken));
+        }
+        catch (ChannelException ex)
+        {
+            return Problem(ex.Message, statusCode: StatusCodes.Status502BadGateway);
+        }
+    }
+
     /// <summary>Queues an order import for the account now, rather than at its next scheduled time.</summary>
     [HttpPost("{id:guid}/import-orders")]
     public async Task<IActionResult> ImportOrders(Guid id, CancellationToken cancellationToken)

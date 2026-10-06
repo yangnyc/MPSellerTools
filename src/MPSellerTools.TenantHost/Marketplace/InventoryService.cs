@@ -194,6 +194,7 @@ public class InventoryService(TenantDbContext db)
         var now = DateTime.UtcNow;
         var keys = await db.InventoryReservations.AsNoTracking()
             .Where(r => r.Status == ReservationStatus.Active && r.ExpiresAtUtc != null && r.ExpiresAtUtc < now)
+            .OrderBy(r => r.ExpiresAtUtc)
             .Select(r => r.IdempotencyKey)
             .Take(200)
             .ToListAsync(cancellationToken);

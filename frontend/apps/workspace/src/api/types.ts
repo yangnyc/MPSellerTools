@@ -68,9 +68,23 @@ export type UserSummary = {
   isBlocked: boolean;
 };
 
+// Low-stock alerts are on when both the threshold and the assignee are set.
 export type CompanySettings = {
   companyName: string;
+  lowStockThreshold: number | null;
+  lowStockAssigneeId: string | null;
   rowVersion: string;
+};
+
+export type ImportProductRow = { sku: string; name: string; price: number; stockQuantity: number };
+
+// `row` counts from 1, in the order the rows were sent. With dryRun nothing was saved.
+export type ImportProductsResult = {
+  dryRun: boolean;
+  created: number;
+  updated: number;
+  unchanged: number;
+  errors: { row: number; sku: string | null; message: string }[];
 };
 
 export type AuditEntry = {
@@ -87,6 +101,25 @@ export type TenantDashboard = {
   openTaskCount: number;
   totalOrderCount: number;
   totalTaskCount: number;
+  // The company-wide picture; only there for a TenantAdmin.
+  sales: SalesDashboard | null;
+};
+
+// Orders and revenue cover the last `days` days and leave cancelled orders out.
+export type SalesDashboard = {
+  days: number;
+  revenue: number;
+  orders: number;
+  channels: { channel: string; orders: number; revenue: number }[];
+  daily: { date: string; orders: number; revenue: number }[];
+  lowStockThreshold: number;
+  lowStockCount: number;
+  lowStock: { variantId: string; sku: string; productName: string; availableToSell: number; onHand: number }[];
+  listings: { draft: number; live: number; processing: number; rejected: number; offSale: number };
+  failedSyncJobs: number;
+  openOrderIssues: number;
+  // Channels whose orders have not been read recently enough for stock to be sent to them.
+  staleChannels: string[];
 };
 
 export type PendingInvitation = {
@@ -128,8 +161,8 @@ export type EbayStatus = {
 export type EbayOrderImport = { created: number; updated: number; productsCreated: number };
 export type EbayProductImport = { created: number; updated: number; listings: number };
 
-export type SalesChannel = 0; // Ebay
-export const SALES_CHANNEL_LABELS: Record<SalesChannel, string> = { 0: "eBay" };
+export type SalesChannel = 0 | 1 | 2 | 3; // Ebay, Amazon, Walmart, Website
+export const SALES_CHANNEL_LABELS: Record<SalesChannel, string> = { 0: "eBay", 1: "Amazon", 2: "Walmart", 3: "Website" };
 
 export type ListingStatus = 0 | 1 | 2; // Live, OutOfStock, Ended
 export const LISTING_STATUS_LABELS: Record<ListingStatus, string> = {

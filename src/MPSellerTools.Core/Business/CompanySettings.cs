@@ -10,6 +10,15 @@ public class CompanySettings
 
     public required string CompanyName { get; set; }
 
+    /// <summary>
+    /// A variant with this many units or fewer left to sell gets a restocking
+    /// task. Null switches the alerts off.
+    /// </summary>
+    public int? LowStockThreshold { get; set; }
+
+    /// <summary>Who the restocking tasks are assigned to; alerts need both this and the threshold.</summary>
+    public Guid? LowStockAssigneeId { get; set; }
+
     public DateTime UpdatedAtUtc { get; set; }
 
     public byte[]? RowVersion { get; set; }

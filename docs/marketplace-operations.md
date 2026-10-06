@@ -305,14 +305,14 @@ Not done — needs credentials, a decision, or more work:
 - [ ] **Any call to a real marketplace API.** Sandbox verification of all three adapters
 - [ ] Everything marked *from prior knowledge* or *unverified* in `marketplace-integrations.md`, the Walmart feed layout above all
 - [ ] Validating payloads against the channels' machine-readable schemas for the chosen product types
-- [ ] Workspace UI for channels, listings and the queue
-- [ ] Amazon: submitting `JSON_LISTINGS_FEED` through the Feeds API; catalog search for existing ASINs; evaluating product type JSON Schemas
+- [x] Workspace UI: per-marketplace listings, add-product and account settings pages (eBay, Amazon, Walmart), the sync queue with order-line issues (`/sync`), and inventory with its ledger (`/inventory`). Not yet in the UI: category mappings, listing groups, per-listing content overrides and the request preview — those are still API-only
+- [x] Amazon: catalog search for existing ASINs (`GET /api/channels/{id}/catalog-search`, from prior knowledge of Catalog Items 2022-04-01, tested against a fake only)
 - [ ] eBay: creating policies and locations; `bulkMigrateListing` for listings made outside the Inventory API; per-variant withdrawal from a group
 - [ ] Walmart: `MP_MAINTENANCE` for updates; item spec retrieval
 - [ ] Inbound notifications/webhooks with provider signature checks (`InboxEvent` is ready for their deduplication)
-- [ ] Proactive per-API rate limiting (today: reactive, via `Retry-After` and backoff)
+- [x] Proactive rate limiting: one token bucket per channel per host (`Marketplace:RequestsPerSecond`, default 5, burst `Marketplace:RequestBurst`, 0 = off), on top of `Retry-After` and backoff. Per channel, not per API operation: the channels' own per-operation limits are not modelled
 - [ ] Automated allocation of shared stock across channels (today: full quantity with optional per-listing caps)
 - [ ] FBA / WFS inventory import and lifecycle
 - [ ] A storefront, cart and checkout — none exists in the project
-- [ ] Playwright coverage; the frontend was not changed and its checks were not re-run
+- [x] Playwright coverage with mocked APIs (`tests/e2e/ui-tests/workspace-marketplace.spec.ts`); no browser test runs against a real tenant host for these pages
 - [ ] Decision: when to stop writing `Product.Price` / `StockQuantity` and retire the legacy `Listings` table

@@ -46,4 +46,16 @@ public class MarketplaceOptions
     public int OrderStaleMinutes { get; set; } = 60;
 
     public int ReconcileMinutes { get; set; } = 360;
+
+    /// <summary>
+    /// How many calls a second are made to any one channel, ahead of the
+    /// channel's own throttling. 0 switches the pacing off.
+    /// </summary>
+    public int RequestsPerSecond { get; set; } = 5;
+
+    /// <summary>How many calls may go out at once after a quiet spell before the pacing takes hold.</summary>
+    public int RequestBurst { get; set; } = 10;
+
+    /// <summary>Variants listed under "low stock" on the dashboard when the company has set no alert level of its own.</summary>
+    public int DefaultLowStockThreshold { get; set; } = 5;
 }

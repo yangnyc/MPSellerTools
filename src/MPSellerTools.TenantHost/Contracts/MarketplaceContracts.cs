@@ -70,6 +70,16 @@ public record AdjustInventoryRequest(int? OnHand, int? SafetyStock);
 /// <summary><see cref="ReceiptId"/> is the warehouse's own reference for the receipt; the same one is counted once.</summary>
 public record ReturnReceiptRequest(Guid VariantId, int Quantity, string ReceiptId);
 
+public record InventoryItemResponse(
+    Guid VariantId, Guid ProductId, string Sku, string ProductName, string? VariantName, decimal Price,
+    int OnHand, int Reserved, int SafetyStock, int AvailableToSell, DateTime? UpdatedAtUtc);
+
+/// <summary><see cref="AccountingEnabled"/> false: orders leave stock alone, so nothing is ever reserved.</summary>
+public record InventoryOverviewResponse(bool AccountingEnabled, IReadOnlyList<InventoryItemResponse> Items);
+
+public record InventoryMovementResponse(
+    Guid Id, Guid VariantId, string Sku, InventoryMovementType Type, int OnHandDelta, int ReservedDelta, string? Reference, DateTime OccurredAtUtc);
+
 public record ChannelMarketResponse(Guid Id, string MarketplaceCode, string Language, string Currency);
 
 /// <summary>

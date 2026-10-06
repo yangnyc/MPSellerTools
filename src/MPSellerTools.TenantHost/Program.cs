@@ -179,6 +179,7 @@ builder.Services.Configure<MarketplaceOptions>(builder.Configuration.GetSection(
 builder.Services.AddHttpClient(ChannelHttp.AmazonClient, client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddHttpClient(ChannelHttp.WalmartClient, client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton<ChannelTokenCache>();
+builder.Services.AddSingleton<ChannelRateLimiter>();
 builder.Services.AddScoped<ChannelHttp>();
 builder.Services.AddScoped<ChannelSecrets>();
 builder.Services.AddScoped<IChannelAdapter, EbayChannelAdapter>();
@@ -191,6 +192,7 @@ builder.Services.AddScoped<OrderIngestionService>();
 builder.Services.AddScoped<SyncEngine>();
 builder.Services.AddScoped<CatalogBackfill>();
 builder.Services.AddScoped<SyncHealthReader>();
+builder.Services.AddScoped<LowStockMonitor>();
 builder.Services.AddHostedService<ChannelSyncWorker>();
 
 var app = builder.Build();

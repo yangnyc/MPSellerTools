@@ -2,7 +2,9 @@ using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Options;
 using MPSellerTools.Core.Business;
 using MPSellerTools.Core.Marketplace;
 
@@ -183,12 +185,49 @@ public abstract class ChannelAdapterBase : IChannelAdapter
 
 public record ChannelResponse(int Status, JsonElement Body, string? RequestId);
 
+/// <summary>An item already in a channel's catalog (for Amazon, an ASIN) that an offer can be made on.</summary>
+public record CatalogSearchResult(string CatalogItemId, string? Title, string? Brand);
+
+/// <summary>
+/// Paces outgoing calls so a channel's limits are respected before it has to
+/// say so: one token bucket per channel, shared by everything in this process.
+/// The channel's own Retry-After and the job backoff still apply on top; this
+/// only keeps a busy queue from running into them in the first place.
+/// </summary>
+public sealed class ChannelRateLimiter(IOptions<MarketplaceOptions> options) : IDisposable
+{
+    private readonly PartitionedRateLimiter<string> _limiter = PartitionedRateLimiter.Create<string, string>(channel =>
+    {
+        var perSecond = options.Value.RequestsPerSecond;
+        return perSecond <= 0
+            ? RateLimitPartition.GetNoLimiter(channel)
+            : RateLimitPartition.GetTokenBucketLimiter(channel, _ => new TokenBucketRateLimiterOptions
+            {
+                TokenLimit = Math.Max(perSecond, options.Value.RequestBurst),
+                TokensPerPeriod = perSecond,
+                ReplenishmentPeriod = TimeSpan.FromSeconds(1),
+                QueueLimit = 500,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true,
+            });
+    });
+
+    /// <summary>Waits for a turn. False when so many calls are already waiting that this one was turned away.</summary>
+    public async Task<bool> WaitAsync(string channel, CancellationToken cancellationToken)
+    {
+        using var lease = await _limiter.AcquireAsync(channel, 1, cancellationToken);
+        return lease.IsAcquired;
+    }
+
+    public void Dispose() => _limiter.Dispose();
+}
+
 /// <summary>
 /// The HTTP transport shared by the marketplace adapters. It knows nothing
 /// about payloads: it sends, classifies failures, and never puts a request's
 /// headers or body into an error.
 /// </summary>
-public class ChannelHttp(IHttpClientFactory httpClientFactory)
+public class ChannelHttp(IHttpClientFactory httpClientFactory, ChannelRateLimiter? limiter = null)
 {
     public const string AmazonClient = "amazon";
     public const string WalmartClient = "walmart";
@@ -216,6 +255,12 @@ public class ChannelHttp(IHttpClientFactory httpClientFactory)
     public async Task<ChannelResponse> SendAsync(
         string clientName, string channelName, HttpRequestMessage request, CancellationToken cancellationToken, params int[] alsoAccept)
     {
+        if (limiter is not null && !await limiter.WaitAsync(clientName, cancellationToken))
+        {
+            // Nothing was sent, so this is safe to try again and not ambiguous.
+            throw new ChannelException(SyncErrorClass.Transient, $"Too many requests to {channelName} are already waiting; this one will be tried again.");
+        }
+
         HttpResponseMessage response;
         string text;
         try

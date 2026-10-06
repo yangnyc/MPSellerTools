@@ -82,7 +82,7 @@ public class FakeChannelApi(ChannelRouter router) : HttpMessageHandler
 public class MarketplaceFixture : TenantHostFixture
 {
     protected override object MarketplaceSettings =>
-        new { WorkerEnabled = false, AutoBackfill = false, LiveWritesEnabled = true, InventoryAccountingEnabled = true };
+        new { WorkerEnabled = false, AutoBackfill = false, LiveWritesEnabled = true, InventoryAccountingEnabled = true, RequestsPerSecond = 0 };
 
     public async Task<HttpClient> AdminAsync(string email)
     {
