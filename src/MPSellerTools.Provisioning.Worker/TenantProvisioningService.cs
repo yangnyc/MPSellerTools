@@ -53,17 +53,17 @@ public class TenantProvisioningService(
         var applicationInstanceId = tenant.ApplicationInstanceId ?? Guid.NewGuid();
         await EnsureInitialInvitationAsync(tenantDb, tenant, cancellationToken);
 
-        var url = $"https://localhost:{tenant.Port}";
+        var url = PublicUrl(tenant);
         var instanceConfigPath = WriteInstanceConfig(tenant, applicationInstanceId, url, connectionString);
 
         if (!supervisor.IsRunning(tenant))
         {
-            var launched = supervisor.Start(instanceConfigPath, url, options.TenantHostPublishDirectory);
+            var launched = supervisor.Start(instanceConfigPath, LocalUrl(tenant), options.TenantHostPublishDirectory);
             tenant.ProcessId = launched.ProcessId;
             tenant.ProcessStartTimeUtc = launched.StartTimeUtc;
         }
 
-        await WaitForReadinessAsync(url, tenant.Id, applicationInstanceId, cancellationToken);
+        await WaitForReadinessAsync(LocalUrl(tenant), tenant.Id, applicationInstanceId, cancellationToken);
 
         tenant.DatabaseName = databaseName;
         tenant.ApplicationInstanceId = applicationInstanceId;
@@ -104,16 +104,19 @@ public class TenantProvisioningService(
         // creation; migrations are additive, and this is the local database the worker itself made.
         await tenantDb.Database.MigrateAsync(cancellationToken);
 
+        // Recomputed rather than reused, so the address follows the public host
+        // setting when it is turned on or off after the tenant was created.
+        tenant.Url = PublicUrl(tenant);
         var instanceConfigPath = WriteInstanceConfig(tenant, tenant.ApplicationInstanceId.Value, tenant.Url, connectionString);
 
         if (!supervisor.IsRunning(tenant))
         {
-            var launched = supervisor.Start(instanceConfigPath, tenant.Url, options.TenantHostPublishDirectory);
+            var launched = supervisor.Start(instanceConfigPath, LocalUrl(tenant), options.TenantHostPublishDirectory);
             tenant.ProcessId = launched.ProcessId;
             tenant.ProcessStartTimeUtc = launched.StartTimeUtc;
         }
 
-        await WaitForReadinessAsync(tenant.Url, tenant.Id, tenant.ApplicationInstanceId.Value, cancellationToken);
+        await WaitForReadinessAsync(LocalUrl(tenant), tenant.Id, tenant.ApplicationInstanceId.Value, cancellationToken);
 
         tenant.Status = TenantStatus.Active;
         tenant.UpdatedAtUtc = DateTime.UtcNow;
@@ -178,6 +181,16 @@ public class TenantProvisioningService(
         }
     }
 
+    /// <summary>The address people open: on the public host when one is configured, otherwise localhost.</summary>
+    private string PublicUrl(Tenant tenant) =>
+        $"https://{(string.IsNullOrWhiteSpace(options.PublicHost) ? "localhost" : options.PublicHost.Trim())}:{tenant.Port}";
+
+    /// <summary>
+    /// The address this machine uses to reach the instance. Always localhost,
+    /// which is the only name the HTTPS development certificate is valid for.
+    /// </summary>
+    private static string LocalUrl(Tenant tenant) => $"https://localhost:{tenant.Port}";
+
     private static TenantDbContext CreateTenantDbContext(string connectionString)
     {
         var dbOptions = new DbContextOptionsBuilder<TenantDbContext>().UseSqlServer(connectionString).Options;
@@ -238,7 +251,7 @@ public class TenantProvisioningService(
 
         var outboxDirectory = Path.Combine(localDataDirectory, "tenants", tenant.Slug, "outbox");
         var outbox = new FileDevOutbox(outboxDirectory);
-        var acceptLink = $"https://localhost:{tenant.Port}/accept-invitation?token={Uri.EscapeDataString(rawToken)}";
+        var acceptLink = $"{PublicUrl(tenant)}/accept-invitation?token={Uri.EscapeDataString(rawToken)}";
         await outbox.WriteAsync(
             tenant.InitialAdminEmail,
             "You've been invited to MPSellerTools",

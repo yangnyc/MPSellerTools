@@ -4,7 +4,22 @@
     Starts the local dev environment (brief §12): checks for port conflicts,
     then launches DevHost, which publishes and starts PlatformHost and the
     Provisioning Worker (the worker in turn starts/reconciles any tenants).
+
+.PARAMETER PublicHost
+    The host name or IP address other machines use to reach this one. When
+    given, PlatformHost and every tenant instance listen on all interfaces
+    instead of localhost only, and company links use this host. The firewall
+    must separately allow inbound TCP 7100 and 7201-7299 (see README.md).
+
+.PARAMETER BehindProxy
+    Use with -PublicHost when a reverse proxy on this machine (scripts/Caddyfile)
+    answers on the public host with its own certificate. The hosts then keep
+    listening on localhost only and the proxy forwards to them.
 #>
+param(
+    [string]$PublicHost,
+    [switch]$BehindProxy
+)
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -27,7 +42,11 @@ if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq "Arm
 
 function Test-PortInUse($port) {
     $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-    return $null -ne $listener
+    if ($BehindProxy) {
+        # The proxy holds the same port on the public address; the hosts only need localhost.
+        $listener = $listener | Where-Object { $_.LocalAddress -ne $PublicHost }
+    }
+    return [bool]$listener
 }
 
 Write-Host "Checking for port conflicts..." -ForegroundColor Cyan
@@ -54,6 +73,15 @@ try {
 
 Write-Host "Starting DevHost (publishes PlatformHost/TenantHost/Worker, then launches them)..." -ForegroundColor Cyan
 Write-Host ""
+
+if ($PublicHost) {
+    Write-Host "Public access is ON: reachable from other machines at https://${PublicHost}:7100" -ForegroundColor Yellow
+    $env:MPST_PUBLIC_HOST = $PublicHost
+    $env:MPST_BEHIND_PROXY = $BehindProxy ? "1" : $null
+} else {
+    $env:MPST_PUBLIC_HOST = $null
+    $env:MPST_BEHIND_PROXY = $null
+}
 
 Push-Location $repoRoot
 try {

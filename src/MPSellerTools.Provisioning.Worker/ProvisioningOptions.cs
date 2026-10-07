@@ -21,6 +21,20 @@ public class ProvisioningOptions
     /// </summary>
     public string DotnetExecutablePath { get; set; } = "dotnet";
 
+    /// <summary>
+    /// The host name or IP address other machines use to reach this one. When
+    /// set, tenant instances listen on every interface and their links use
+    /// this host; when empty they stay on localhost, unreachable from outside.
+    /// </summary>
+    public string? PublicHost { get; set; }
+
+    /// <summary>
+    /// True when a reverse proxy on this machine answers on the public host
+    /// and forwards to the instances. They then keep listening on localhost
+    /// only, while still accepting and linking to <see cref="PublicHost"/>.
+    /// </summary>
+    public bool BehindProxy { get; set; }
+
     public int PollIntervalSeconds { get; set; } = 5;
 
     public int LeaseDurationSeconds { get; set; } = 120;

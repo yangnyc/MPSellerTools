@@ -35,7 +35,9 @@ public class TenantUsersClient(IHttpClientFactory httpClientFactory, string loca
             throw new TenantUnavailableException("Needs a restart to accept platform access");
         }
 
-        using var request = new HttpRequestMessage(method, $"{tenant.Url}{path}");
+        // Always over localhost, not tenant.Url: that may name a public host,
+        // which the HTTPS development certificate is not valid for.
+        using var request = new HttpRequestMessage(method, $"https://localhost:{tenant.Port}{path}");
         request.Headers.Add(PlatformAccessKey.HeaderName, key);
         request.Headers.Add(PlatformAccessKey.ActorHeaderName, actorEmail);
         if (body is not null)

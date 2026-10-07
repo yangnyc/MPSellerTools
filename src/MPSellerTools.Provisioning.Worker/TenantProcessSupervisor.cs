@@ -16,8 +16,17 @@ public record LaunchedProcess(int ProcessId, DateTime StartTimeUtc);
 /// </summary>
 public class TenantProcessSupervisor(ProvisioningOptions options, ILogger<TenantProcessSupervisor> logger)
 {
-    public LaunchedProcess Start(string instanceConfigPath, string url, string workingDirectory)
+    public LaunchedProcess Start(string instanceConfigPath, string localUrl, string workingDirectory)
     {
+        // With a public host configured the instance answers requests addressed
+        // to that host, and listens on every interface unless a reverse proxy
+        // on this machine does that for it; otherwise it binds to localhost
+        // only and nothing outside this machine can reach it.
+        var publicHost = options.PublicHost?.Trim();
+        var url = string.IsNullOrEmpty(publicHost) || options.BehindProxy
+            ? localUrl
+            : $"https://*:{new Uri(localUrl).Port}";
+
         var dllPath = Path.Combine(options.TenantHostPublishDirectory, "MPSellerTools.TenantHost.dll");
         if (!File.Exists(dllPath))
         {
@@ -36,6 +45,10 @@ public class TenantProcessSupervisor(ProvisioningOptions options, ILogger<Tenant
         startInfo.ArgumentList.Add(dllPath);
         startInfo.Environment["ASPNETCORE_URLS"] = url;
         startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        if (!string.IsNullOrEmpty(publicHost))
+        {
+            startInfo.Environment["AllowedHosts"] = $"localhost;{publicHost}";
+        }
         // The instance config path is the only thing passed to the child process
         // beyond the standard ASP.NET Core variables — no secrets on the command
         // line or in an argument list that would show up in a process listing

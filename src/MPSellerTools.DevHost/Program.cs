@@ -32,14 +32,30 @@ await PublishAsync(solutionRoot, "MPSellerTools.Provisioning.Worker", workerPubl
 Console.WriteLine("Publish complete.");
 Console.WriteLine();
 
+// Opt-in (scripts/Start-Dev.ps1 -PublicHost): the host name or IP address
+// other machines use to reach this one. When set, PlatformHost and every
+// tenant instance listen on all interfaces instead of localhost only, and
+// accept requests addressed to that host. With -BehindProxy a reverse proxy
+// on this machine answers on the public host instead (see README.md), so
+// they keep listening on localhost and only the accepted host changes.
+var publicHost = Environment.GetEnvironmentVariable("MPST_PUBLIC_HOST")?.Trim();
+var isPublic = !string.IsNullOrEmpty(publicHost);
+var behindProxy = isPublic && Environment.GetEnvironmentVariable("MPST_BEHIND_PROXY") == "1";
+
+var platformEnvironment = new Dictionary<string, string>
+{
+    ["ASPNETCORE_URLS"] = isPublic && !behindProxy ? "https://*:7100" : "https://localhost:7100",
+    ["ASPNETCORE_ENVIRONMENT"] = "Development",
+};
+if (isPublic)
+{
+    platformEnvironment["AllowedHosts"] = $"localhost;{publicHost}";
+}
+
 using var platformHost = StartChild(
     Path.Combine(platformHostPublishDir, "MPSellerTools.PlatformHost.dll"),
     platformHostPublishDir,
-    new Dictionary<string, string>
-    {
-        ["ASPNETCORE_URLS"] = "https://localhost:7100",
-        ["ASPNETCORE_ENVIRONMENT"] = "Development",
-    });
+    platformEnvironment);
 Console.WriteLine($"Started PlatformHost (PID {platformHost.Id}).");
 
 Console.WriteLine("Waiting for PlatformHost to become ready...");
@@ -47,21 +63,28 @@ await WaitForHealthyAsync("https://localhost:7100/api/health");
 Console.WriteLine("PlatformHost is ready.");
 Console.WriteLine();
 
+var workerEnvironment = new Dictionary<string, string>
+{
+    ["DOTNET_ENVIRONMENT"] = "Development",
+    ["Provisioning__TenantHostPublishDirectory"] = tenantHostPublishDir,
+};
+if (isPublic)
+{
+    workerEnvironment["Provisioning__PublicHost"] = publicHost!;
+    workerEnvironment["Provisioning__BehindProxy"] = behindProxy ? "true" : "false";
+}
+
 using var worker = StartChild(
     Path.Combine(workerPublishDir, "MPSellerTools.Provisioning.Worker.dll"),
     workerPublishDir,
-    new Dictionary<string, string>
-    {
-        ["DOTNET_ENVIRONMENT"] = "Development",
-        ["Provisioning__TenantHostPublishDirectory"] = tenantHostPublishDir,
-    });
+    workerEnvironment);
 Console.WriteLine($"Started Provisioning.Worker (PID {worker.Id}). It will start any Active tenants automatically.");
 Console.WriteLine();
 
 await WriteStateFileAsync(solutionRoot, platformHost, worker);
 
 Console.WriteLine("Login URLs:");
-Console.WriteLine("  PlatformAdmin : https://localhost:7100/login");
+Console.WriteLine($"  PlatformAdmin : https://{(isPublic ? publicHost : "localhost")}:7100/login");
 Console.WriteLine("  Companies     : shown on each company's detail page in the platform console once Active");
 Console.WriteLine();
 Console.WriteLine("Press Ctrl+C to stop DevHost, PlatformHost, and the Provisioning Worker.");

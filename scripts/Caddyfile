@@ -1,0 +1,46 @@
+# Public HTTPS front for a machine reached by its bare IP address, used with
+# `Start-Dev.ps1 -PublicHost <address> -BehindProxy` (see README.md).
+#
+# Caddy answers on the public address with a Let's Encrypt certificate it
+# obtains and renews by itself, and forwards each port to the host listening
+# on the same port on localhost. Certificates for an IP address only exist in
+# Let's Encrypt's "shortlived" profile (about six days), and are validated
+# over ports 80/443, so both must be reachable from the internet.
+#
+# Run with the address in MPST_PUBLIC_HOST:
+#   $env:MPST_PUBLIC_HOST = "203.0.113.10"; caddy run --config scripts/Caddyfile
+{
+	# A request for a bare IP address carries no server name to pick a
+	# certificate by, so name the one to use.
+	default_sni {$MPST_PUBLIC_HOST}
+	# Only the public address: the hosts themselves hold these ports on localhost.
+	default_bind {$MPST_PUBLIC_HOST}
+	cert_issuer acme {
+		profile shortlived
+	}
+}
+
+(instance) {
+	https://{$MPST_PUBLIC_HOST}:{args[0]} {
+		reverse_proxy https://localhost:{args[0]} {
+			transport http {
+				# Loopback only; the hosts present the localhost development certificate.
+				tls_insecure_skip_verify
+			}
+		}
+	}
+}
+
+# The address without a port lands on the platform console.
+https://{$MPST_PUBLIC_HOST} {
+	redir https://{$MPST_PUBLIC_HOST}:7100{uri}
+}
+
+# PlatformHost, then the first tenant ports (allocated upwards from 7201;
+# add a line per further company).
+import instance 7100
+import instance 7201
+import instance 7202
+import instance 7203
+import instance 7204
+import instance 7205
