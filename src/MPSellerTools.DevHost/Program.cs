@@ -50,7 +50,11 @@ var platformEnvironment = new Dictionary<string, string>
 if (isPublic)
 {
     platformEnvironment["AllowedHosts"] = $"localhost;{publicHost}";
+    platformEnvironment["Hosting__BehindProxy"] = behindProxy ? "true" : "false";
 }
+
+// Behind a proxy everything on this machine uses the public address too.
+var platformUrl = $"https://{(behindProxy ? publicHost : "localhost")}:7100";
 
 using var platformHost = StartChild(
     Path.Combine(platformHostPublishDir, "MPSellerTools.PlatformHost.dll"),
@@ -59,7 +63,7 @@ using var platformHost = StartChild(
 Console.WriteLine($"Started PlatformHost (PID {platformHost.Id}).");
 
 Console.WriteLine("Waiting for PlatformHost to become ready...");
-await WaitForHealthyAsync("https://localhost:7100/api/health");
+await WaitForHealthyAsync($"{platformUrl}/api/health");
 Console.WriteLine("PlatformHost is ready.");
 Console.WriteLine();
 

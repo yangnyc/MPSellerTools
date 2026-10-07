@@ -265,8 +265,14 @@ Things to know:
   automatically, but **only while it is running**: if Caddy is stopped for
   longer than that, the certificate expires and browsers warn again until it
   is started and renews.
-- `scripts/Caddyfile` forwards 7100 and the first five company ports
-  (7201–7205). Add an `import instance <port>` line for each further company.
+- In this mode nothing uses `localhost` addresses: the hosts also reach each
+  other through the public address (the worker's readiness check, the
+  platform's calls to a company's instance), because that is the only name
+  with a certificate every process trusts. The hosts still *listen* on
+  localhost, since Caddy holds the same ports on the public address.
+- `scripts/Caddyfile` forwards 7100 and the first forty company ports
+  (7201–7240). A company on a port outside that list cannot be provisioned
+  until the port is added to the list.
 - A company port with nothing running behind it answers 502 Bad Gateway.
 - Caddy keeps its certificates under `%AppData%\Caddy`.
 
@@ -286,6 +292,7 @@ becomes `__`). The scripts set what is needed; these are the ones worth knowing.
 | `MPST_PUBLIC_HOST`, `MPST_BEHIND_PROXY` | DevHost, Caddy | Set by `Start-Dev.ps1 -PublicHost … -BehindProxy`; `MPST_PUBLIC_HOST` is also what `scripts/Caddyfile` reads. |
 | `Provisioning:TenantHostPublishDirectory` | worker | The published TenantHost the worker launches (`.local/build/TenantHost`). |
 | `Provisioning:PublicHost`, `Provisioning:BehindProxy` | worker | The public address for company links, and whether a proxy answers on it. |
+| `Hosting:BehindProxy` | PlatformHost | When true, the platform calls company instances at their public address instead of localhost. |
 | `Provisioning:DotnetExecutablePath` | worker | The `dotnet` used to launch company instances; must be x64 on ARM64 Windows. |
 | `Marketplace:*` | TenantHost | The multichannel switches — see [`docs/marketplace-operations.md`](docs/marketplace-operations.md). |
 
@@ -439,6 +446,13 @@ and one `MPSellerTools_Tenant_<slug>` per company.
   start with `-BehindProxy`.
 - **`#Requires -Version 7.0` error running a script**: your `pwsh` on `PATH`
   is PowerShell 6.x — see the ARM64/PowerShell note above.
+- **"Provisioning failed … did not become ready within 30s"**: the company's
+  process started but the worker could not verify it over HTTPS. Without a
+  proxy the worker calls `https://localhost:<port>`, which needs the HTTPS
+  development certificate to be trusted on this machine — `Setup-Dev.ps1`
+  does that (`dotnet dev-certs https --trust`). Behind Caddy it calls the
+  public address instead, so check that Caddy is running and forwards that
+  port. Then use **Retry** on the company's page.
 - **A tenant shows Active in the console but its URL doesn't load**: the
   provisioning worker reconciles this automatically on its next startup (or
   restart it via `Stop-Dev.ps1` + `Start-Dev.ps1`) — it checks every Active

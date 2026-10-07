@@ -8,7 +8,7 @@
 # over ports 80/443, so both must be reachable from the internet.
 #
 # Run with the address in MPST_PUBLIC_HOST:
-#   $env:MPST_PUBLIC_HOST = "203.0.113.10"; caddy run --config scripts/Caddyfile
+#   $env:MPST_PUBLIC_HOST = "203.0.113.10"; caddy run --config scripts/Caddyfile --adapter caddyfile
 {
 	# A request for a bare IP address carries no server name to pick a
 	# certificate by, so name the one to use.
@@ -20,27 +20,31 @@
 	}
 }
 
-(instance) {
-	https://{$MPST_PUBLIC_HOST}:{args[0]} {
-		reverse_proxy https://localhost:{args[0]} {
-			transport http {
-				# Loopback only; the hosts present the localhost development certificate.
-				tls_insecure_skip_verify
-			}
-		}
-	}
-}
-
 # The address without a port lands on the platform console.
 https://{$MPST_PUBLIC_HOST} {
 	redir https://{$MPST_PUBLIC_HOST}:7100{uri}
 }
 
-# PlatformHost, then the first tenant ports (allocated upwards from 7201;
-# add a line per further company).
-import instance 7100
-import instance 7201
-import instance 7202
-import instance 7203
-import instance 7204
-import instance 7205
+# PlatformHost (7100) and the first forty tenant ports (allocated upwards
+# from 7201; extend the list for more companies). The hosts also reach each
+# other through here, so a company on a port missing from this list cannot
+# be provisioned.
+https://{$MPST_PUBLIC_HOST}:7100, https://{$MPST_PUBLIC_HOST}:7201, https://{$MPST_PUBLIC_HOST}:7202, https://{$MPST_PUBLIC_HOST}:7203,
+https://{$MPST_PUBLIC_HOST}:7204, https://{$MPST_PUBLIC_HOST}:7205, https://{$MPST_PUBLIC_HOST}:7206, https://{$MPST_PUBLIC_HOST}:7207,
+https://{$MPST_PUBLIC_HOST}:7208, https://{$MPST_PUBLIC_HOST}:7209, https://{$MPST_PUBLIC_HOST}:7210, https://{$MPST_PUBLIC_HOST}:7211,
+https://{$MPST_PUBLIC_HOST}:7212, https://{$MPST_PUBLIC_HOST}:7213, https://{$MPST_PUBLIC_HOST}:7214, https://{$MPST_PUBLIC_HOST}:7215,
+https://{$MPST_PUBLIC_HOST}:7216, https://{$MPST_PUBLIC_HOST}:7217, https://{$MPST_PUBLIC_HOST}:7218, https://{$MPST_PUBLIC_HOST}:7219,
+https://{$MPST_PUBLIC_HOST}:7220, https://{$MPST_PUBLIC_HOST}:7221, https://{$MPST_PUBLIC_HOST}:7222, https://{$MPST_PUBLIC_HOST}:7223,
+https://{$MPST_PUBLIC_HOST}:7224, https://{$MPST_PUBLIC_HOST}:7225, https://{$MPST_PUBLIC_HOST}:7226, https://{$MPST_PUBLIC_HOST}:7227,
+https://{$MPST_PUBLIC_HOST}:7228, https://{$MPST_PUBLIC_HOST}:7229, https://{$MPST_PUBLIC_HOST}:7230, https://{$MPST_PUBLIC_HOST}:7231,
+https://{$MPST_PUBLIC_HOST}:7232, https://{$MPST_PUBLIC_HOST}:7233, https://{$MPST_PUBLIC_HOST}:7234, https://{$MPST_PUBLIC_HOST}:7235,
+https://{$MPST_PUBLIC_HOST}:7236, https://{$MPST_PUBLIC_HOST}:7237, https://{$MPST_PUBLIC_HOST}:7238, https://{$MPST_PUBLIC_HOST}:7239,
+https://{$MPST_PUBLIC_HOST}:7240 {
+	reverse_proxy localhost:{http.request.local.port} {
+		transport http {
+			# Loopback only; the hosts present the localhost development certificate.
+			tls
+			tls_insecure_skip_verify
+		}
+	}
+}

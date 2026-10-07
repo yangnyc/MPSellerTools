@@ -63,7 +63,7 @@ public class TenantProvisioningService(
             tenant.ProcessStartTimeUtc = launched.StartTimeUtc;
         }
 
-        await WaitForReadinessAsync(LocalUrl(tenant), tenant.Id, applicationInstanceId, cancellationToken);
+        await WaitForReadinessAsync(InternalUrl(tenant), tenant.Id, applicationInstanceId, cancellationToken);
 
         tenant.DatabaseName = databaseName;
         tenant.ApplicationInstanceId = applicationInstanceId;
@@ -116,7 +116,7 @@ public class TenantProvisioningService(
             tenant.ProcessStartTimeUtc = launched.StartTimeUtc;
         }
 
-        await WaitForReadinessAsync(LocalUrl(tenant), tenant.Id, tenant.ApplicationInstanceId.Value, cancellationToken);
+        await WaitForReadinessAsync(InternalUrl(tenant), tenant.Id, tenant.ApplicationInstanceId.Value, cancellationToken);
 
         tenant.Status = TenantStatus.Active;
         tenant.UpdatedAtUtc = DateTime.UtcNow;
@@ -185,11 +185,15 @@ public class TenantProvisioningService(
     private string PublicUrl(Tenant tenant) =>
         $"https://{(string.IsNullOrWhiteSpace(options.PublicHost) ? "localhost" : options.PublicHost.Trim())}:{tenant.Port}";
 
-    /// <summary>
-    /// The address this machine uses to reach the instance. Always localhost,
-    /// which is the only name the HTTPS development certificate is valid for.
-    /// </summary>
+    /// <summary>The address the instance itself listens on.</summary>
     private static string LocalUrl(Tenant tenant) => $"https://localhost:{tenant.Port}";
+
+    /// <summary>
+    /// The address this machine uses to reach the instance. Behind a proxy that
+    /// is the public address, whose certificate is trusted everywhere; without
+    /// one it is localhost, the only name the development certificate is valid for.
+    /// </summary>
+    private string InternalUrl(Tenant tenant) => options.BehindProxy ? PublicUrl(tenant) : LocalUrl(tenant);
 
     private static TenantDbContext CreateTenantDbContext(string connectionString)
     {

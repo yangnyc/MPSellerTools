@@ -102,8 +102,9 @@ builder.Services.AddCors(options =>
 
 // Tenant users are read from and managed through each company's own instance.
 builder.Services.AddHttpClient(TenantUsersClient.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+var behindProxy = builder.Configuration.GetValue<bool>("Hosting:BehindProxy");
 builder.Services.AddScoped(services =>
-    new TenantUsersClient(services.GetRequiredService<IHttpClientFactory>(), localDataDirectory));
+    new TenantUsersClient(services.GetRequiredService<IHttpClientFactory>(), localDataDirectory, behindProxy));
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();

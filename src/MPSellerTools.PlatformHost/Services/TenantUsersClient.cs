@@ -13,7 +13,7 @@ public class TenantUnavailableException(string reason) : Exception(reason);
 /// that company's platform access key. The platform holds no tenant
 /// connection string and keeps none of what comes back (brief §4).
 /// </summary>
-public class TenantUsersClient(IHttpClientFactory httpClientFactory, string localDataDirectory)
+public class TenantUsersClient(IHttpClientFactory httpClientFactory, string localDataDirectory, bool viaPublicUrl)
 {
     public const string HttpClientName = "TenantHosts";
 
@@ -35,9 +35,11 @@ public class TenantUsersClient(IHttpClientFactory httpClientFactory, string loca
             throw new TenantUnavailableException("Needs a restart to accept platform access");
         }
 
-        // Always over localhost, not tenant.Url: that may name a public host,
-        // which the HTTPS development certificate is not valid for.
-        using var request = new HttpRequestMessage(method, $"https://localhost:{tenant.Port}{path}");
+        // tenant.Url may name a public host. Behind a proxy its certificate is
+        // trusted, so use it; otherwise only localhost matches the HTTPS
+        // development certificate the instance presents.
+        var baseUrl = viaPublicUrl ? tenant.Url : $"https://localhost:{tenant.Port}";
+        using var request = new HttpRequestMessage(method, $"{baseUrl}{path}");
         request.Headers.Add(PlatformAccessKey.HeaderName, key);
         request.Headers.Add(PlatformAccessKey.ActorHeaderName, actorEmail);
         if (body is not null)
