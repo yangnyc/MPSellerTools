@@ -189,7 +189,8 @@ public record ChannelListingResponse(
     IReadOnlyList<ListingImage> AvailableImages,
     IReadOnlyList<Guid>? ImageIds,
     IReadOnlyList<string> EffectiveImageUrls,
-    ImageRules ImageRules);
+    ImageRules ImageRules,
+    Guid ProductId);
 
 public record ListingValidationResponse(bool Valid, IReadOnlyList<ValidationIssue> Issues, string? RequirementsSource, string? RequirementsVersion);
 

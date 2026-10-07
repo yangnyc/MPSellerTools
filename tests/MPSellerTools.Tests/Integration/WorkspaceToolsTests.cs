@@ -308,6 +308,10 @@ public class WorkspaceToolsTests(MarketplaceFixture fixture) : IClassFixture<Mar
         // Following the product: all eleven, which is more than Amazon takes, and the listing says so.
         var following = await ListingAsync();
         Assert.Equal(JsonValueKind.Null, following.GetProperty("imageIds").ValueKind);
+        // The listing says which product it is of, and the product's page asks for its listings by that.
+        Assert.Equal(productId, following.GetProperty("productId").GetGuid());
+        var ofProduct = await admin.GetFromJsonAsync<JsonElement>($"/api/channel-listings?productId={productId}");
+        Assert.Equal(listingId, Assert.Single(ofProduct.EnumerateArray()).GetProperty("id").GetGuid());
         Assert.Equal((11, 11, 9), (following.GetProperty("availableImages").GetArrayLength(), following.GetProperty("effectiveImageUrls").GetArrayLength(), following.GetProperty("imageRules").GetProperty("maxImages").GetInt32()));
         Assert.Contains("too_many", await ProblemsAsync());
 

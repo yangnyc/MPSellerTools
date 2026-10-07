@@ -492,7 +492,8 @@ public class ChannelListingsController(
             new ListingVersions(l.PriceVersion, l.ConfirmedPriceVersion),
             new ListingVersions(l.InventoryVersion, l.ConfirmedInventoryVersion),
             issues, bundle.Work.References,
-            bundle.AvailableImages, bundle.ImageSelection, s.ImageUrls, ChannelImageRules.For(bundle.Context.Account.Channel));
+            bundle.AvailableImages, bundle.ImageSelection, s.ImageUrls, ChannelImageRules.For(bundle.Context.Account.Channel),
+            bundle.ProductId);
     }
 }
 

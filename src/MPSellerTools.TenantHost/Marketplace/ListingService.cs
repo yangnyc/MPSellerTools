@@ -17,6 +17,8 @@ public record ListingBundle(ChannelListing Listing, ChannelContext Context, List
 
     /// <summary>The pictures chosen for this marketplace, in order; null when the listing follows the product.</summary>
     public IReadOnlyList<Guid>? ImageSelection { get; init; }
+
+    public Guid ProductId { get; init; }
 }
 
 /// <summary>
@@ -78,7 +80,7 @@ public class ListingService(TenantDbContext db, IEnumerable<IChannelAdapter> ada
             references.GetValueOrDefault(ExternalResourceType.CatalogItem));
         var work = new ListingWork(
             snapshot, listing.DesiredState, listing.ContentVersion, listing.PriceVersion, listing.InventoryVersion, references, groupReady);
-        return new ListingBundle(listing, ContextFor(account, market), work) { AvailableImages = available, ImageSelection = selection };
+        return new ListingBundle(listing, ContextFor(account, market), work) { AvailableImages = available, ImageSelection = selection, ProductId = product.Id };
     }
 
     public static List<Guid>? ParseSelection(string? json) =>

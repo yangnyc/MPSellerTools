@@ -299,3 +299,51 @@ test("a listing's own price, cap, title and ASIN are edited on its marketplace p
   await expect(dialog.getByText("PUT https://sandbox.example/listings/MUG-BLUE")).toBeVisible();
   await expect(dialog.getByText('"productType": "DRINKING_CUP"')).toBeVisible();
 });
+test("a product's own page shows it on every marketplace, and adds, edits and publishes from there", async ({ page }) => {
+  const detail = {
+    id: "p1", sku: "MUG-BLUE", name: "Blue mug", brand: "Mugco", description: "A blue mug.", category: "Mugs",
+    variants: [{ id: "v1", sku: "MUG-BLUE", name: null, price: 12.5, isDefault: true, isArchived: false, onHand: 9, reserved: 1, safetyStock: 2, availableToSell: 6 }],
+    identifiers: [{ id: "i1", type: 1, value: "000012345678", variantId: null }],
+    media: [{ id: "img-1", url: "https://img.example.com/front.jpg", altText: null, variantId: null, purpose: 0, position: 0 }],
+  };
+  const onAmazon = {
+    ...listing, productId: "p1", desiredState: 0, observedStatus: 0, externalCategoryId: null, contentOverrides: {}, priceOverride: 14.5, fulfillmentMode: 0, quantityCap: 3,
+    effectivePrice: 14.5, effectiveQuantity: 3, references: { CatalogItem: "B00TEST001" }, hasPriceConflict: false, observedPrice: null, observedAtUtc: null,
+    issues: [{ channel: 1, path: "category", code: "required", message: "Map the product's category to an Amazon product type." }],
+    availableImages: [{ id: "img-1", url: "https://img.example.com/front.jpg" }], imageIds: null, effectiveImageUrls: ["https://img.example.com/front.jpg"],
+    imageRules: { minImages: 0, maxImages: 9, mainImage: "", formats: "", size: "", source: "" },
+  };
+  const walmart = account({ id: "a-walmart", channel: 2, name: "Walmart", markets: [{ id: "m-walmart", marketplaceCode: "WALMART_US", language: "en-US", currency: "USD" }] });
+  await mockApi(
+    page,
+    { "/api/products": [{ id: "p1", sku: "MUG-BLUE", name: "Blue mug", price: 12.5, stockQuantity: 9, isArchived: false, rowVersion: "A" }], "/api/catalog/products/p1": detail, "/api/channel-listings": [onAmazon], "/api/channels": [account({}), walmart] },
+    { "/api/channel-listings/l1/publish": { listingId: "l1", desiredState: 1, liveWrites: false } }
+  );
+
+  // Reached from the product's name in the catalog.
+  await page.goto("/products");
+  await page.getByRole("link", { name: "Blue mug" }).click();
+  await expect(page).toHaveURL(/\/products\/p1$/);
+  await expect(page.getByRole("heading", { name: "Blue mug", level: 1 })).toBeVisible();
+  await expect(page.getByText("A blue mug.")).toBeVisible();
+  await expect(page.getByText("000012345678")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Blue mug, picture 1" })).toBeVisible();
+
+  // Amazon: the draft with its own price and cap, its ASIN, and what still stops it being published.
+  await expect(page.getByText("$14.50 (its own)")).toBeVisible();
+  await expect(page.getByText("3 (capped at 3)")).toBeVisible();
+  await expect(page.getByText("B00TEST001")).toBeVisible();
+  await expect(page.getByText("Map the product's category to an Amazon product type.")).toBeVisible();
+  await page.getByRole("button", { name: "Publish on Amazon" }).click();
+  await expect(page.getByText("Queued as a dry run: live writes to Amazon are off.")).toBeVisible();
+
+  // Walmart is set up but does not have the product; eBay is not set up at all.
+  await page.getByRole("button", { name: "Add to Walmart" }).click();
+  await expect(page.getByText("Added to Walmart as a draft.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Set up eBay" })).toHaveAttribute("href", "/ebay/products");
+  expect(writes).toEqual(["POST /api/channel-listings/l1/publish", 'PUT /api/channel-listings {"channelMarketId":"m-walmart","variantId":"v1","fulfillmentMode":0}']);
+
+  // The same dialog as on the marketplace's own page.
+  await page.getByRole("button", { name: "Edit on Amazon" }).click();
+  await expect(page.getByRole("dialog").getByLabel("Price on Amazon")).toHaveValue("14.5");
+});

@@ -5,7 +5,7 @@ import Icon from "@mui/material/Icon";
 import MDButton from "components/MDButton";
 import MDInput from "components/MDInput";
 import DataTable from "examples/Tables/DataTable";
-import { Identity, InlineAlert, PageHeader, Section, StateBlock, StatusPill, formatMoney, useKit, type KitTone } from "examples/Kit";
+import { Identity, InlineAlert, PageHeader, Section, StateBlock, StatusPill, formatMoney, useKit } from "examples/Kit";
 import PageShell from "../../components/PageShell";
 import ListingEditDialog from "./ListingEditDialog";
 import { useSnackbar } from "../../components/useSnackbar";
@@ -15,19 +15,11 @@ import {
   ChannelsApi,
   type ChannelAccount,
   type ChannelListing,
-  type ListingObservedStatus,
   type Marketplace,
 } from "../../api/channels";
+import { LISTING_OBSERVED } from "../../lib/status";
 
-// What the marketplace itself last reported; a draft has never been sent, so it has its own label.
-const OBSERVED: Record<ListingObservedStatus, { label: string; tone: KitTone }> = {
-  0: { label: "Not sent", tone: "neutral" },
-  1: { label: "Not listed", tone: "neutral" },
-  2: { label: "Processing", tone: "warning" },
-  3: { label: "Live", tone: "success" },
-  4: { label: "Off sale", tone: "neutral" },
-  5: { label: "Rejected", tone: "error" },
-};
+const OBSERVED = LISTING_OBSERVED;
 
 const message = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message : fallback);
 
@@ -111,7 +103,11 @@ export default function MarketplaceListingsPage({ marketplace }: { marketplace: 
         Header: "Product",
         id: "product",
         accessor: (row: ChannelListing) => `${row.effectiveTitle ?? ""} ${row.sellerSku}`,
-        Cell: ({ row }: CellProps) => <Identity name={row.original.effectiveTitle ?? row.original.sellerSku} secondary={row.original.sellerSku} square />,
+        Cell: ({ row }: CellProps) => (
+          <Box component={RouterLink} to={`/products/${row.original.productId}`} aria-label={`View ${row.original.sellerSku}`} sx={{ display: "block", color: "inherit" }}>
+            <Identity name={row.original.effectiveTitle ?? row.original.sellerSku} secondary={row.original.sellerSku} square />
+          </Box>
+        ),
       },
       {
         Header: "Price",

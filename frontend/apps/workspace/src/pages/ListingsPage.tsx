@@ -119,7 +119,11 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
         id: "product",
         // Name and SKU together, so searching and sorting cover both.
         accessor: (row: Row) => `${row.productName} ${row.productSku}`,
-        Cell: ({ row }: CellProps) => <Identity name={row.original.productName} secondary={row.original.productSku} square />,
+        Cell: ({ row }: CellProps) => (
+          <Box component={RouterLink} to={`/products/${row.original.productId}`} aria-label={`View ${row.original.productName}`} sx={{ display: "block", color: "inherit" }}>
+            <Identity name={row.original.productName} secondary={row.original.productSku} square />
+          </Box>
+        ),
       },
       { Header: "Posted on", accessor: "site" },
       {

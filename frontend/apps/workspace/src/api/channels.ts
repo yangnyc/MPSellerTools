@@ -105,6 +105,9 @@ export type ChannelAccountUpdate = {
 
 export type CatalogSearchResult = { catalogItemId: string; title: string | null; brand: string | null };
 
+// Every marketplace the workspace has pages for, in the order they are shown.
+export const marketplaces = (): Marketplace[] => [EBAY, AMAZON, WALMART];
+
 export type ChannelMarket = { id: string; marketplaceCode: string; language: string; currency: string };
 
 // Credentials are never part of it, only whether any are saved.
@@ -152,12 +155,14 @@ export type ChannelListing = {
   references: Record<string, string>;
   hasPriceConflict: boolean;
   observedPrice: number | null;
+  observedAtUtc: string | null;
   // Every picture of the product this listing could use, and the ones chosen for this marketplace
   // in the order they are sent; imageIds null means all of them, in the product's own order.
   availableImages: ListingImage[];
   imageIds: string[] | null;
   effectiveImageUrls: string[];
   imageRules: ImageRules;
+  productId: string;
   effectiveTitle: string | null;
   effectivePrice: number;
   effectiveQuantity: number;
@@ -191,7 +196,18 @@ export type ListingEdit = {
 // liveWrites false: the queued work is carried out as a dry run and nothing reaches the channel.
 export type ListingQueued = { listingId: string; desiredState: ListingDesiredState; liveWrites: boolean };
 
-export type CatalogVariant = { id: string; sku: string; name: string | null; isDefault: boolean; isArchived: boolean };
+export type CatalogVariant = {
+  id: string;
+  sku: string;
+  name: string | null;
+  price: number;
+  isDefault: boolean;
+  isArchived: boolean;
+  onHand: number;
+  reserved: number;
+  safetyStock: number;
+  availableToSell: number;
+};
 
 export type ProductIdentifierType = 0 | 1 | 2 | 3 | 4; // Gtin, Upc, Ean, Isbn, Mpn
 export const IDENTIFIER_LABELS: Record<ProductIdentifierType, string> = { 0: "GTIN", 1: "UPC", 2: "EAN", 3: "ISBN", 4: "MPN" };
@@ -412,6 +428,8 @@ export const CatalogApi = {
 
 export const ChannelListingsApi = {
   list: (accountId: string) => apiFetch<ChannelListing[]>(`/api/channel-listings?accountId=${accountId}`),
+  // Every marketplace's listing of one product.
+  ofProduct: (productId: string) => apiFetch<ChannelListing[]>(`/api/channel-listings?productId=${productId}`),
   all: () => apiFetch<ChannelListing[]>("/api/channel-listings"),
   // Sends the listing's current state again after a failure or a correction.
   retry: (id: string) => apiFetch<ListingQueued>(`/api/channel-listings/${id}/retry`, { method: "POST" }),

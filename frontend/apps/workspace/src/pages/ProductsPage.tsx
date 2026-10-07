@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link as RouterLink } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
@@ -203,8 +204,8 @@ export default function ProductsPage() {
       {
         Header: "Name",
         accessor: "name",
-        Cell: ({ value }: { value: string }) => (
-          <Box component="span" sx={{ fontWeight: 500, color: c.text }}>
+        Cell: ({ value, row }: { value: string; row: { original: Product } }) => (
+          <Box component={RouterLink} to={`/products/${row.original.id}`} sx={{ fontWeight: 500, color: c.text, "&:hover": { color: c.accent } }}>
             {value}
           </Box>
         ),

@@ -5,6 +5,7 @@ import Configurator from "examples/Configurator";
 import { useMaterialUIController } from "context";
 import routes, { type AppRoute } from "./routes";
 import LoginPage from "./pages/LoginPage";
+import ProductViewPage from "./pages/ProductViewPage";
 import { useAuth } from "./auth/useAuth";
 
 function RequireAuth({ children, allowedRoles }: { children: ReactNode; allowedRoles?: string[] }) {
@@ -73,6 +74,8 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         {renderProtectedRoutes(routes)}
+        {/* One product's own page: reached from the tables, so it has no sidenav entry. */}
+        <Route path="/products/:id" element={<RequireAuth><ProductViewPage /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </>
