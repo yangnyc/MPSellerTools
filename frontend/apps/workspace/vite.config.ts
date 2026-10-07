@@ -16,10 +16,10 @@ export default defineConfig({
       context: path.resolve(uiSrc, "context"),
       assets: path.resolve(uiSrc, "assets"),
     },
-    // packages/ui has its own node_modules (no workspace hoisting in this
-    // environment — see docs/template-adaptation.md), so without this, files
-    // aliased in from packages/ui/src resolve a second copy of these
-    // singleton-sensitive libs, breaking React hooks / MUI theme context.
+    // Files aliased in from packages/ui/src must share the app's copy of these
+    // singleton-sensitive libs: a second copy breaks React hooks / MUI theme
+    // context. The hoisted workspace install leaves one copy of each; this
+    // keeps it that way if a version ever ends up nested under a package.
     dedupe: [
       "react",
       "react-dom",

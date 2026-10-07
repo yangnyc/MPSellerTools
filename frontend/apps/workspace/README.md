@@ -17,7 +17,7 @@ If you are developing a production application, we recommend enabling type-aware
 
 ```json
 {
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "$schema": "../../node_modules/oxlint/configuration_schema.json",
   "plugins": ["react", "typescript", "oxc"],
   "options": {
     "typeAware": true

@@ -10,9 +10,14 @@
     published output is what actually gets launched at runtime — Debug
     symbols aren't needed for that and Release is what a real deployment
     would use.
+
+.PARAMETER ForceInstall
+    Runs the frontend `npm install` even when the manifests are unchanged
+    since the last install.
 #>
 param(
-    [string]$Configuration = "Release"
+    [string]$Configuration = "Release",
+    [switch]$ForceInstall
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,23 +28,48 @@ function Write-Step($message) {
     Write-Host "==> $message" -ForegroundColor Cyan
 }
 
-# Installed per package rather than once at the workspace root: a root
-# install symlinks each workspace into frontend/node_modules, which fails
-# with EISDIR on filesystems that can't hold symlinks (e.g. a VM shared
-# folder). --no-workspaces stops npm from walking up to frontend/package.json
-# and doing that root install anyway. Each package has its own
-# package-lock.json, and the Vite configs already resolve packages/ui by
-# path, so nothing needs the hoisted layout.
+# Installed once at the workspace root (frontend/package.json lists the
+# workspaces): shared dependencies are hoisted into frontend/node_modules
+# instead of being unpacked once per package, which cuts the install — and
+# every later walk of the tree — to about a third of the files. npm links
+# each workspace into frontend/node_modules, so the checkout has to sit on a
+# filesystem that can hold links (NTFS junctions are fine; a VM shared folder
+# is not).
+#
+# The install is skipped when the root package-lock.json and every
+# package.json are unchanged since the last successful install: it rewrites
+# tens of thousands of small files, which takes minutes on slow storage. The
+# stamp lives inside node_modules so that deleting node_modules forces a
+# reinstall; -ForceInstall does the same without deleting anything.
+$frontendDir = Join-Path $repoRoot "frontend"
 $frontendPackages = @("apps/platform", "apps/workspace", "packages/ui")
-foreach ($package in $frontendPackages) {
-    Write-Step "Installing frontend dependencies ($package)"
-    Push-Location (Join-Path $repoRoot "frontend/$package")
+
+function Get-ManifestHash {
+    $manifests = @("package.json", "package-lock.json") +
+        ($frontendPackages | ForEach-Object { "$_/package.json" })
+    $hashes = foreach ($name in $manifests) {
+        $path = Join-Path $frontendDir $name
+        if (Test-Path $path) { (Get-FileHash $path -Algorithm SHA256).Hash }
+    }
+    return ($hashes -join ":")
+}
+
+$stampPath = Join-Path $frontendDir "node_modules/.install-stamp"
+if (-not $ForceInstall -and (Test-Path $stampPath) -and
+    (Get-Content $stampPath -Raw).Trim() -eq (Get-ManifestHash)) {
+    Write-Step "Frontend dependencies up to date"
+} else {
+    Write-Step "Installing frontend dependencies"
+    Push-Location $frontendDir
     try {
-        npm install --no-workspaces
-        if ($LASTEXITCODE -ne 0) { throw "npm install failed for $package" }
+        npm install
+        if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
     } finally {
         Pop-Location
     }
+
+    # Hashed after the install, since npm may rewrite package-lock.json.
+    Set-Content -Path $stampPath -Value (Get-ManifestHash)
 }
 
 # Each app writes its build output directly into the corresponding host's
@@ -71,7 +101,7 @@ try {
     dotnet restore MPSellerTools.sln
     if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed" }
 
-    dotnet build MPSellerTools.sln -c $Configuration
+    dotnet build MPSellerTools.sln -c $Configuration --no-restore
     if ($LASTEXITCODE -ne 0) { throw "dotnet build failed" }
 } finally {
     Pop-Location
@@ -81,6 +111,8 @@ try {
 # does not contain wwwroot (only `dotnet publish` copies it), and the
 # provisioning worker/DevHost launch these as standalone "prebuilt, approved
 # executables" (brief §10), not via `dotnet run` from their project folders.
+# --no-build reuses the solution build just above instead of re-checking every
+# project three more times; it publishes exactly what that build produced.
 $buildRoot = Join-Path $repoRoot ".local/build"
 $components = @(
     @{ Name = "MPSellerTools.PlatformHost"; Output = "PlatformHost" },
@@ -92,7 +124,7 @@ foreach ($component in $components) {
     Write-Step "Publishing $($component.Name) ($Configuration)"
     $projectPath = Join-Path $repoRoot "src/$($component.Name)/$($component.Name).csproj"
     $outputPath = Join-Path $buildRoot $component.Output
-    dotnet publish $projectPath -c $Configuration -o $outputPath
+    dotnet publish $projectPath -c $Configuration -o $outputPath --no-build
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $($component.Name)" }
 }
 

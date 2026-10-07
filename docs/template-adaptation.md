@@ -163,7 +163,7 @@ version` against the npm registry, not guessed):
 
 | Package | Upstream pin | Used here | Why |
 | --- | --- | --- | --- |
-| react / react-dom | 18.2.0 | 19.3.0 | Latest. `react-table` v7 only declares React ≤ 18 as a peer, so each `package.json` carries an `overrides` entry pointing it at the installed React; it runs on 19 unchanged. |
+| react / react-dom | 18.2.0 | 19.3.0 | Latest. `react-table` v7 only declares React ≤ 18 as a peer, so `frontend/package.json` carries an `overrides` entry pointing it at the installed React (npm only honours overrides at the workspace root); it runs on 19 unchanged. |
 | react-router-dom | 6.16.0 | 6.30.6 | Latest 6.x; v7 changes the routing API (data routers), which the ported `Sidenav`/`App.tsx` pattern does not use. |
 | @mui/material / @mui/icons-material | 5.5.2 / 5.5.1 | 9.4.0 | Latest. MUI 9 dropped APIs the ported template relies on, so they are bridged in one place each rather than at every call site: `MDBox`/`MDTypography` move layout props (`display`, `px`, ...) into `sx`; `MDInput` maps `InputProps`/`inputProps`/`SelectProps`/`InputLabelProps`/`FormHelperTextProps` onto `slotProps`; `Divider`'s removed `light` prop is a `MuiDivider-light` class; and the palette's `transparent` is written as `rgba(0, 0, 0, 0)`. |
 | @emotion/react / @emotion/styled | 11.8.x | 11.14.0 / 11.14.1 | Latest 11.x (the emotion major MUI requires). |
