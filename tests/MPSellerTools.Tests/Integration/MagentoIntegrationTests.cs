@@ -97,6 +97,16 @@ public class MagentoIntegrationTests(MarketplaceFixture fixture) : IClassFixture
         }));
     }
 
+    [Theory]
+    [InlineData("https://shop.example.test/", "https://shop.example.test")]
+    // The address of the API itself is taken for the store's.
+    [InlineData("https://shop.example.test/rest/V1/", "https://shop.example.test")]
+    [InlineData("https://shop.example.test:8443/store/rest", "https://shop.example.test:8443/store")]
+    // A folder that only starts with "rest" is part of the store's address.
+    [InlineData("https://shop.example.test/restaurant", "https://shop.example.test/restaurant")]
+    public void The_store_address_is_reduced_to_the_store_root(string entered, string expected) =>
+        Assert.Equal(expected, TenantHost.Marketplace.Channels.MagentoApi.Root(entered));
+
     [Fact]
     public async Task Publishing_saves_the_product_in_the_store_and_taking_it_off_sale_disables_it()
     {

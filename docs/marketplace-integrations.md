@@ -162,7 +162,9 @@ Behaviour to know:
   switched on (Stores › Configuration › Services › OAuth).
 - The store address has to be a public `https://` one. An address on this
   machine or a private network is refused before any call, and redirects
-  are not followed.
+  are not followed. Plain `http://` is never accepted, as the token would
+  travel unencrypted. An address ending in `/rest` or `/rest/V1` is taken
+  for the store it belongs to.
 - A draft is saved in the store disabled; publishing enables it; taking it
   off sale disables it again. Nothing is deleted from the store.
 - A listing's attributes are sent as Magento custom attributes, under

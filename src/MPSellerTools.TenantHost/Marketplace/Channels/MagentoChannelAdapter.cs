@@ -36,7 +36,9 @@ public static class MagentoApi
     /// <summary>
     /// The store's address without a trailing slash. It has to be a public
     /// https address: the server calls whatever is entered here, so it must
-    /// not be pointed at this machine or the network behind it.
+    /// not be pointed at this machine or the network behind it, and the
+    /// access token must not travel unencrypted. The address of the API
+    /// itself (".../rest/V1/") is taken for the store's.
     /// </summary>
     public static string Root(string? baseUrl)
     {
@@ -49,7 +51,10 @@ public static class MagentoApi
             throw new ChannelException(SyncErrorClass.DataCorrection, "The Magento store address must be a public one.");
         }
 
-        return uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
+        var root = uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
+        var api = root.IndexOf("/rest", uri.GetLeftPart(UriPartial.Authority).Length, StringComparison.OrdinalIgnoreCase);
+        // Only a whole "/rest" segment, not a folder that merely starts with it.
+        return api >= 0 && (api + 5 == root.Length || root[api + 5] == '/') ? root[..api] : root;
     }
 
     public static async Task<ChannelResponse> SendAsync(
@@ -193,7 +198,7 @@ public class MagentoChannelAdapter(ChannelHttp http, ChannelSecrets secrets) : C
         var issues = new List<ValidationIssue>();
         try
         {
-            MagentoApi.Root(context.Setting("baseUrl"));
+            Root(context);
         }
         catch (ChannelException ex)
         {
@@ -217,7 +222,7 @@ public class MagentoChannelAdapter(ChannelHttp http, ChannelSecrets secrets) : C
     public override IReadOnlyList<ChannelRequest> Preview(SyncOperation operation, ListingWork work, ChannelContext context)
     {
         var s = work.Snapshot;
-        var root = MagentoApi.Root(context.Setting("baseUrl"));
+        var root = Root(context);
         return operation switch
         {
             SyncOperation.Content => [new("POST", $"{root}/rest/all/V1/products", MagentoPayloads.Product(s, context, work.DesiredState == ListingDesiredState.Active))],
@@ -232,7 +237,7 @@ public class MagentoChannelAdapter(ChannelHttp http, ChannelSecrets secrets) : C
         SyncOperation operation, ChannelContext context, ListingWork work, CancellationToken cancellationToken)
     {
         var s = work.Snapshot;
-        var root = MagentoApi.Root(context.Setting("baseUrl"));
+        var root = Root(context);
         switch (operation)
         {
             case SyncOperation.Content:
@@ -265,7 +270,7 @@ public class MagentoChannelAdapter(ChannelHttp http, ChannelSecrets secrets) : C
     {
         try
         {
-            var root = MagentoApi.Root(context.Setting("baseUrl"));
+            var root = Root(context);
             var response = await SendAsync(context, HttpMethod.Get, ProductUrl(root, work.Snapshot), null, cancellationToken, 404);
             return response.Status == 404
                 ? OperationOutcome.Confirmed(new RemoteState(ListingObservedStatus.NotListed, null, null))
@@ -279,7 +284,7 @@ public class MagentoChannelAdapter(ChannelHttp http, ChannelSecrets secrets) : C
 
     public override async Task<IReadOnlyList<ChannelOrder>> GetOrdersAsync(ChannelContext context, DateTime sinceUtc, CancellationToken cancellationToken)
     {
-        var root = MagentoApi.Root(context.Setting("baseUrl"));
+        var root = Root(context);
         var since = Uri.EscapeDataString(sinceUtc.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
         var orders = new List<ChannelOrder>();
         for (var page = 1; page <= MaxPages; page++)
@@ -357,6 +362,8 @@ public class MagentoChannelAdapter(ChannelHttp http, ChannelSecrets secrets) : C
             : null;
         return OperationOutcome.Confirmed(state, references);
     }
+
+    private static string Root(ChannelContext context) => MagentoApi.Root(context.Setting("baseUrl"));
 
     private static string ProductUrl(string root, ListingSnapshot s) => $"{root}/rest/all/V1/products/{Uri.EscapeDataString(s.SellerSku)}";
 
