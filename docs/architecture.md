@@ -129,8 +129,8 @@ TenantHost, so one company's eBay access is never available to another.
   address because the session cookie is SameSite=Strict.) The RuName's
   "auth accepted URL" on eBay must be `https://<workspace>/ebay`.
 - **Scopes are read-only**: `sell.fulfillment.readonly` and
-  `sell.inventory.readonly`. Nothing here changes a listing or an order on
-  eBay.
+  `sell.inventory.readonly`, with eBay's basic `api_scope` for the Trading
+  API call below. Nothing here changes a listing or an order on eBay.
 - **Importing orders** (`POST /api/ebay/import/orders`) reads the Fulfillment
   API's `getOrders` for orders changed since the last import (90 days back the
   first time). A new one becomes an order numbered `EBAY-<order id>`, with a
@@ -139,15 +139,22 @@ TenantHost, so one company's eBay access is never available to another.
   imported twice.
 - **Importing products** (`POST /api/ebay/import/products`) reads the
   Inventory API's `getInventoryItems` and each item's offer price, matched by
-  SKU. eBay only returns items listed through its Inventory API, not listings
-  made on the eBay site.
+  SKU. The Inventory API only returns items listed through it, so the import
+  then reads everything on sale with the Trading API's `GetMyeBaySelling`
+  (`ActiveList`, called with the OAuth token in `X-EBAY-API-IAF-TOKEN`). A
+  listing made on the eBay site is filed under the product with its SKU, or
+  under a new product (`EBAY-<item number>` when it has no SKU); a product
+  already in the catalog is not changed by it.
 - **Listings** (`GET /api/listings`, the workspace's **Listings** page, open
   to employees too) are the products posted for sale. The product import
   records each item's *published* offers in `Listings`, keyed by channel and
   eBay's item number, with the marketplace, price, available and sold
   quantities, status (Live / Out of stock / Ended) and the item's public
-  address. A listing eBay no longer reports is removed; one whose offers eBay
-  could not be asked about that time is left as it was. `Listings.Channel`
+  address, and the same for each listing `GetMyeBaySelling` reports. A
+  listing eBay no longer reports is removed; one whose offers eBay could not
+  be asked about that time is left as it was. When `GetMyeBaySelling` itself
+  is refused, nothing is removed, and the import succeeds with a `warning`
+  that is also kept as the connection's last error. `Listings.Channel`
   exists so another e-commerce site can be added beside eBay.
 - **Imports are run by hand** from the page; there is no background schedule.
   A refusal from eBay is shown as eBay worded it and kept as the link's last

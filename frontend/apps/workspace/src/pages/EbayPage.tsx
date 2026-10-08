@@ -130,7 +130,9 @@ export default function EbayPage() {
     run("products", async () => {
       const result = await EbayApi.importProducts();
       setStatus(await EbayApi.get());
-      notify(`Products imported: ${result.created} new, ${result.updated} updated, ${result.listings} posted on eBay.`, "success");
+      const summary = `Products imported: ${result.created} new, ${result.updated} updated, ${result.listings} posted on eBay.`;
+      if (result.warning) notify(`${summary} ${result.warning}`, "warning");
+      else notify(summary, "success");
     }, "Product import failed.");
 
   const keysChanged =
@@ -226,8 +228,9 @@ export default function EbayPage() {
                     {busy === "products" ? "Importing…" : "Import products"}
                   </MDButton>
                   <Box sx={{ ...hint, mt: 1 }}>
-                    Matches products by SKU and takes eBay's name, quantity and price. eBay only provides items listed through its
-                    inventory tools, not listings made by hand on the eBay site. The ones posted for sale then show under Listings.
+                    Matches products by SKU and takes eBay's name, quantity and price. Everything on sale on the account then shows
+                    under Listings, including listings made by hand on the eBay site; one of those with a SKU not in the catalog gets a
+                    product made for it.
                     {status.lastProductSyncAtUtc ? ` Last ${timeAgo(status.lastProductSyncAtUtc)}.` : ""}
                   </Box>
                 </Box>

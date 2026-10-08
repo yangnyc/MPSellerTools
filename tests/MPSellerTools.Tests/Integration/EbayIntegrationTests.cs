@@ -17,6 +17,19 @@ public class EbayIntegrationTests(TenantHostFixture fixture) : IClassFixture<Ten
     private const string TokenJson =
         """{"access_token":"access-1","expires_in":7200,"refresh_token":"refresh-1","refresh_token_expires_in":47304000}""";
 
+    /// <summary>The Trading API's answer for a seller with these listings on sale; each is the inside of an Item element.</summary>
+    private static string OnSaleXml(params string[] items) =>
+        $"""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <GetMyeBaySellingResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+          <Ack>Success</Ack>
+          <ActiveList>
+            <ItemArray>{string.Concat(items.Select(item => $"<Item>{item}</Item>"))}</ItemArray>
+            <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages><TotalNumberOfEntries>{items.Length}</TotalNumberOfEntries></PaginationResult>
+          </ActiveList>
+        </GetMyeBaySellingResponse>
+        """;
+
     private async Task<HttpClient> AdminAsync(string email)
     {
         await fixture.CreateUserAsync(email, "Password123!", "TenantAdmin");
@@ -59,6 +72,8 @@ public class EbayIntegrationTests(TenantHostFixture fixture) : IClassFixture<Ten
         Assert.StartsWith("https://auth.sandbox.ebay.com/oauth2/authorize?client_id=App-123&redirect_uri=My-RuName&response_type=code", authorizeUrl);
         Assert.Contains("sell.fulfillment.readonly", authorizeUrl);
         Assert.Contains("sell.inventory.readonly", authorizeUrl);
+        // The basic scope, for reading what is on sale through the Trading API.
+        Assert.Contains(Uri.EscapeDataString("https://api.ebay.com/oauth/api_scope "), authorizeUrl);
 
         // An answer carrying some other state is not the answer to this request.
         var forged = await TenantApiHelpers.PostJsonWithAntiforgeryAsync(
@@ -229,6 +244,7 @@ public class EbayIntegrationTests(TenantHostFixture fixture) : IClassFixture<Ten
         fixture.Ebay.Answer("/identity/v1/oauth2/token", TokenJson);
         fixture.Ebay.Answer("/sell/inventory/v1/inventory_item", inventory);
         fixture.Ebay.Answer("offer?sku=LS-DOWN", """{"errors":[{"message":"Internal error"}]}""", HttpStatusCode.InternalServerError);
+        fixture.Ebay.Answer("/ws/api.dll", OnSaleXml());
 
         var again = await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, "/api/ebay/import/products", new { });
         Assert.Equal(HttpStatusCode.OK, again.StatusCode);
@@ -238,6 +254,97 @@ public class EbayIntegrationTests(TenantHostFixture fixture) : IClassFixture<Ten
         var left = await db.Listings.Where(l => l.ExternalId.StartsWith("1107000000")).Select(l => l.ExternalId).ToListAsync();
         // The one eBay stopped reporting is gone; the one it could not answer about is kept as it was.
         Assert.Equal(["110700000003"], left);
+    }
+
+    [Fact]
+    public async Task Importing_products_also_records_the_listings_made_on_the_ebay_site()
+    {
+        using var admin = await AdminAsync("ebay-site-listings@example.com");
+        await ConnectAsync(admin);
+        // A product the company already keeps, which one of the listings names by its SKU.
+        var keptId = (await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PostJsonWithAntiforgeryAsync(
+            admin, "/api/products", new { sku = "SITE-KEPT", name = "Our own name", price = 5.00m, stockQuantity = 9 }))).GetProperty("id").GetString();
+
+        const string withSku = """
+            <ItemID>110800000001</ItemID><Title>Hand-listed lamp</Title><SKU>SITE-KEPT</SKU>
+            <Quantity>10</Quantity><QuantityAvailable>7</QuantityAvailable>
+            <SellingStatus><CurrentPrice currencyID="USD">24.50</CurrentPrice></SellingStatus>
+            <ListingDetails><ViewItemURL>https://www.sandbox.ebay.com/itm/Hand-listed-lamp/110800000001</ViewItemURL></ListingDetails>
+            """;
+        const string withoutSku = """
+            <ItemID>110800000002</ItemID><Title>Hand-listed vase</Title>
+            <Quantity>2</Quantity><QuantityAvailable>0</QuantityAvailable>
+            <SellingStatus><CurrentPrice currencyID="GBP">8.00</CurrentPrice></SellingStatus>
+            """;
+        fixture.Ebay.Answer("/sell/inventory/v1/inventory_item", """{"total":0,"inventoryItems":[]}""");
+        fixture.Ebay.Answer("/ws/api.dll", OnSaleXml(withSku, withoutSku));
+
+        var imported = await (await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, "/api/ebay/import/products", new { }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, imported.GetProperty("listings").GetInt32());
+        // Only the listing without a SKU needed a product made for it.
+        Assert.Equal(1, imported.GetProperty("created").GetInt32());
+        Assert.Equal(JsonValueKind.Null, imported.GetProperty("warning").ValueKind);
+
+        // The call goes to the Trading API with the seller's token in its own header.
+        Assert.Contains(fixture.Ebay.Requests, r => r.StartsWith("POST https://api.sandbox.ebay.com/ws/api.dll", StringComparison.Ordinal) && r.Contains("<GetMyeBaySellingRequest"));
+
+        var page = await admin.GetFromJsonAsync<JsonElement>("/api/listings?channel=0");
+        var mine = page.GetProperty("listings").EnumerateArray()
+            .Where(l => l.GetProperty("externalId").GetString()!.StartsWith("1108000000", StringComparison.Ordinal))
+            .OrderBy(l => l.GetProperty("externalId").GetString()).ToList();
+        Assert.Equal(2, mine.Count);
+
+        var lamp = mine[0];
+        Assert.Equal(keptId, lamp.GetProperty("productId").GetString());
+        // The company's own product is left as it was.
+        Assert.Equal("Our own name", lamp.GetProperty("productName").GetString());
+        Assert.Equal("https://www.sandbox.ebay.com/itm/Hand-listed-lamp/110800000001", lamp.GetProperty("url").GetString());
+        Assert.Equal((int)ListingStatus.Live, lamp.GetProperty("status").GetInt32());
+        Assert.Equal(24.50m, lamp.GetProperty("price").GetDecimal());
+        Assert.Equal("USD", lamp.GetProperty("currency").GetString());
+        Assert.Equal(7, lamp.GetProperty("availableQuantity").GetInt32());
+        Assert.Equal(3, lamp.GetProperty("soldQuantity").GetInt32());
+
+        var vase = mine[1];
+        Assert.Equal("EBAY-110800000002", vase.GetProperty("productSku").GetString());
+        Assert.Equal("Hand-listed vase", vase.GetProperty("productName").GetString());
+        Assert.Equal("https://www.sandbox.ebay.com/itm/110800000002", vase.GetProperty("url").GetString());
+        Assert.Equal((int)ListingStatus.OutOfStock, vase.GetProperty("status").GetInt32());
+
+        // eBay refuses the Trading call: the import still succeeds, says so, and keeps what it knew.
+        fixture.Ebay.Reset();
+        fixture.Ebay.Answer("/identity/v1/oauth2/token", TokenJson);
+        fixture.Ebay.Answer("/sell/inventory/v1/inventory_item", """{"total":0,"inventoryItems":[]}""");
+        fixture.Ebay.Answer("/ws/api.dll", """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <GetMyeBaySellingResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+              <Ack>Failure</Ack>
+              <Errors><ShortMessage>Invalid token.</ShortMessage><LongMessage>The token does not allow this call.</LongMessage></Errors>
+            </GetMyeBaySellingResponse>
+            """);
+
+        var refused = await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, "/api/ebay/import/products", new { });
+        Assert.Equal(HttpStatusCode.OK, refused.StatusCode);
+        Assert.Contains("The token does not allow this call.", (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("warning").GetString());
+        Assert.Contains("The token does not allow this call.", (await admin.GetFromJsonAsync<JsonElement>("/api/ebay")).GetProperty("lastSyncError").GetString());
+        Assert.Equal(2, await CountAsync());
+
+        // The vase has sold out and ended: eBay no longer reports it, so it goes from here too.
+        fixture.Ebay.Reset();
+        fixture.Ebay.Answer("/identity/v1/oauth2/token", TokenJson);
+        fixture.Ebay.Answer("/sell/inventory/v1/inventory_item", """{"total":0,"inventoryItems":[]}""");
+        fixture.Ebay.Answer("/ws/api.dll", OnSaleXml(withSku));
+
+        await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, "/api/ebay/import/products", new { });
+        Assert.Equal(1, await CountAsync());
+
+        async Task<int> CountAsync()
+        {
+            using var scope = fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<TenantDbContext>();
+            return await db.Listings.CountAsync(l => l.ExternalId.StartsWith("1108000000"));
+        }
     }
 
     [Fact]

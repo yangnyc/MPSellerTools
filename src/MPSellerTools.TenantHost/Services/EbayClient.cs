@@ -2,6 +2,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Xml;
+using System.Xml.Linq;
 using MPSellerTools.Core.Business;
 
 namespace MPSellerTools.TenantHost.Services;
@@ -48,10 +50,26 @@ public record EbayOffer(
     int? SoldQuantity);
 
 /// <summary>
-/// The calls this application makes to eBay's REST APIs: OAuth (consent,
-/// tokens), the Fulfillment API (orders) and the Inventory API (items and
-/// their offers, which carry the price and the listing). Everything is
-/// read-only on eBay's side.
+/// A listing on sale on the seller's account, however it was made.
+/// <see cref="Quantity"/> is what the listing was posted with and
+/// <see cref="AvailableQuantity"/> what is left of it.
+/// </summary>
+public record EbayActiveListing(
+    string ItemId,
+    string? Sku,
+    string? Title,
+    decimal? Price,
+    string? Currency,
+    int? Quantity,
+    int? AvailableQuantity,
+    string? Url);
+
+/// <summary>
+/// The calls this application makes to eBay: OAuth (consent, tokens), the
+/// Fulfillment API (orders), the Inventory API (items and their offers,
+/// which carry the price and the listing) and, for the listings the
+/// Inventory API does not know about, the Trading API's GetMyeBaySelling.
+/// Everything is read-only on eBay's side.
 /// </summary>
 public class EbayClient(IHttpClientFactory httpClientFactory)
 {
@@ -68,8 +86,19 @@ public class EbayClient(IHttpClientFactory httpClientFactory)
     public const string WriteScopes =
         "https://api.ebay.com/oauth/api_scope/sell.fulfillment https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account.readonly";
 
+    /// <summary>
+    /// eBay's basic scope, asked for at consent alongside the others: the
+    /// Trading API, which lists what the seller has on sale, is called with it.
+    /// </summary>
+    public const string TradingScope = "https://api.ebay.com/oauth/api_scope";
+
     private const int PageSize = 100;
     private const int MaxPages = 50;
+
+    private const string TradingNamespace = "urn:ebay:apis:eBLBaseComponents";
+    private const string TradingVersion = "1349";
+    private const int TradingPageSize = 200;
+    private static readonly XNamespace Trading = TradingNamespace;
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -85,7 +114,7 @@ public class EbayClient(IHttpClientFactory httpClientFactory)
         $"?client_id={Uri.EscapeDataString(connection.ClientId)}" +
         $"&redirect_uri={Uri.EscapeDataString(connection.RuName)}" +
         "&response_type=code" +
-        $"&scope={Uri.EscapeDataString(forWriting ? $"{Scopes} {WriteScopes}" : Scopes)}" +
+        $"&scope={Uri.EscapeDataString(forWriting ? $"{TradingScope} {Scopes} {WriteScopes}" : $"{TradingScope} {Scopes}")}" +
         $"&state={Uri.EscapeDataString(state)}";
 
     /// <summary>Exchanges the code from the consent page for the seller's tokens.</summary>
@@ -189,6 +218,71 @@ public class EbayClient(IHttpClientFactory httpClientFactory)
         }
     }
 
+    /// <summary>
+    /// Every listing the seller has on sale, including the ones made on the
+    /// eBay site or with another tool, which the Inventory API leaves out.
+    /// Read with the Trading API's GetMyeBaySelling, a page at a time.
+    /// </summary>
+    public async Task<List<EbayActiveListing>> GetActiveListingsAsync(
+        EbayEnvironment environment, string accessToken, CancellationToken cancellationToken)
+    {
+        var listings = new List<EbayActiveListing>();
+        for (var page = 1; page <= MaxPages; page++)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiHost(environment)}/ws/api.dll")
+            {
+                Content = new StringContent(
+                    $"""
+                    <?xml version="1.0" encoding="utf-8"?>
+                    <GetMyeBaySellingRequest xmlns="{TradingNamespace}">
+                      <ActiveList>
+                        <Include>true</Include>
+                        <Pagination><EntriesPerPage>{TradingPageSize}</EntriesPerPage><PageNumber>{page}</PageNumber></Pagination>
+                      </ActiveList>
+                    </GetMyeBaySellingRequest>
+                    """,
+                    Encoding.UTF8, "text/xml"),
+            };
+            request.Headers.Add("X-EBAY-API-CALL-NAME", "GetMyeBaySelling");
+            request.Headers.Add("X-EBAY-API-SITEID", "0");
+            request.Headers.Add("X-EBAY-API-COMPATIBILITY-LEVEL", TradingVersion);
+            // The Trading API takes an OAuth access token in this header instead of Authorization.
+            request.Headers.Add("X-EBAY-API-IAF-TOKEN", accessToken);
+
+            var response = await SendTradingAsync(request, cancellationToken);
+            var active = response.Element(Trading + "ActiveList");
+            var items = active?.Element(Trading + "ItemArray")?.Elements(Trading + "Item").ToList() ?? [];
+            foreach (var item in items)
+            {
+                var itemId = item.Element(Trading + "ItemID")?.Value.Trim();
+                if (string.IsNullOrEmpty(itemId))
+                {
+                    continue;
+                }
+
+                // A fixed-price listing carries its price as the current price; an auction's is its latest bid.
+                var price = item.Element(Trading + "SellingStatus")?.Element(Trading + "CurrentPrice")
+                    ?? item.Element(Trading + "BuyItNowPrice");
+                listings.Add(new EbayActiveListing(
+                    itemId,
+                    NullIfBlank(item.Element(Trading + "SKU")?.Value),
+                    NullIfBlank(item.Element(Trading + "Title")?.Value),
+                    ParseAmount(new EbayAmount(price?.Value, null)),
+                    NullIfBlank(price?.Attribute("currencyID")?.Value),
+                    ParseCount(item.Element(Trading + "Quantity")?.Value),
+                    ParseCount(item.Element(Trading + "QuantityAvailable")?.Value),
+                    NullIfBlank(item.Element(Trading + "ListingDetails")?.Element(Trading + "ViewItemURL")?.Value)));
+            }
+
+            var pages = ParseCount(active?.Element(Trading + "PaginationResult")?.Element(Trading + "TotalNumberOfPages")?.Value) ?? 1;
+            if (page >= pages || items.Count == 0)
+            {
+                break;
+            }
+        }
+        return listings;
+    }
+
     /// <summary>The public page of a listing.</summary>
     public static string ListingUrl(EbayEnvironment environment, string listingId) =>
         $"{(environment == EbayEnvironment.Production ? "https://www.ebay.com" : "https://www.sandbox.ebay.com")}/itm/{Uri.EscapeDataString(listingId)}";
@@ -257,6 +351,51 @@ public class EbayClient(IHttpClientFactory httpClientFactory)
             }
         }
     }
+
+    /// <summary>Sends a Trading API call and returns its answer's root element. The Trading API answers 200 even when it refuses.</summary>
+    private async Task<XElement> SendTradingAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        HttpResponseMessage response;
+        string body;
+        try
+        {
+            response = await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
+            body = await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            throw new EbayApiException("eBay could not be reached.");
+        }
+
+        using (response)
+        {
+            XElement? root = null;
+            try
+            {
+                root = XDocument.Parse(body).Root;
+            }
+            catch (XmlException)
+            {
+            }
+
+            var refused = root?.Element(Trading + "Ack")?.Value == "Failure";
+            if (!response.IsSuccessStatusCode || refused)
+            {
+                var error = root?.Element(Trading + "Errors");
+                var reason = NullIfBlank(error?.Element(Trading + "LongMessage")?.Value)
+                    ?? NullIfBlank(error?.Element(Trading + "ShortMessage")?.Value) ?? "no reason given";
+                throw new EbayApiException(
+                    $"eBay refused the request ({(int)response.StatusCode}): {Truncate(reason)}", (int)response.StatusCode);
+            }
+
+            return root ?? throw new EbayApiException("eBay returned an answer that could not be read.");
+        }
+    }
+
+    private static string? NullIfBlank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+    private static int? ParseCount(string? text) =>
+        int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : null;
 
     // The token endpoint answers {"error", "error_description"}; the APIs answer {"errors": [{"message"}]}.
     private static string ErrorMessage(string body)

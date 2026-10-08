@@ -9,8 +9,12 @@ namespace MPSellerTools.TenantHost.Services;
 
 public record EbayOrderSyncResult(int Created, int Updated, int ProductsCreated);
 
-/// <summary><see cref="Listings"/> is how many of the seller's items eBay reported as posted.</summary>
-public record EbayProductSyncResult(int Created, int Updated, int Listings);
+/// <summary>
+/// <see cref="Listings"/> is how many of the seller's items eBay reported as
+/// posted. <see cref="Warning"/> says why the listings made on the eBay site
+/// could not be read, when they could not; the rest was still imported.
+/// </summary>
+public record EbayProductSyncResult(int Created, int Updated, int Listings, string? Warning = null);
 
 /// <summary>
 /// Copies the connected seller's eBay orders and inventory into this
@@ -74,7 +78,9 @@ public class EbaySync(
     /// Imports the seller's eBay inventory items as products, matched by SKU.
     /// A product already here gets eBay's name, quantity and price; an
     /// archived one is left alone. Each item's published offers are recorded
-    /// as its listings.
+    /// as its listings, and so is everything else the seller has on sale:
+    /// a listing made on the eBay site has no inventory item, so it is filed
+    /// under the product with its SKU, or under a new one made for it.
     /// </summary>
     public async Task<EbayProductSyncResult> ImportProductsAsync(EbayConnection connection, CancellationToken cancellationToken)
     {
@@ -115,6 +121,7 @@ public class EbaySync(
                     UpdatedAtUtc = now,
                 };
                 db.Products.Add(product);
+                products[item.Sku] = product;
                 created++;
             }
             else if (!product.IsArchived
@@ -159,14 +166,84 @@ public class EbaySync(
             }
         }
 
-        // A listing eBay no longer reports is gone from the site, so it goes from here too.
-        db.Listings.RemoveRange(listings.Values.Where(l => !seenListingIds.Contains(l.ExternalId) && !unreadProductIds.Contains(l.ProductId)));
+        // Everything else on sale: the listings made on the eBay site, which have no inventory item.
+        List<EbayActiveListing>? onSale = null;
+        string? warning = null;
+        try
+        {
+            onSale = await ebay.GetActiveListingsAsync(connection.Environment, await TradingTokenAsync(connection, cancellationToken), cancellationToken);
+        }
+        catch (EbayApiException ex)
+        {
+            warning = $"Listings made on the eBay site could not be read. {ex.Message}";
+        }
+
+        var unfiled = (onSale ?? []).Where(l => l.ItemId.Length <= 64 && !seenListingIds.Contains(l.ItemId)).DistinctBy(l => l.ItemId).ToList();
+        var unfiledSkus = unfiled.Select(SkuOf).Where(sku => !products.ContainsKey(sku)).Distinct().ToList();
+        foreach (var known in await db.Products.Where(p => unfiledSkus.Contains(p.Sku)).ToListAsync(cancellationToken))
+        {
+            products[known.Sku] = known;
+        }
+
+        foreach (var item in unfiled)
+        {
+            seenListingIds.Add(item.ItemId);
+            var sku = SkuOf(item);
+            // A product already here is the company's own record and is left as it is.
+            if (!products.TryGetValue(sku, out var product))
+            {
+                product = new Product
+                {
+                    Id = Guid.NewGuid(),
+                    Sku = sku,
+                    Name = Truncate(item.Title ?? sku, 200),
+                    Price = item.Price ?? 0m,
+                    StockQuantity = Math.Max(item.AvailableQuantity ?? 0, 0),
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                };
+                db.Products.Add(product);
+                products[sku] = product;
+                created++;
+            }
+
+            if (!listings.TryGetValue(item.ItemId, out var listing))
+            {
+                listing = new Listing { Id = Guid.NewGuid(), Channel = SalesChannel.Ebay, ExternalId = item.ItemId, FirstSeenAtUtc = now };
+                db.Listings.Add(listing);
+            }
+
+            listing.ProductId = product.Id;
+            listing.Marketplace = null;
+            listing.Url = item.Url is { Length: <= 500 } url ? url : EbayClient.ListingUrl(connection.Environment, item.ItemId);
+            listing.Status = item.AvailableQuantity == 0 ? ListingStatus.OutOfStock : ListingStatus.Live;
+            listing.Price = item.Price;
+            listing.Currency = item.Currency is { Length: 3 } currency ? currency : null;
+            listing.AvailableQuantity = item.AvailableQuantity;
+            listing.SoldQuantity = item.Quantity is { } posted && item.AvailableQuantity is { } left && posted >= left ? posted - left : null;
+            listing.LastSyncedAtUtc = now;
+        }
+
+        // A listing eBay no longer reports is gone from the site, so it goes from here too. Not when
+        // the listings on sale could not be read: one of those may simply not have been seen this time.
+        if (onSale is not null)
+        {
+            db.Listings.RemoveRange(listings.Values.Where(l => !seenListingIds.Contains(l.ExternalId) && !unreadProductIds.Contains(l.ProductId)));
+        }
 
         connection.LastProductSyncAtUtc = now;
-        connection.LastSyncError = null;
+        connection.LastSyncError = warning is { Length: > 1000 } ? warning[..1000] : warning;
         audit.Log("EbayProductsImported", $"created={created}; updated={updated}; listings={seenListingIds.Count}");
         await db.SaveChangesAsync(cancellationToken);
-        return new EbayProductSyncResult(created, updated, seenListingIds.Count);
+        return new EbayProductSyncResult(created, updated, seenListingIds.Count, warning);
+    }
+
+    /// <summary>A token with every scope the seller consented to, as the Trading API wants more than the read-only two.</summary>
+    private async Task<string> TradingTokenAsync(EbayConnection connection, CancellationToken cancellationToken)
+    {
+        var tokens = await ebay.RefreshWithGrantedScopesAsync(
+            connection, Unprotect(connection.ClientSecretProtected), Unprotect(connection.RefreshTokenProtected!), cancellationToken);
+        return tokens.AccessToken;
     }
 
     private async Task<string> AccessTokenAsync(EbayConnection connection, CancellationToken cancellationToken)
@@ -184,6 +261,10 @@ public class EbaySync(
     // A listing made without a SKU still needs one here, so its eBay item number stands in.
     private static string SkuOf(EbayLineItem line) =>
         Truncate(string.IsNullOrWhiteSpace(line.Sku) ? $"EBAY-{line.LegacyItemId}" : line.Sku.Trim(), 64);
+
+    // The same stand-in as for an order line without a SKU, so a listing and its orders meet on one product.
+    private static string SkuOf(EbayActiveListing listing) =>
+        Truncate(string.IsNullOrWhiteSpace(listing.Sku) ? $"EBAY-{listing.ItemId}" : listing.Sku.Trim(), 64);
 
     private static ListingStatus ListingStatusOf(EbayOffer offer) => offer.ListingStatus switch
     {

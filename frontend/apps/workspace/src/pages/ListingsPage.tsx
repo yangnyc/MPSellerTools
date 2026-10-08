@@ -87,7 +87,9 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
     setRefreshing(true);
     try {
       const result = await EbayApi.importProducts();
-      notify(`Read from eBay: ${result.listings} posted.`, "success");
+      // The rest was read; the reason the site's own listings were not is eBay's.
+      if (result.warning) notify(`Read from eBay: ${result.listings} posted. ${result.warning}`, "warning");
+      else notify(`Read from eBay: ${result.listings} posted.`, "success");
       fetchData();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -247,7 +249,7 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
                   ? "Connect your eBay account and the products you have posted there show up here."
                   : "No e-commerce site is connected yet. A company admin can connect eBay."
                 : isTenantAdmin
-                  ? "eBay reported no posted items. Only items listed through eBay's inventory tools can be read, not listings made by hand on the eBay site."
+                  ? "eBay reported nothing on sale on this account."
                   : "eBay reported no posted items the last time it was read."
             }
             action={isTenantAdmin && (!data?.connected ? connectButton : readsEbay && refreshButton("small"))}
