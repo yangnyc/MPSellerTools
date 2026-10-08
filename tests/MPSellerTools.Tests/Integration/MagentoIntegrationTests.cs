@@ -88,6 +88,8 @@ public class MagentoIntegrationTests(MarketplaceFixture fixture) : IClassFixture
             Assert.Contains(check.GetProperty("issues").EnumerateArray(), i => i.GetProperty("path").GetString() == "account.settings.baseUrl");
         }
         Assert.Empty(fixture.Magento.Requests);
+        // The listing was left recorded as held back by the address.
+        Assert.Contains("account.settings.baseUrl", (await fixture.ListingAsync(listingId)).IssuesJson);
 
         // Put back for the other tests of this class.
         await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PutJsonWithAntiforgeryAsync(admin, $"/api/channels/{accountId}", new
@@ -95,6 +97,8 @@ public class MagentoIntegrationTests(MarketplaceFixture fixture) : IClassFixture
             channel = Magento, name = "Our store", environment = 0, settings = new { baseUrl = Store },
             isEnabled = true, liveWritesEnabled = true, inventorySyncEnabled = false, orderImportEnabled = false, priceConflictPolicy = 2,
         }));
+        // Saving a good address clears that by itself, without each listing being checked again by hand.
+        Assert.Null((await fixture.ListingAsync(listingId)).IssuesJson);
     }
 
     [Theory]

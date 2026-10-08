@@ -119,6 +119,7 @@ public class ChannelsController(
             }
         }
 
+        var settingsBefore = account.SettingsJson;
         account.Name = name;
         account.Environment = request.Environment;
         account.SellerId = string.IsNullOrWhiteSpace(request.SellerId) ? null : request.SellerId.Trim();
@@ -131,6 +132,11 @@ public class ChannelsController(
         account.UpdatedAtUtc = now;
         audit.Log("ChannelAccountSaved", $"channel={account.Channel}; name={account.Name}; liveWrites={account.LiveWritesEnabled}");
         await db.SaveChangesAsync(cancellationToken);
+        if (id is not null && settingsBefore != account.SettingsJson)
+        {
+            // A listing held back by a setting that has now been filled in should stop saying so.
+            await listings.RecheckAccountIssuesAsync(account.Id, cancellationToken);
+        }
 
         var markets = await db.ChannelMarkets.AsNoTracking().Where(m => m.ChannelAccountId == account.Id).ToListAsync(cancellationToken);
         return Ok(ToResponse(account, markets));

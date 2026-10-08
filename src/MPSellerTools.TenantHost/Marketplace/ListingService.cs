@@ -156,6 +156,47 @@ public class ListingService(TenantDbContext db, IEnumerable<IChannelAdapter> ada
         return issues;
     }
 
+    /// <summary>
+    /// Checks again the account's listings that were held back by something
+    /// about the account itself (a missing setting, say), after the account
+    /// changed, so they do not go on showing a problem that is gone. Issues
+    /// of any other kind are the listing's own and are left for its next check.
+    /// Returns how many listings' recorded issues changed.
+    /// </summary>
+    public async Task<int> RecheckAccountIssuesAsync(Guid accountId, CancellationToken cancellationToken)
+    {
+        var ids = await (
+            from listing in db.ChannelListings.AsNoTracking()
+            join market in db.ChannelMarkets.AsNoTracking() on listing.ChannelMarketId equals market.Id
+            where market.ChannelAccountId == accountId && listing.IssuesJson != null && listing.IssuesJson.Contains("\"path\":\"account.")
+            select listing.Id).ToListAsync(cancellationToken);
+
+        // Most listings come out the same, so they are written together, one statement for each distinct result.
+        var byResult = new Dictionary<string, List<Guid>>();
+        foreach (var bundle in await LoadManyAsync(ids, cancellationToken))
+        {
+            var issues = Validate(bundle);
+            var json = issues.Count == 0 ? "" : JsonSerializer.Serialize(issues, IssuesJson);
+            if (json != (bundle.Listing.IssuesJson ?? ""))
+            {
+                (byResult.TryGetValue(json, out var same) ? same : byResult[json] = []).Add(bundle.Listing.Id);
+            }
+        }
+
+        foreach (var (json, listingIds) in byResult)
+        {
+            var stored = json.Length == 0 ? null : json;
+            foreach (var chunk in listingIds.Chunk(1000))
+            {
+                await db.ChannelListings.Where(l => EF.Parameter(chunk).Contains(l.Id))
+                    .ExecuteUpdateAsync(s => s.SetProperty(l => l.IssuesJson, stored), cancellationToken);
+            }
+        }
+        return byResult.Values.Sum(list => list.Count);
+    }
+
+    private static readonly JsonSerializerOptions IssuesJson = new(JsonSerializerDefaults.Web);
+
     private async Task<(ListingGroupSnapshot? Group, bool Ready)> LoadGroupAsync(Guid listingId, CancellationToken cancellationToken)
     {
         var membership = await db.ListingGroupMembers.AsNoTracking().FirstOrDefaultAsync(m => m.ChannelListingId == listingId, cancellationToken);
