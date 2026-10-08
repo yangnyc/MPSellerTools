@@ -55,7 +55,9 @@ export default function App() {
   }, [pathname]);
 
   const showChrome = layout === "dashboard" && pathname !== "/login" && status === "authenticated";
-  const visibleRoutes = routes.filter((route) => !route.roles || route.roles.some((role) => user?.roles.includes(role)));
+  // A group open to everyone can still hold a page that is not, so its sub-items are checked too.
+  const allowed = (route: AppRoute) => !route.roles || route.roles.some((role) => user?.roles.includes(role));
+  const visibleRoutes = routes.filter(allowed).map((route) => (route.collapse ? { ...route, collapse: route.collapse.filter(allowed) } : route));
 
   return (
     <>

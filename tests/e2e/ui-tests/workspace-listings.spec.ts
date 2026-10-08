@@ -48,6 +48,8 @@ test("Listings shows what is posted, where, and links to the item on the site", 
   await mockApi(page, admin, posted);
   await page.goto("/dashboard");
   const sidebar = page.locator(".MuiDrawer-paper").filter({ has: page.getByText("MP Seller Tools", { exact: true }) });
+  // Listings sits in the Inventory group, with Products and Stock.
+  await sidebar.getByRole("button", { name: /Inventory/ }).click();
   await sidebar.locator('a[href="/listings"]').click();
   await expect(page.getByRole("heading", { name: "Listings" })).toBeVisible();
 

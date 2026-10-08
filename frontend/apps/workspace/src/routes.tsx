@@ -106,21 +106,40 @@ const routes: AppRoute[] = [
     route: "/dashboard",
     component: <DashboardPage />,
   },
+  // What the company has to sell: its products, where they are posted, and how many are in stock.
+  // Employees see the first two; the stock page is the admin's.
   {
     type: "collapse",
-    name: "Products",
-    key: "products",
+    name: "Inventory",
+    key: "inventory",
     icon: <Icon fontSize="small">inventory_2</Icon>,
-    route: "/products",
-    component: <ProductsPage />,
-  },
-  {
-    type: "collapse",
-    name: "Listings",
-    key: "listings",
-    icon: <Icon fontSize="small">sell</Icon>,
-    route: "/listings",
-    component: <ListingsPage />,
+    collapse: [
+      {
+        type: "collapse",
+        name: "Products",
+        key: "products",
+        icon: <Icon fontSize="small">category</Icon>,
+        route: "/products",
+        component: <ProductsPage />,
+      },
+      {
+        type: "collapse",
+        name: "Listings",
+        key: "listings",
+        icon: <Icon fontSize="small">sell</Icon>,
+        route: "/listings",
+        component: <ListingsPage />,
+      },
+      {
+        type: "collapse",
+        name: "Stock",
+        key: "stock",
+        icon: <Icon fontSize="small">warehouse</Icon>,
+        route: "/inventory",
+        component: <InventoryPage />,
+        roles: ["TenantAdmin"],
+      },
+    ],
   },
   {
     type: "collapse",
@@ -129,15 +148,6 @@ const routes: AppRoute[] = [
     icon: <Icon fontSize="small">receipt_long</Icon>,
     route: "/orders",
     component: <OrdersPage />,
-  },
-  {
-    type: "collapse",
-    name: "Inventory",
-    key: "inventory",
-    icon: <Icon fontSize="small">warehouse</Icon>,
-    route: "/inventory",
-    component: <InventoryPage />,
-    roles: ["TenantAdmin"],
   },
   // eBay's keys and the seller's consent have a page of their own, where eBay sends the seller back to.
   marketplaceGroup(EBAY, [
