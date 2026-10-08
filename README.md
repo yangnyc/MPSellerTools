@@ -166,6 +166,7 @@ All in `scripts/`, all PowerShell 7+ unless noted.
 | `Verify.ps1` | Runs every automated check: restore/build, frontend lint/typecheck/build, backend tests, with a pass/fail summary. |
 | `Seed-Marketplaces.ps1` | Fills one company's workspace with six demo products listed as drafts on eBay, Amazon and Walmart; the eBay drafts carry everything eBay asks for and pass the pre-publish check. Nothing is sent to a marketplace. Needs `-Url`, `-Email`, `-Password` of a TenantAdmin. |
 | `Seed-Workspace.ps1` | After `Seed-Marketplaces.ps1`: adds orders and tasks in every status, safety stock, a return, two pending invitations and a low-stock threshold, shared out among the company's users. Same `-Url`, `-Email`, `-Password`. |
+| `Seed-MagentoOtc.ps1` | Fills one company's workspace with a large demo catalog of over-the-counter pharmacy products (2,500 unless `-Count` says otherwise) and puts each on Magento as a draft. Nothing is sent to a store. Same `-Url`, `-Email`, `-Password`. |
 | `Auto-Push.ps1` | Commits and pushes any pending changes to `origin master`; meant to be run on a schedule by Task Scheduler. PowerShell 5.1+. |
 | `Caddyfile` | Not a script: the [Caddy](https://caddyserver.com) configuration for a trusted certificate on a public address. |
 
