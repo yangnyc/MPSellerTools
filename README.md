@@ -164,7 +164,7 @@ All in `scripts/`, all PowerShell 7+ unless noted.
 | `Stop-Dev.ps1` | Stops only this project's processes (verified by PID and start time, never a blanket `dotnet` kill), then asks the worker to stop every company instance. Safe to run when nothing is running. |
 | `Build.ps1` | Installs frontend dependencies if the manifests changed, builds both frontends into each host's `wwwroot`, builds the solution and publishes the three components to `.local/build/`. `-Configuration Debug`, `-ForceInstall`. |
 | `Verify.ps1` | Runs every automated check: restore/build, frontend lint/typecheck/build, backend tests, with a pass/fail summary. |
-| `Seed-Marketplaces.ps1` | Fills one company's workspace with six demo products listed as drafts on eBay, Amazon and Walmart. Nothing is sent to a marketplace. Needs `-Url`, `-Email`, `-Password` of a TenantAdmin. |
+| `Seed-Marketplaces.ps1` | Fills one company's workspace with six demo products listed as drafts on eBay, Amazon and Walmart; the eBay drafts carry everything eBay asks for and pass the pre-publish check. Nothing is sent to a marketplace. Needs `-Url`, `-Email`, `-Password` of a TenantAdmin. |
 | `Seed-Workspace.ps1` | After `Seed-Marketplaces.ps1`: adds orders and tasks in every status, safety stock, a return, two pending invitations and a low-stock threshold, shared out among the company's users. Same `-Url`, `-Email`, `-Password`. |
 | `Auto-Push.ps1` | Commits and pushes any pending changes to `origin master`; meant to be run on a schedule by Task Scheduler. PowerShell 5.1+. |
 | `Caddyfile` | Not a script: the [Caddy](https://caddyserver.com) configuration for a trusted certificate on a public address. |
