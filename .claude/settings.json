@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-Content *)",
+      "PowerShell(Select-String *)",
+      "PowerShell(Get-CimInstance *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "PowerShell(Get-Date *)",
+      "PowerShell(Get-Service *)",
+      "PowerShell(git status *)",
+      "PowerShell(git log *)",
+      "PowerShell(git diff *)",
+      "PowerShell(Get-PhysicalDisk *)",
+      "PowerShell(Get-ItemProperty *)",
+      "PowerShell(Get-NetFirewallRule *)",
+      "PowerShell(Get-NetFirewallPortFilter *)",
+      "PowerShell(Get-MpPreference *)",
+      "PowerShell(Get-NetAdapter *)",
+      "PowerShell(Get-Location *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Join-Path *)",
+      "PowerShell(Get-Volume *)",
+      "PowerShell(Get-Counter *)",
+      "PowerShell(Get-AuthenticodeSignature *)",
+      "PowerShell(sqllocaldb info *)",
+      "PowerShell(Select-Object *)",
+      "PowerShell(Format-Table *)",
+      "PowerShell(Format-List *)",
+      "PowerShell(Sort-Object *)",
+      "PowerShell(Measure-Object *)",
+      "PowerShell(Group-Object *)",
+      "PowerShell(Out-String *)",
+      "PowerShell(ConvertTo-Json *)",
+      "PowerShell(Out-Null *)",
+      "PowerShell(Start-Sleep *)"
+    ]
+  }
+}
