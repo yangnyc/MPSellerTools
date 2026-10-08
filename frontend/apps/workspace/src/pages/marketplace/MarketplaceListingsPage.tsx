@@ -16,6 +16,7 @@ import {
   type ChannelAccount,
   type ChannelListing,
   type Marketplace,
+  canSendAgain,
 } from "../../api/channels";
 import { LISTING_OBSERVED } from "../../lib/status";
 
@@ -89,6 +90,13 @@ export default function MarketplaceListingsPage({ marketplace }: { marketplace: 
       await load();
     }, "Could not publish.");
 
+  const sendAgain = (listing: ChannelListing) =>
+    run(listing.id, async () => {
+      const queued = await ChannelListingsApi.retry(listing.id);
+      await load();
+      notify(queued.liveWrites ? `Queued for ${name} again.` : `Queued as a dry run: live writes to ${name} are off.`, "success");
+    }, "Could not send it again.");
+
   const deactivate = (listing: ChannelListing) =>
     run(listing.id, async () => {
       await ChannelListingsApi.deactivate(listing.id);
@@ -137,6 +145,11 @@ export default function MarketplaceListingsPage({ marketplace }: { marketplace: 
             <MDButton variant="text" color="info" size="small" disabled={!!busy} onClick={() => setEditing(row.original)} aria-label={`Edit ${row.original.sellerSku}`}>
               Edit
             </MDButton>
+            {canSendAgain(row.original) && (
+              <MDButton variant="outlined" color="info" size="small" disabled={!!busy} onClick={() => sendAgain(row.original)} aria-label={`Send ${row.original.sellerSku} again`}>
+                Send again
+              </MDButton>
+            )}
             {row.original.desiredState === 1 ? (
               <MDButton variant="outlined" color="secondary" size="small" disabled={!!busy} onClick={() => deactivate(row.original)}>
                 Take off sale
@@ -151,7 +164,7 @@ export default function MarketplaceListingsPage({ marketplace }: { marketplace: 
       },
     ];
     return { columns, rows: listings };
-    // publish/deactivate only close over state setters and `busy`.
+    // publish/sendAgain/deactivate only close over state setters and `busy`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listings, busy]);
 

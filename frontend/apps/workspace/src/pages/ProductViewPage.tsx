@@ -20,6 +20,7 @@ import {
   type ChannelAccount,
   type ChannelListing,
   type Marketplace,
+  canSendAgain,
 } from "../api/channels";
 import ListingEditDialog from "./marketplace/ListingEditDialog";
 
@@ -94,6 +95,12 @@ export default function ProductViewPage() {
       }
     }, "Could not publish.");
 
+  const sendAgain = (listing: ChannelListing, marketplace: Marketplace) =>
+    run(listing.id, async () => {
+      const queued = await ChannelListingsApi.retry(listing.id);
+      notify(queued.liveWrites ? `Queued for ${marketplace.name} again.` : `Queued as a dry run: live writes to ${marketplace.name} are off.`, "success");
+    }, "Could not send it again.");
+
   const deactivate = (listing: ChannelListing) =>
     run(listing.id, async () => {
       await ChannelListingsApi.deactivate(listing.id);
@@ -162,6 +169,11 @@ export default function ProductViewPage() {
                     <MDButton variant="text" color="info" size="small" disabled={!!busy} onClick={() => setEditing({ listing, marketplace })} aria-label={`Edit on ${name}`}>
                       Edit
                     </MDButton>
+                    {canSendAgain(listing) && (
+                      <MDButton variant="outlined" color="info" size="small" disabled={!!busy} onClick={() => sendAgain(listing, marketplace)} aria-label={`Send to ${name} again`}>
+                        Send again
+                      </MDButton>
+                    )}
                     {listing.desiredState === 1 ? (
                       <MDButton variant="outlined" color="secondary" size="small" disabled={!!busy} onClick={() => deactivate(listing)} aria-label={`Take off sale on ${name}`}>
                         Take off sale

@@ -400,3 +400,32 @@ test("Magento has its own menu, led by the connection page, where the store's ad
     "POST /api/magento/import/listings",
   ]);
 });
+
+test("a listing that was published but never reached the marketplace can be sent again from the product's page", async ({ page }) => {
+  const detail = {
+    id: "p1", sku: "MUG-BLUE", name: "Blue mug", brand: "Mugco", description: "A blue mug.", category: "Mugs",
+    variants: [{ id: "v1", sku: "MUG-BLUE", name: null, price: 12.5, isDefault: true, isArchived: false, onHand: 9, reserved: 1, safetyStock: 2, availableToSell: 6 }],
+    identifiers: [], media: [],
+  };
+  // Published while live writes were off: wanted on sale, and the marketplace has never been told.
+  const unsent = {
+    ...listing, productId: "p1", desiredState: 1, observedStatus: 0, externalCategoryId: null, contentOverrides: {}, priceOverride: null, fulfillmentMode: 0, quantityCap: null,
+    references: {}, hasPriceConflict: false, observedPrice: null, observedAtUtc: null, issues: null,
+    availableImages: [], imageIds: null, effectiveImageUrls: [],
+    imageRules: { minImages: 0, maxImages: 9, mainImage: "", formats: "", size: "", source: "" },
+  };
+  await mockApi(
+    page,
+    { "/api/catalog/products/p1": detail, "/api/channel-listings": [unsent], "/api/channels": [account({ liveWritesEnabled: true, effectiveLiveWrites: true })] },
+    { "/api/channel-listings/l1/retry": { listingId: "l1", desiredState: 1, liveWrites: true } }
+  );
+  await page.goto("/products/p1");
+
+  await expect(page.getByText("Not sent")).toBeVisible();
+  // There is nothing to publish again, so without this the page offered no way to send it.
+  await expect(page.getByRole("button", { name: "Publish on Amazon" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Take off sale on Amazon" })).toBeVisible();
+  await page.getByRole("button", { name: "Send to Amazon again" }).click();
+  await expect(page.getByText("Queued for Amazon again.")).toBeVisible();
+  expect(writes).toEqual(["POST /api/channel-listings/l1/retry"]);
+});

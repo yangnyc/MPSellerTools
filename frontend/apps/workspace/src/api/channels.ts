@@ -206,6 +206,10 @@ export type ChannelListing = {
   issues: ListingIssue[] | null;
 };
 
+// Wanted on sale, but the marketplace has not got it: never sent (a dry run, say), not there, or turned down.
+// Such a listing can be sent again; one that is live or still being processed cannot usefully be.
+export const canSendAgain = (listing: ChannelListing) => listing.desiredState === 1 && [0, 1, 5].includes(listing.observedStatus);
+
 export type ListingImage = { id: string; url: string };
 
 // What the marketplace asks of a listing's pictures. Only the counts are checked by the server:
