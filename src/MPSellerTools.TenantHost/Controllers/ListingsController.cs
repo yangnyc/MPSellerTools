@@ -96,7 +96,7 @@ public class ListingsController(TenantDbContext db) : ControllerBase
     }
 
     /// <summary>The posting's page on the site's United States storefront; null for a site whose address is not known here.</summary>
-    private static string? PublicUrl(SalesChannel channel, string marketplace, string id) => (channel, marketplace) switch
+    internal static string? PublicUrl(SalesChannel channel, string marketplace, string id) => (channel, marketplace) switch
     {
         (SalesChannel.Ebay, "EBAY_US") => $"https://www.ebay.com/itm/{Uri.EscapeDataString(id)}",
         (SalesChannel.Amazon, "ATVPDKIKX0DER") => $"https://www.amazon.com/dp/{Uri.EscapeDataString(id)}",

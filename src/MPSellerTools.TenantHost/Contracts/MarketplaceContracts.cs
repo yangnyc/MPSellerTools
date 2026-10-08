@@ -190,7 +190,10 @@ public record ChannelListingResponse(
     IReadOnlyList<Guid>? ImageIds,
     IReadOnlyList<string> EffectiveImageUrls,
     ImageRules ImageRules,
-    Guid ProductId);
+    Guid ProductId,
+    // The listing's own page on the marketplace or store, once it has a number there; null before that,
+    // in a sandbox, and on a site whose address is not known here.
+    string? StoreUrl = null);
 
 public record ListingValidationResponse(bool Valid, IReadOnlyList<ValidationIssue> Issues, string? RequirementsSource, string? RequirementsVersion);
 

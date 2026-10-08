@@ -490,7 +490,36 @@ public class ChannelListingsController(
             new ListingVersions(l.InventoryVersion, l.ConfirmedInventoryVersion),
             issues, bundle.Work.References,
             bundle.AvailableImages, bundle.ImageSelection, s.ImageUrls, ChannelImageRules.For(bundle.Context.Account.Channel),
-            bundle.ProductId);
+            bundle.ProductId, StoreUrl(bundle));
+    }
+
+    /// <summary>Where buyers see the listing, built from the number the marketplace or store gave it.</summary>
+    private static string? StoreUrl(ListingBundle bundle)
+    {
+        var (account, references) = (bundle.Context.Account, bundle.Work.References);
+        if (account.Channel == SalesChannel.Magento)
+        {
+            // The company's own store, at the address saved on the account; every Magento storefront answers this path.
+            try
+            {
+                return references.TryGetValue(ExternalResourceType.CatalogItem, out var productNumber)
+                    ? $"{MagentoApi.Root(bundle.Context.Setting("baseUrl"))}/catalog/product/view/id/{Uri.EscapeDataString(productNumber)}"
+                    : null;
+            }
+            catch (ChannelException)
+            {
+                return null;
+            }
+        }
+
+        // A sandbox number leads nowhere on the public site.
+        if (account.Environment != ChannelEnvironment.Production)
+        {
+            return null;
+        }
+        // The public listing's number where there is one (eBay), otherwise the catalog item's (an ASIN, a Walmart item id).
+        var number = references.GetValueOrDefault(ExternalResourceType.Listing) ?? references.GetValueOrDefault(ExternalResourceType.CatalogItem);
+        return number is null ? null : ListingsController.PublicUrl(account.Channel, bundle.Context.Market.MarketplaceCode, number);
     }
 }
 

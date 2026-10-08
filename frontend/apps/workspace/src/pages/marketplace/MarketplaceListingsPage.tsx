@@ -142,6 +142,11 @@ export default function MarketplaceListingsPage({ marketplace }: { marketplace: 
         align: "right" as const,
         Cell: ({ row }: CellProps) => (
           <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
+            {row.original.storeUrl && (
+              <MDButton component="a" href={row.original.storeUrl} target="_blank" rel="noreferrer" variant="text" color="info" size="small" endIcon={<Icon>open_in_new</Icon>} aria-label={`View ${row.original.sellerSku} on ${name}`}>
+                View
+              </MDButton>
+            )}
             <MDButton variant="text" color="info" size="small" disabled={!!busy} onClick={() => setEditing(row.original)} aria-label={`Edit ${row.original.sellerSku}`}>
               Edit
             </MDButton>

@@ -153,6 +153,11 @@ public class MagentoIntegrationTests(MarketplaceFixture fixture) : IClassFixture
         Assert.Equal("77", await fixture.WithDbAsync(db => db.ExternalReferences
             .Where(r => r.OwnerId == listingId && r.ResourceType == ExternalResourceType.CatalogItem).Select(r => r.Value).SingleAsync()));
 
+        // Its page in the store, for the link shown beside the listing.
+        var shown = await admin.GetFromJsonAsync<JsonElement>($"/api/channel-listings/{listingId}");
+        Assert.True(shown.TryGetProperty("storeUrl", out var storeUrl), shown.GetRawText());
+        Assert.Equal($"{Store}/catalog/product/view/id/77", storeUrl.GetString());
+
         // Off sale: the product stays in the store, disabled.
         fixture.Magento.On("PUT", "/rest/all/V1/products/MAG-MUG", """{"id":77,"sku":"MAG-MUG","status":2}""");
         await MarketplaceFixture.JsonAsync(await PostAsync(admin, $"/api/channel-listings/{listingId}/deactivate"));

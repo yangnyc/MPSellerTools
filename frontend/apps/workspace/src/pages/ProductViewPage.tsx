@@ -166,6 +166,11 @@ export default function ProductViewPage() {
                 </Box>
                 {isTenantAdmin && (
                   <Box sx={{ display: "flex", gap: 1 }}>
+                    {listing.storeUrl && (
+                      <MDButton component="a" href={listing.storeUrl} target="_blank" rel="noreferrer" variant="text" color="info" size="small" endIcon={<Icon>open_in_new</Icon>}>
+                        View on {name}
+                      </MDButton>
+                    )}
                     <MDButton variant="text" color="info" size="small" disabled={!!busy} onClick={() => setEditing({ listing, marketplace })} aria-label={`Edit on ${name}`}>
                       Edit
                     </MDButton>

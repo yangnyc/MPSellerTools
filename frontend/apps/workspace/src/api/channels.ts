@@ -188,6 +188,8 @@ export type ChannelListing = {
   quantityCap: number | null;
   // Ids the marketplace gave it, or the seller supplied: CatalogItem (an ASIN), Offer, Listing.
   references: Record<string, string>;
+  // Its own page on the marketplace or store, once it has a number there.
+  storeUrl?: string | null;
   hasPriceConflict: boolean;
   observedPrice: number | null;
   observedAtUtc: string | null;
