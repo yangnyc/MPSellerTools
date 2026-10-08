@@ -54,7 +54,7 @@ and stop the whole thing.
 - Sales channels: Amazon, eBay, Walmart, a Magento store and the company's own website, with
   per-channel content, price, quantity and pictures for each listing.
 - A sync queue that carries changes to the channels, inventory accounting and
-  low-stock monitoring. **Off by default** — see
+  low-stock monitoring. **Each account sends nothing until switched on** — see
   [Multichannel catalog](#multichannel-catalog-amazon-ebay-walmart-website).
 
 ## How it fits together
@@ -389,10 +389,14 @@ can be listed on Amazon, eBay, Walmart and the company's own website with
 channel-specific content, price, quantity and pictures. Changes reach the
 channels through an outbox and a background worker in each tenant's host.
 
-**It is off by default and has never been run against a real marketplace.**
-Out of the box every channel operation is a dry run and orders leave stock
-alone. The adapters are tested against in-process fakes only; no credentials
-were available to try a sandbox.
+**Nothing is sent until a company switches it on, and most of it has never
+been run against a real marketplace.** A new sales channel account starts
+with live writes off, so every operation on it is a dry run until a
+TenantAdmin turns them on for that account; the operator can turn them off
+for every account at once with `Marketplace:LiveWritesEnabled`. Orders
+leave stock alone until `Marketplace:InventoryAccountingEnabled` is set.
+The adapters are tested against in-process fakes; only the Magento
+connection has been tried against a real store.
 
 To see it with data, seed a company's workspace with demo products and draft
 listings (nothing is sent anywhere):

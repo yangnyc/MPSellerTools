@@ -179,8 +179,8 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
         <Box sx={{ display: "grid", gap: 3 }}>
           {account.liveWritesEnabled && !account.effectiveLiveWrites && (
             <InlineAlert tone="warning" title="Still a dry run">
-              Live writes are on for this account but off for the whole workspace (the host setting Marketplace:LiveWritesEnabled), so nothing
-              is sent to {name} yet.
+              Live writes are on for this account, but the server's operator has switched them off for every account (the host setting
+              Marketplace:LiveWritesEnabled), so nothing is sent to {name} until that is turned back on.
             </InlineAlert>
           )}
           {account.lastError && (

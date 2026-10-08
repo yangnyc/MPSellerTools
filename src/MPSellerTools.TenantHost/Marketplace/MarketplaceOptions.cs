@@ -10,10 +10,13 @@ public class MarketplaceOptions
     public const string SectionName = "Marketplace";
 
     /// <summary>
-    /// Master switch for changing anything on a marketplace. While false every
-    /// operation is a dry run, whatever an account's own setting says.
+    /// The operator's off switch for changing anything on a marketplace. It
+    /// is on unless turned off: whether an account writes is the company's
+    /// own decision, made with the account's switch, which starts off. While
+    /// this is false every operation on every account is a dry run, whatever
+    /// the account says.
     /// </summary>
-    public bool LiveWritesEnabled { get; set; }
+    public bool LiveWritesEnabled { get; set; } = true;
 
     /// <summary>
     /// Whether orders reserve and deduct stock. While false orders leave

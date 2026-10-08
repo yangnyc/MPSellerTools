@@ -265,9 +265,10 @@ endpoint.
    resolved. It publishes nothing and creates no external id. A product
    edited while it runs gets its variant from that save; the unique index
    makes whichever comes second a no-op.
-3. **Switch** — by configuration, per host: `InventoryAccountingEnabled`
-   (orders start holding and deducting stock) and `LiveWritesEnabled` plus
-   each account's own switch (operations stop being dry runs).
+3. **Switch** — `InventoryAccountingEnabled`, by configuration, per host
+   (orders start holding and deducting stock), and each account's own live
+   writes switch (its operations stop being dry runs). The host's
+   `LiveWritesEnabled` is on unless an operator turns it off for everyone.
 4. **Cleanup** — not done, on purpose. `Product.Price`, `Product.StockQuantity`,
    `Order.EbayOrderId` and the `Listings` table all stay.
 

@@ -28,7 +28,7 @@ there are no secrets in this section.
 ```json
 {
   "Marketplace": {
-    "LiveWritesEnabled": false,
+    "LiveWritesEnabled": true,
     "InventoryAccountingEnabled": false,
     "WorkerEnabled": true,
     "AutoBackfill": true,
@@ -46,7 +46,7 @@ there are no secrets in this section.
 
 | Setting | Effect |
 | --- | --- |
-| `LiveWritesEnabled` | Master switch. While `false`, every operation on every marketplace account is a dry run. A real call needs this **and** the account's `liveWritesEnabled` |
+| `LiveWritesEnabled` | The operator's off switch, on unless turned off. Whether an account writes is the company's decision, made with the account's own `liveWritesEnabled`, which starts `false`. While this is `false`, every operation on every marketplace account is a dry run whatever the account says |
 | `InventoryAccountingEnabled` | Orders reserve stock, ship it on completion and release it on cancellation. Required before stock is sent to any marketplace |
 | `WorkerEnabled` | Runs the sync worker inside the tenant host |
 | `AutoBackfill` | Runs the catalog backfill once at startup |
@@ -249,7 +249,7 @@ confirmed channel operation, price restore/import and order import.
 2. Create accounts with `liveWritesEnabled: false`. Add markets, mappings, listings. Use `validate` and `preview`.
 3. `publish` and confirm the jobs end `DryRunCompleted` with sensible requests in `preview`.
 4. Check everything marked unverified in [`marketplace-integrations.md`](marketplace-integrations.md) against the channel's current documentation, in its sandbox, with real credentials.
-5. Set `Marketplace:LiveWritesEnabled` to `true` and one account's `liveWritesEnabled`, sandbox environment. Publish one listing; watch it reach `Live`.
+5. Turn on one account's `liveWritesEnabled`, sandbox environment (and check `Marketplace:LiveWritesEnabled` has not been turned off). Publish one listing; watch it reach `Live`.
 6. Turn on `orderImportEnabled` for every marketplace account, then `Marketplace:InventoryAccountingEnabled`, then `inventorySyncEnabled`. The API refuses stock sync until orders are imported from every active channel.
 
 ## Rolling back
