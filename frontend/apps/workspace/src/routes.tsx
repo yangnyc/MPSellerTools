@@ -141,14 +141,6 @@ const routes: AppRoute[] = [
       },
     ],
   },
-  {
-    type: "collapse",
-    name: "Orders",
-    key: "orders",
-    icon: <Icon fontSize="small">receipt_long</Icon>,
-    route: "/orders",
-    component: <OrdersPage />,
-  },
   // eBay's keys and the seller's consent have a page of their own, where eBay sends the seller back to.
   marketplaceGroup(EBAY, [
     {
@@ -164,6 +156,15 @@ const routes: AppRoute[] = [
   marketplaceGroup(AMAZON),
   marketplaceGroup(WALMART),
   marketplaceGroup(MAGENTO),
+  // After the places the orders come from.
+  {
+    type: "collapse",
+    name: "Orders",
+    key: "orders",
+    icon: <Icon fontSize="small">receipt_long</Icon>,
+    route: "/orders",
+    component: <OrdersPage />,
+  },
   {
     type: "collapse",
     name: "Sync queue",
