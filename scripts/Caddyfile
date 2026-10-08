@@ -18,6 +18,15 @@
 	cert_issuer acme {
 		profile shortlived
 	}
+	# Plain HTTP sent to one of the HTTPS ports below (http://<address>:7100)
+	# is redirected to HTTPS on the same port instead of answered with 400.
+	# Port 80 is not listed here: Caddy redirects it to HTTPS by itself.
+	servers {
+		listener_wrappers {
+			http_redirect
+			tls
+		}
+	}
 }
 
 # The address without a port lands on the platform console.
