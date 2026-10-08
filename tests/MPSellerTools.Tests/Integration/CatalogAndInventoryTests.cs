@@ -189,6 +189,25 @@ public class CatalogAndInventoryTests(MarketplaceFixture fixture) : IClassFixtur
     }
 
     [Fact]
+    public async Task The_order_list_shows_every_order_of_a_company_with_several()
+    {
+        using var admin = await fixture.AdminAsync("inv-order-list@example.com");
+        var (productId, _) = await fixture.CreateProductAsync(admin, "ORDER-LIST", stock: 10);
+        for (var quantity = 1; quantity <= 3; quantity++)
+        {
+            await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PostJsonWithAntiforgeryAsync(
+                admin, "/api/orders", new { items = new[] { new { productId, quantity } } }));
+        }
+
+        var list = await MarketplaceFixture.JsonAsync(await admin.GetAsync("/api/orders"));
+
+        var mine = list.EnumerateArray()
+            .Where(order => order.GetProperty("items").EnumerateArray().Any(item => item.GetProperty("productSku").GetString() == "ORDER-LIST"))
+            .ToList();
+        Assert.Equal(3, mine.Count);
+    }
+
+    [Fact]
     public async Task A_marketplace_order_delivered_twice_is_one_order_holding_and_deducting_its_stock_once()
     {
         using var admin = await fixture.AdminAsync("inv-import@example.com");

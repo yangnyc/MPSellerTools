@@ -40,7 +40,13 @@ public class OrdersController(
         }
 
         var orders = await query.OrderByDescending(o => o.CreatedAtUtc).ToListAsync();
-        return Ok(await Task.WhenAll(orders.Select(ToResponseAsync)));
+        // One at a time: a DbContext cannot run two queries at once.
+        var responses = new List<OrderResponse>(orders.Count);
+        foreach (var order in orders)
+        {
+            responses.Add(await ToResponseAsync(order));
+        }
+        return Ok(responses);
     }
 
     [HttpGet("{id:guid}")]
