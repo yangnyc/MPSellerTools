@@ -73,15 +73,11 @@ if (Test-Path $vswhere) {
 }
 
 try {
-    $localDbInfo = & sqllocaldb info MSSQLLocalDB 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Note "Creating LocalDB instance MSSQLLocalDB..."
-        & sqllocaldb create MSSQLLocalDB | Out-Null
-    }
-    & sqllocaldb start MSSQLLocalDB | Out-Null
-    Write-Note "SQL Server LocalDB (MSSQLLocalDB) is running."
+    $sqlService = Get-Service MSSQLSERVER
+    if ($sqlService.Status -ne "Running") { Start-Service MSSQLSERVER }
+    Write-Note "SQL Server (default instance, service MSSQLSERVER) is running."
 } catch {
-    Write-Warn2 "Could not start SQL Server LocalDB: $_"
+    Write-Warn2 "Could not start SQL Server (service MSSQLSERVER): $_"
 }
 
 # ---------------------------------------------------------------------------

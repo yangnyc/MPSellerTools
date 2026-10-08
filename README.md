@@ -6,7 +6,7 @@ system: one platform console manages a registry of companies, and each company
 runs its own isolated ASP.NET Core process against its own SQL Server database.
 
 It is a Windows / Visual Studio solution: ASP.NET Core (.NET 10) hosts, React
-frontends, SQL Server LocalDB, and PowerShell scripts that set up, build, start
+frontends, SQL Server, and PowerShell scripts that set up, build, start
 and stop the whole thing.
 
 > **Status: local development setup, not production-hardened.** Read
@@ -94,14 +94,16 @@ Detected in the environment this project was built and verified in:
 | npm | 11.6.2 | |
 | .NET SDK | 10.0.401 | Primary target — pinned in `global.json`. 8.0.425 and 9.0.318 were also present but unused. |
 | Visual Studio | Community 2026, 18.10.12201.205 | Satisfies the VS 2026 18.x+ requirement for .NET 10; the ASP.NET/web workload must be installed. |
-| SQL Server LocalDB | `MSSQLLocalDB`, engine 17.0.4025.3 (SQL Server 2025) | |
+| SQL Server | 2025 Developer (17.0.1000.7), default instance `MSSQLSERVER` | The app's databases. |
+| SQL Server LocalDB | `MSSQLLocalDB` | Only the backend integration tests use it. |
 | PowerShell | 7.5.4 required (**not** the default `pwsh` on that machine — see below) | |
 
 Install/verify these yourself if starting from scratch:
 
 - **.NET 10 SDK**: https://dotnet.microsoft.com/download — `dotnet --list-sdks` should include a `10.x` entry.
 - **Visual Studio 2026** with the **ASP.NET and web development** workload (only needed for the F5 workflow; the scripts run without it).
-- **SQL Server Express LocalDB**: installed with Visual Studio's "SQL Server Data Tools" component, or standalone from Microsoft.
+- **SQL Server** (Developer edition is free) as the default instance, listening on TCP 51433 with SQL Server and Windows authentication (mixed mode) enabled. The app connects to it at the server's public address, as the SQL login `mpsellertools` — see [Database connection](#database-connection).
+- **SQL Server Express LocalDB**, for the backend tests only: installed with Visual Studio's "SQL Server Data Tools" component, or standalone from Microsoft.
 - **Node.js 20+** and npm.
 - **PowerShell 7+**: https://aka.ms/powershell — see the ARM64/PowerShell note below if `pwsh --version` reports 6.x.
 - **Caddy 2.11+** — only for [a trusted certificate on a public address](#with-a-trusted-certificate-caddy).
@@ -158,7 +160,7 @@ All in `scripts/`, all PowerShell 7+ unless noted.
 | Script | What it does |
 | --- | --- |
 | `Setup-Dev.ps1` | One-time, safe to re-run. Checks prerequisites, trusts the HTTPS development certificate, migrates the platform database, builds, creates the initial PlatformAdmin, and seeds demo Company A and Company B through the real provisioning pipeline. `-SkipBuild` reuses an existing build. |
-| `Start-Dev.ps1` | Checks port 7100 is free, starts LocalDB, then runs DevHost, which publishes and starts PlatformHost and the worker (and through it every Active company). `-PublicHost` and `-BehindProxy` open it to other machines — see [below](#reaching-it-from-another-machine). |
+| `Start-Dev.ps1` | Checks port 7100 is free and SQL Server is running, then runs DevHost, which publishes and starts PlatformHost and the worker (and through it every Active company). `-PublicHost` and `-BehindProxy` open it to other machines — see [below](#reaching-it-from-another-machine). |
 | `Stop-Dev.ps1` | Stops only this project's processes (verified by PID and start time, never a blanket `dotnet` kill), then asks the worker to stop every company instance. Safe to run when nothing is running. |
 | `Build.ps1` | Installs frontend dependencies if the manifests changed, builds both frontends into each host's `wwwroot`, builds the solution and publishes the three components to `.local/build/`. `-Configuration Debug`, `-ForceInstall`. |
 | `Verify.ps1` | Runs every automated check: restore/build, frontend lint/typecheck/build, backend tests, with a pass/fail summary. |
@@ -283,7 +285,7 @@ becomes `__`). The scripts set what is needed; these are the ones worth knowing.
 
 | Setting | Where | Meaning |
 | --- | --- | --- |
-| `ConnectionStrings:PlatformDatabase` | PlatformHost, worker | The registry database. Default: LocalDB, `MPSellerTools_Platform`. |
+| `ConnectionStrings:PlatformDatabase` | PlatformHost, worker | The registry database. `MPSellerTools_Platform` on this machine's SQL Server — see [Database connection](#database-connection). The worker creates each company's database on the same server with the same login. |
 | `ConnectionStrings:TenantDatabase` | TenantHost | That company's database; written into its instance config by the worker. |
 | `Hosting:LocalDataDirectory` | all | Where keys, logs, outbox and credentials go. Default: `.local/` at the solution root. |
 | `Hosting:DevSpaOrigins` | both hosts | Origins allowed to call the API cross-origin in Development (the Vite dev servers). |
@@ -417,16 +419,43 @@ Everything the running system writes outside the databases goes under
 | `.local/tenants/<slug>/demo-credentials.txt` | Demo companies only. |
 | `.local/devhost-state.json` | PIDs of the running processes, for `Stop-Dev.ps1`. |
 
-The databases are in LocalDB (`(localdb)\MSSQLLocalDB`): `MPSellerTools_Platform`
+The databases are in the default SQL Server instance: `MPSellerTools_Platform`
 and one `MPSellerTools_Tenant_<slug>` per company.
+
+### Database connection
+
+The app reaches SQL Server at the server's public address, not `localhost`,
+and signs in with the SQL login `mpsellertools`. The address and the password
+are not in the repository: each host reads them from an
+`appsettings.Local.json` next to its `appsettings.json`, which git ignores.
+The committed `appsettings.json` files hold only a placeholder without a
+password.
+
+On a new machine, create the three files (TenantHost's is only its `dotnet
+run` fallback; a provisioned company gets its connection string from the
+worker):
+
+```jsonc
+// src/MPSellerTools.PlatformHost/appsettings.Local.json
+// src/MPSellerTools.Provisioning.Worker/appsettings.Local.json
+{ "ConnectionStrings": { "PlatformDatabase": "Server=<address>,51433;Database=MPSellerTools_Platform;User Id=mpsellertools;Password=<password>;TrustServerCertificate=True" } }
+
+// src/MPSellerTools.TenantHost/appsettings.Local.json
+{ "ConnectionStrings": { "TenantDatabase": "Server=<address>,51433;Database=MPSellerTools_Tenant_dev;User Id=mpsellertools;Password=<password>;TrustServerCertificate=True" } }
+```
+
+The login is in the `dbcreator` server role and owns the app's databases; it
+is not a sysadmin. The Windows firewall rule `MPSellerTools SQL Server (TCP
+51433)` lets other machines connect with the same details (SSMS, `sqlcmd -S
+<address>,51433 -U mpsellertools`).
 
 ## Troubleshooting
 
 - **LocalDB errors mentioning `SqlUserInstance.dll` or `hostfxr.dll`**: see
   the ARM64 section above — you're running under the wrong SDK architecture.
-- **`sqllocaldb` says the instance isn't running**: `sqllocaldb start
-  MSSQLLocalDB` (both `Setup-Dev.ps1` and `Start-Dev.ps1` do this
-  automatically, but the instance can be stopped externally).
+- **The hosts cannot reach the database**: check the SQL Server service with
+  `Get-Service MSSQLSERVER` (both `Setup-Dev.ps1` and `Start-Dev.ps1` start
+  it when it is stopped).
 - **HTTPS certificate warning on `localhost`**: run `dotnet dev-certs https
   --trust` (also done by `Setup-Dev.ps1`), then restart your browser.
 - **HTTPS certificate warning on a public address**: expected with
@@ -462,12 +491,14 @@ and one `MPSellerTools_Tenant_<slug>` per company.
 
 This is a **local development** setup, explicitly not production-hardened:
 
-- All companies' databases live on the **same shared LocalDB engine
+- All companies' databases live on the **same shared SQL Server engine
   instance** on this machine — application and database separation is real
   (separate databases, separate connection strings, separate EF Core
-  contexts), but there is no OS-level privilege boundary between them: the
-  same Windows user account that runs one TenantHost could, in principle,
-  open any of the other tenant databases directly with SQL tooling. See
+  contexts), but there is no privilege boundary between them: every
+  TenantHost signs in with the same SQL login, which could, in principle,
+  open any of the other tenant databases directly with SQL tooling. The SQL
+  port is also open to other machines, so that login's password is all that
+  protects every database. See
   `docs/windows-deployment.md` for how production should separate this with
   distinct database users and OS identities.
 - **No real email is ever sent.** Every invitation, password reset, etc. is

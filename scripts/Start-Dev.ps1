@@ -65,10 +65,10 @@ if ($conflicts) {
 }
 
 try {
-    $localDbInfo = & sqllocaldb info MSSQLLocalDB 2>$null
-    & sqllocaldb start MSSQLLocalDB | Out-Null
+    $sqlService = Get-Service MSSQLSERVER
+    if ($sqlService.Status -ne "Running") { Start-Service MSSQLSERVER }
 } catch {
-    Write-Host "Could not start SQL Server LocalDB: $_" -ForegroundColor Yellow
+    Write-Host "Could not start SQL Server (service MSSQLSERVER): $_" -ForegroundColor Yellow
 }
 
 Write-Host "Starting DevHost (publishes PlatformHost/TenantHost/Worker, then launches them)..." -ForegroundColor Cyan

@@ -19,6 +19,9 @@ src/MPSellerTools.TenantHost/wwwroot/
 # dev outbox. Never committed (brief §11/§7).
 .local/
 
+# This machine's database address and password (see README.md, "Database connection").
+appsettings.Local.json
+
 # Visual Studio
 .vs/
 

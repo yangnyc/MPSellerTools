@@ -18,6 +18,10 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     ContentRootPath = AppContext.BaseDirectory,
 });
 
+// This machine's database address and password, kept out of source control
+// (see README.md, "Database connection").
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
+
 var localDataDirectory = LocalDataPaths.Resolve(
     builder.Configuration["Hosting:LocalDataDirectory"], builder.Environment.ContentRootPath);
 var keysDirectory = Path.Combine(localDataDirectory, "platform", "keys");

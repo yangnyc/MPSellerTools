@@ -26,6 +26,10 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     ContentRootPath = AppContext.BaseDirectory,
 });
 
+// This machine's database address and password, kept out of source control
+// (see README.md, "Database connection").
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
+
 // Each running instance of this compiled binary is bound to exactly one
 // tenant via a per-instance config file living outside source control and
 // outside wwwroot (brief §4/§10) — written by the provisioning worker for a
