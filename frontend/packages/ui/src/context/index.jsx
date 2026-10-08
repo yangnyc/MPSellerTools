@@ -23,7 +23,7 @@ import { createContext, useContext, useReducer, useMemo } from "react";
 // prop-types is a library for typechecking of props
 import PropTypes from "prop-types";
 
-import { defaultThemeName, themeOptions, resolveThemeName } from "context/themes";
+import { defaultThemeName, themeOptions, resolveThemeName, resolveSidenav } from "context/themes";
 
 // Material Dashboard 2 React main context
 // NOTE: authentication state is intentionally NOT part of this shared UI context.
@@ -75,14 +75,15 @@ function reducer(state, action) {
     }
     // Applies a saved per-user theme (see each app's ThemeSync) in one step.
     case "THEME_SETTINGS": {
-      const { themeName, darkMode, whiteSidenav, sidenavTint, sidenavColor, fixedNavbar } = action.value;
+      const { darkMode, whiteSidenav, fixedNavbar } = action.value;
+      const themeName = resolveThemeName(action.value.themeName);
       return {
         ...state,
-        themeName: resolveThemeName(themeName),
+        themeName,
         darkMode,
         whiteSidenav,
-        sidenavTint,
-        sidenavColor,
+        // Only the swatches this theme offers.
+        ...resolveSidenav(themeName, action.value),
         fixedNavbar,
       };
     }
@@ -100,7 +101,7 @@ const defaultThemeSettings = {
   darkMode: false,
   whiteSidenav: false,
   sidenavTint: null,
-  sidenavColor: "steel",
+  sidenavColor: "harbor",
   fixedNavbar: true,
 };
 
@@ -108,7 +109,7 @@ const defaultThemeSettings = {
 function MaterialUIControllerProvider({ children }) {
   const initialState = {
     // sidenavTint is non-null when the sidenav background itself is tinted
-    // with one of the sidenavColors accent colors (see Configurator's
+    // with one of the theme's sidenav swatches (see Configurator's
     // "Sidenav Style" row), mutually exclusive with whiteSidenav.
     ...defaultThemeSettings,
     miniSidenav: false,

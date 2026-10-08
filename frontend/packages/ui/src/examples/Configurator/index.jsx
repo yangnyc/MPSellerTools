@@ -55,14 +55,6 @@ function Configurator() {
   } = controller;
   const [disabled, setDisabled] = useState(false);
   const configuratorRef = useRef(null);
-  // "slate" and "sage" are no longer offered; their gradients stay in
-  // colors.js so a profile that saved one still renders.
-  const sidenavColors = ["steel", "teal", "amber", "mauve", "gold", "mint"];
-  // A curated subset of sidenavColors that reads well as a full sidenav
-  // background rather than a small accent chip, so the "Sidenav Style" row
-  // shows the same number of swatches (6: Dark, White + 4 tints) as the
-  // "Sidenav Colors" row above it.
-  const sidenavTypeTints = ["steel", "teal", "amber", "mauve"];
 
   // Use the useEffect hook to change the button state for the sidenav type based on window size.
   useEffect(() => {
@@ -118,8 +110,8 @@ function Configurator() {
   const handleFixedNavbar = () => setFixedNavbar(dispatch, !fixedNavbar);
   const handleDarkMode = () => setDarkMode(dispatch, !darkMode);
 
-  // Background fill for a swatch button. Accent colors (steel, slate, ...)
-  // and "dark" use the theme's gradient pairs; "white" is a flat fill.
+  // Background fill for a swatch button. The theme's sidenav swatches and
+  // "dark" use the theme's gradient pairs; "white" is a flat fill.
   const getSwatchBackground = (variant, { functions: { linearGradient }, palette: { gradients, white } }) => {
     if (variant === "white") {
       return { backgroundImage: "none", background: white.main };
@@ -160,6 +152,10 @@ function Configurator() {
   };
 
   const activeTheme = themeOptions.find((option) => option.id === themeName) ?? themeOptions[0];
+  // Each theme offers its own sidenav swatches (see context/themes.js). With
+  // Dark and White, the tints make the "Sidenav Style" row as long as the
+  // "Sidenav Colors" row above it.
+  const { colors: sidenavColors, tints: sidenavTypeTints } = activeTheme.sidenav;
 
   return (
     <ConfiguratorRoot ref={configuratorRef} variant="permanent" ownerState={{ openConfigurator }}>

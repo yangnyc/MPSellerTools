@@ -11,7 +11,7 @@ import { createTheme } from "@mui/material/styles";
 import theme from "assets/theme";
 import { nativeOptionSelector } from "assets/theme/base/globals";
 import themeDark from "assets/theme-dark";
-import { defaultThemeName } from "context/themes";
+import { defaultThemeName, sidenavGradients } from "context/themes";
 
 // Minimalist: buttons are flat, with no coloured glow under them.
 const noColoredShadows = {
@@ -30,8 +30,7 @@ const flat = (color) => ({ main: color, state: color });
 // `accent` is the colour of focus rings and switches; `button` / `onButton`
 // are the main action button's fill and its text.
 // `sidenav` is the fill of the sidenav in its "Dark" style.
-// `gradients` adds to or replaces the palette's gradient pairs.
-function flatTheme(base, { background, text, dark, accent, button, onButton, line, sidenav, gradients, ...rest }) {
+function flatTheme(themeName, base, { background, text, dark, accent, button, onButton, line, sidenav, ...rest }) {
   // The text of an open dropdown's list.
   const onDark = base === themeDark;
   const optionText = rest.optionText ?? (onDark ? "#FFFFFF" : dark.main);
@@ -53,7 +52,7 @@ function flatTheme(base, { background, text, dark, accent, button, onButton, lin
         warning: flat("#B7791F"),
         error: flat("#C2413A"),
         dark: flat(sidenav),
-        ...gradients,
+        ...sidenavGradients(themeName),
       },
     },
     boxShadows: { colored: noColoredShadows },
@@ -112,63 +111,59 @@ function flatTheme(base, { background, text, dark, accent, button, onButton, lin
   });
 }
 
+// The base pair with the default theme's sidenav swatches added.
+const withSidenav = (base) => createTheme(base, { palette: { gradients: sidenavGradients(defaultThemeName) } });
+
 const muiThemes = {
-  ocean: { light: theme, dark: themeDark },
-  // Navy Amber: Superdesign's "Stepwise" wizard design. In it the "gold"
-  // sidenav colour is the design's amber.
-  stepwise: {
-    // Light: cream page, navy buttons with amber text.
-    light: flatTheme(theme, {
-      background: { default: "#FAF7F0", sidenav: "#FFFFFF", card: "#FFFFFF" },
-      text: "#3D4F6B",
-      dark: { main: "#0B1F3A", focus: "#081729" },
-      accent: "#B07D0B",
-      button: "#0B1F3A",
-      onButton: "#F7C948",
-      line: "#E8E2D3",
-      sidenav: "#0B1F3A",
-      gradients: { gold: { main: "#F7C948", state: "#F0B429" } },
+  ocean: { light: withSidenav(theme), dark: withSidenav(themeDark) },
+  // Sapphire Ash: Figma's "Sapphire ash morning" palette.
+  sapphire: {
+    // Light: ash-white page, sapphire sidenav and buttons with white text.
+    light: flatTheme("sapphire", theme, {
+      background: { default: "#F5F5F5", sidenav: "#FFFFFF", card: "#FFFFFF" },
+      text: "#4A5B63",
+      dark: { main: "#1F3B4A", focus: "#162C38" },
+      accent: "#35627A",
+      button: "#35627A",
+      onButton: "#FFFFFF",
+      line: "#DDE2E1",
+      sidenav: "#35627A",
     }),
-    // Dark: navy page and cards, amber buttons with navy text.
-    dark: flatTheme(themeDark, {
-      background: { default: "#081729", sidenav: "#0B1F3A", card: "#102A4D" },
-      text: "#CDD6E3",
-      dark: { main: "#163661", focus: "#102A4D" },
-      accent: "#F0B429",
-      button: "#F0B429",
-      onButton: "#081729",
-      line: "rgba(244, 239, 227, 0.1)",
-      sidenav: "#0B1F3A",
-      gradients: { gold: { main: "#F7C948", state: "#F0B429" } },
+    // Dark: deep sapphire page and cards, rose buttons with dark text.
+    dark: flatTheme("sapphire", themeDark, {
+      background: { default: "#14242D", sidenav: "#1B3441", card: "#1F3B4A" },
+      text: "#CBD5D8",
+      dark: { main: "#2A4E61", focus: "#1F3B4A" },
+      accent: "#E5AEA9",
+      button: "#E5AEA9",
+      onButton: "#14242D",
+      line: "rgba(245, 245, 245, 0.1)",
+      sidenav: "#1B3441",
     }),
   },
-  // Matrix: a Unix terminal's phosphor green on black. In it the "mint"
-  // sidenav colour is that green.
-  matrix: {
-    // Light: pale green page, black buttons with green text.
-    light: flatTheme(theme, {
-      background: { default: "#F2FFF4", sidenav: "#FFFFFF", card: "#FFFFFF" },
-      text: "#0B4F1A",
-      dark: { main: "#003B00", focus: "#001F00" },
-      accent: "#008F11",
-      button: "#0D0208",
-      onButton: "#00FF41",
-      line: "#C9EBCF",
-      sidenav: "#0D0208",
-      gradients: { mint: { main: "#00FF41", state: "#00C832" } },
+  // Astro Novalite: ColorMagic's palette of that name.
+  astro: {
+    // Light: cream-white page, night-grey sidenav and buttons with cream text.
+    light: flatTheme("astro", theme, {
+      background: { default: "#FAF6EA", sidenav: "#FFFFFF", card: "#FFFFFF" },
+      text: "#5C6575",
+      dark: { main: "#1E1F2A", focus: "#14151D" },
+      accent: "#4E6580",
+      button: "#3A3F4B",
+      onButton: "#F5E8C7",
+      line: "#E6E0D0",
+      sidenav: "#1E1F2A",
     }),
-    // Dark: black page and cards, green buttons with black text.
-    dark: flatTheme(themeDark, {
-      background: { default: "#000000", sidenav: "#000000", card: "#0A0F0A" },
-      text: "#00D936",
-      dark: { main: "#003B00", focus: "#001F00" },
-      accent: "#00FF41",
-      button: "#00FF41",
-      onButton: "#000000",
-      line: "rgba(0, 255, 65, 0.22)",
-      sidenav: "#000000",
-      optionText: "#00FF41",
-      gradients: { mint: { main: "#00FF41", state: "#00C832" } },
+    // Dark: night-grey page and cards, cream buttons with dark text.
+    dark: flatTheme("astro", themeDark, {
+      background: { default: "#1E1F2A", sidenav: "#252733", card: "#2C303B" },
+      text: "#C9D2DD",
+      dark: { main: "#3A3F4B", focus: "#2C303B" },
+      accent: "#F5E8C7",
+      button: "#F5E8C7",
+      onButton: "#1E1F2A",
+      line: "rgba(245, 232, 199, 0.1)",
+      sidenav: "#252733",
     }),
   },
 };

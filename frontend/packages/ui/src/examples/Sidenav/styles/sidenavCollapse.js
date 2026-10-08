@@ -51,7 +51,7 @@ function collapseItem(theme, ownerState) {
     // background when "Sidenav Colors" and "Sidenav Style" land on the same
     // tint (see accentMatchesTint in SidenavCollapse.jsx) — without this the
     // active item would carry no visible boundary at all.
-    border: active && accentMatchesTint ? `${borderWidth[1]} solid ${white.main}` : "none",
+    border: active && accentMatchesTint ? `${borderWidth[1]} solid ${activeColor}` : "none",
     [breakpoints.up("xl")]: {
       transition: transitions.create(["box-shadow", "background-color"], {
         easing: transitions.easing.easeInOut,

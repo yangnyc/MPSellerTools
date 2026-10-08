@@ -1,13 +1,11 @@
-// Which sidenavColors accent, when used as the *whole* sidenav's background
+// Which sidenav swatches, when used as the *whole* sidenav's background
 // (Configurator's "Sidenav Style" row) or as the active nav item's pill
-// (Configurator's "Sidenav Colors" row), is light enough to need dark text/
+// (Configurator's "Sidenav Colors" row), are light enough to need dark text/
 // icons/divider instead of the white ones every other sidenav background
 // (dark, or the other tints) uses.
 //
-// Derived from WCAG relative luminance of each gradient's "main" stop vs.
-// the theme's white/dark.main text colors. The original six accents (steel,
-// slate, teal, sage, amber, mauve; see colors.js) are dark enough to clear
-// 4.5:1 against white text on their own; "gold" and "mint" are not.
-const sidenavTintsNeedingDarkText = ["gold", "mint"];
+// Each theme marks its own in context/themes.js, from the WCAG contrast of
+// the swatch's "main" stop against white text.
+import { sidenavSwatchesNeedingDarkText } from "context/themes";
 
-export default sidenavTintsNeedingDarkText;
+export default sidenavSwatchesNeedingDarkText;

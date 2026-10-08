@@ -53,41 +53,45 @@ test("picking a theme in display settings restyles the app and saves its name to
 
   await page.getByLabel("Display settings").click();
   await expect(themePicker(page)).toHaveValue("ocean");
-  await themePicker(page).selectOption({ label: "Navy Amber" });
+  await expect(themePicker(page).locator("option")).toHaveText(["Default", "Sapphire Ash", "Astro Novalite"]);
+  await themePicker(page).selectOption({ label: "Sapphire Ash" });
 
-  await expect(themePicker(page)).toHaveValue("stepwise");
-  await expect(body).toHaveCSS("background-color", "rgb(8, 23, 41)");
-  // The active nav item is amber with dark text on it.
+  await expect(themePicker(page)).toHaveValue("sapphire");
+  await expect(body).toHaveCSS("background-color", "rgb(245, 245, 245)");
+  // The sidenav is sapphire; its active item is rose with dark text on it.
+  await expect(page.locator(".MuiDrawer-paper").first()).toHaveCSS("background-image", /rgb\(53, 98, 122\)/);
   const activeIcon = page.locator('.MuiDrawer-paper a[href="/tenants"] .MuiIcon-root');
   await expect(activeIcon).toHaveCSS("color", "rgb(0, 0, 0)");
 
-  await expect.poll(() => saves.at(-1)?.themeName).toBe("stepwise");
-  expect(saves.at(-1)).toMatchObject({ themeName: "stepwise", darkMode: true, sidenavColor: "gold" });
+  await expect.poll(() => saves.at(-1)?.themeName).toBe("sapphire");
+  expect(saves.at(-1)).toMatchObject({ themeName: "sapphire", darkMode: false, sidenavColor: "rose" });
 });
 
-test("the Matrix theme is offered and restyles the app in green on black", async ({ page }) => {
+test("a theme whose preset is dark switches the app to dark mode when picked", async ({ page }) => {
   const saves = await mockApi(page, null);
   await page.getByLabel("Display settings").click();
-  await expect(themePicker(page).locator("option")).toHaveText(["Default", "Navy Amber", "Matrix"]);
-  await themePicker(page).selectOption({ label: "Matrix" });
+  await themePicker(page).selectOption({ label: "Astro Novalite" });
 
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(0, 0, 0)");
-  // The open dropdown list is drawn in the theme's colours, not the browser's white.
-  const option = themePicker(page).locator("option").first();
-  await expect(option).toHaveCSS("background-color", "rgb(10, 15, 10)");
-  await expect(option).toHaveCSS("color", "rgb(0, 255, 65)");
-  await expect.poll(() => saves.at(-1)).toMatchObject({ themeName: "matrix", darkMode: true, sidenavColor: "mint" });
+  await expect(themePicker(page)).toHaveValue("astro");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(30, 31, 42)");
+  // The active sidenav item is cream with dark text on it.
+  const activeIcon = page.locator('.MuiDrawer-paper a[href="/tenants"] .MuiIcon-root');
+  await expect(activeIcon).toHaveCSS("color", "rgb(0, 0, 0)");
+
+  await expect.poll(() => saves.at(-1)?.themeName).toBe("astro");
+  expect(saves.at(-1)).toMatchObject({ themeName: "astro", darkMode: true, sidenavColor: "cream" });
 });
+
 test("a theme name saved on the profile is applied on load, and one saved without a name is the default", async ({ page }) => {
   await mockApi(page, {
-    themeName: "stepwise", darkMode: true, whiteSidenav: false, sidenavTint: null, sidenavColor: "gold", fixedNavbar: true,
+    themeName: "sapphire", darkMode: false, whiteSidenav: false, sidenavTint: null, sidenavColor: "rose", fixedNavbar: true,
   });
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(8, 23, 41)");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(245, 245, 245)");
   await page.getByLabel("Display settings").click();
-  await expect(themePicker(page)).toHaveValue("stepwise");
+  await expect(themePicker(page)).toHaveValue("sapphire");
 
   const saves = await mockApi(page, {
-    darkMode: false, whiteSidenav: false, sidenavTint: null, sidenavColor: "steel", fixedNavbar: true,
+    darkMode: false, whiteSidenav: false, sidenavTint: null, sidenavColor: "harbor", fixedNavbar: true,
   });
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(246, 249, 251)");
   await page.getByLabel("Display settings").click();
@@ -102,21 +106,21 @@ test("switching themes writes the old theme's settings and reads the new theme's
   await page.getByLabel("Display settings").click();
 
   // Customise Default, then leave it before the debounced save has gone out.
-  await page.getByTitle("teal").first().click();
-  await themePicker(page).selectOption({ label: "Navy Amber" });
-  await expect.poll(() => saves.at(-1)?.themeName).toBe("stepwise");
-  expect(saves.find((save) => save.themeName === "ocean")).toMatchObject({ sidenavColor: "teal" });
-  // Navy Amber was never used, so it starts from its preset.
-  expect(saves.at(-1)).toMatchObject({ darkMode: true, sidenavColor: "gold" });
+  await page.getByTitle("coral").first().click();
+  await themePicker(page).selectOption({ label: "Sapphire Ash" });
+  await expect.poll(() => saves.at(-1)?.themeName).toBe("sapphire");
+  expect(saves.find((save) => save.themeName === "ocean")).toMatchObject({ sidenavColor: "coral" });
+  // Sapphire Ash was never used, so it starts from its preset.
+  expect(saves.at(-1)).toMatchObject({ darkMode: false, sidenavColor: "rose" });
 
-  // Customise Navy Amber, switch away and back: each theme returns as it was left.
-  await page.getByTitle("amber").first().click();
+  // Customise Sapphire Ash, switch away and back: each theme returns as it was left.
+  await page.getByTitle("iris").first().click();
   await themePicker(page).selectOption({ label: "Default" });
-  await expect.poll(() => saves.at(-1)).toMatchObject({ themeName: "ocean", darkMode: false, sidenavColor: "teal" });
-  expect(saves.findLast((save) => save.themeName === "stepwise")).toMatchObject({ sidenavColor: "amber" });
+  await expect.poll(() => saves.at(-1)).toMatchObject({ themeName: "ocean", darkMode: false, sidenavColor: "coral" });
+  expect(saves.findLast((save) => save.themeName === "sapphire")).toMatchObject({ sidenavColor: "iris" });
 
-  await themePicker(page).selectOption({ label: "Navy Amber" });
-  await expect.poll(() => saves.at(-1)).toMatchObject({ themeName: "stepwise", darkMode: true, sidenavColor: "amber" });
+  await themePicker(page).selectOption({ label: "Sapphire Ash" });
+  await expect.poll(() => saves.at(-1)).toMatchObject({ themeName: "sapphire", darkMode: false, sidenavColor: "iris" });
 });
 
 test("light and dark each keep their own colours within a theme", async ({ page }) => {
@@ -124,20 +128,48 @@ test("light and dark each keep their own colours within a theme", async ({ page 
   await page.getByLabel("Display settings").click();
   const modeSwitch = page.getByRole("switch").last();
 
-  // Pick teal in light mode, then go dark before the debounced save has gone out.
-  await page.getByTitle("teal").first().click();
+  // Pick coral in light mode, then go dark before the debounced save has gone out.
+  await page.getByTitle("coral").first().click();
   await modeSwitch.click();
   await expect.poll(() => saves.at(-1)).toMatchObject({ themeName: "ocean", darkMode: true });
-  expect(saves.find((save) => save.darkMode === false)).toMatchObject({ themeName: "ocean", sidenavColor: "teal" });
+  expect(saves.find((save) => save.darkMode === false)).toMatchObject({ themeName: "ocean", sidenavColor: "coral" });
   // Dark was never used, so it starts with the colours carried over from light.
-  expect(saves.at(-1)).toMatchObject({ sidenavColor: "teal" });
+  expect(saves.at(-1)).toMatchObject({ sidenavColor: "coral" });
 
-  // Pick amber in dark mode, then go back and forth: each mode returns as it was left.
-  await page.getByTitle("amber").first().click();
+  // Pick sunset in dark mode, then go back and forth: each mode returns as it was left.
+  await page.getByTitle("sunset").first().click();
   await modeSwitch.click();
-  await expect.poll(() => saves.at(-1)).toMatchObject({ darkMode: false, sidenavColor: "teal" });
-  expect(saves.findLast((save) => save.darkMode === true)).toMatchObject({ sidenavColor: "amber" });
+  await expect.poll(() => saves.at(-1)).toMatchObject({ darkMode: false, sidenavColor: "coral" });
+  expect(saves.findLast((save) => save.darkMode === true)).toMatchObject({ sidenavColor: "sunset" });
 
   await modeSwitch.click();
-  await expect.poll(() => saves.at(-1)).toMatchObject({ darkMode: true, sidenavColor: "amber" });
+  await expect.poll(() => saves.at(-1)).toMatchObject({ darkMode: true, sidenavColor: "sunset" });
+});
+
+test("each theme offers its own sidenav swatches, and a saved one it does not offer is replaced", async ({ page }) => {
+  // "steel" was offered before themes had their own swatches; "rose" is Sapphire Ash's.
+  const saves = await mockApi(page, {
+    themeName: "ocean", darkMode: false, whiteSidenav: false, sidenavTint: "rose", sidenavColor: "steel", fixedNavbar: true,
+  });
+  // The sidenav keeps its Dark style, and the active item is the theme's own steel blue.
+  const drawer = page.locator(".MuiDrawer-paper").first();
+  await expect(drawer).toHaveCSS("background-image", /rgb\(18, 31, 69\)/);
+  await expect(drawer.locator('a[href="/tenants"] > li > div')).toHaveCSS("background-image", /rgb\(59, 102, 149\)/);
+
+  await page.getByLabel("Display settings").click();
+  const swatches = () => page.locator("button[title]").evaluateAll((buttons) => buttons.map((button) => button.title));
+  expect(await swatches()).toEqual([
+    "harbor", "tide", "mist", "coral", "crimson", "sunset", "Dark", "White", "indigo", "harbor", "crimson", "mist",
+  ]);
+
+  await themePicker(page).selectOption({ label: "Astro Novalite" });
+  await expect(themePicker(page)).toHaveValue("astro");
+  expect(await swatches()).toEqual([
+    "cream", "sand", "frost", "balihai", "tempest", "shuttle", "Dark", "White", "graphite", "shuttle", "balihai", "cream",
+  ]);
+
+  // A tint fills the whole sidenav with this theme's colour.
+  await page.getByTitle("balihai").last().click();
+  await expect(page.locator(".MuiDrawer-paper").first()).toHaveCSS("background-image", /rgb\(138, 157, 178\)/);
+  await expect.poll(() => saves.at(-1)).toMatchObject({ themeName: "astro", sidenavTint: "balihai", sidenavColor: "cream" });
 });

@@ -47,13 +47,15 @@ const switchButton = {
           backgroundColor: transparent.main,
         },
 
+        // The action colour, not the dark gradient: that one is the colour
+        // of the panels a switch sits on, so an "on" track would vanish.
         "& .MuiSwitch-thumb": {
-          borderColor: `${gradients.dark.main} !important`,
+          borderColor: `${gradients.info.main} !important`,
         },
 
         "& + .MuiSwitch-track": {
-          backgroundColor: `${gradients.dark.main} !important`,
-          borderColor: `${gradients.dark.main} !important`,
+          backgroundColor: `${gradients.info.main} !important`,
+          borderColor: `${gradients.info.main} !important`,
           opacity: 1,
         },
       },

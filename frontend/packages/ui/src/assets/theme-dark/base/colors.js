@@ -21,18 +21,18 @@ Coded by www.creative-tim.com
 
 const colors = {
   background: {
-    default: "#0B1733",
-    sidenav: "#111D40",
-    card: "#192755",
+    default: "#15202B",
+    sidenav: "#192734",
+    card: "#192734",
   },
 
   // `secondary` and `disabled`, and `action` below, are what MUI itself uses
   // for helper text and disabled controls; its defaults are black, for a
   // light page.
   text: {
-    main: "#DCE6EEcc",
-    focus: "#DCE6EEcc",
-    secondary: "rgba(255, 255, 255, 0.7)",
+    main: "#FFFFFF",
+    focus: "#FFFFFF",
+    secondary: "#8899A6",
     disabled: "rgba(255, 255, 255, 0.45)",
   },
 
@@ -57,10 +57,10 @@ const colors = {
     focus: "#000000",
   },
 
-  // Lighter than the light theme's, so it shows against the #192755 cards.
+  // Lighter than the cards (#192734), so it shows against them.
   primary: {
-    main: "#33426F",
-    focus: "#26366A",
+    main: "#2F3F4D",
+    focus: "#22303C",
   },
 
   secondary: {
@@ -68,7 +68,7 @@ const colors = {
     focus: "#C3D3DF",
   },
 
-  // #3B6695 and #B71443 lightened, so outlined buttons read on the #192755 cards.
+  // #3B6695 and #B71443 lightened, so outlined buttons read on the #192734 cards.
   info: {
     main: "#8FB2D9",
     focus: "#3B6695",
@@ -95,8 +95,8 @@ const colors = {
   },
 
   dark: {
-    main: "#26366A",
-    focus: "#192755",
+    main: "#22303C",
+    focus: "#192734",
   },
 
   grey: {
@@ -106,15 +106,15 @@ const colors = {
     400: "#C3D3DF",
     500: "#ABC6D3",
     600: "#546B88",
-    700: "#192755",
-    800: "#121F45",
-    900: "#0B1733",
+    700: "#22303C",
+    800: "#192734",
+    900: "#15202B",
   },
 
   gradients: {
     primary: {
-      main: "#33426F",
-      state: "#121F45",
+      main: "#2F3F4D",
+      state: "#192734",
     },
 
     secondary: {
@@ -150,13 +150,13 @@ const colors = {
     },
 
     dark: {
-      main: "#121F45",
-      state: "#0B1733",
+      main: "#192734",
+      state: "#15202B",
     },
 
     // Sidenav accent swatches — see the matching comment in the light theme's
     // colors.js. Kept identical here since the dark-mode sidenav background
-    // ("#111D40") sits in the same tonal range as the light theme's dark
+    // ("#192734") sits in the same tonal range as the light theme's dark
     // gradient, so the same muted set still reads cleanly against it.
     steel: {
       main: "#4C6E94",
@@ -307,14 +307,14 @@ const colors = {
   },
 
   coloredShadows: {
-    primary: "#192755",
+    primary: "#192734",
     secondary: "#546B88",
     info: "#3B6695",
     success: "#059669",
     warning: "#F36152",
     error: "#B71443",
     light: "#C3D3DF",
-    dark: "#0B1733",
+    dark: "#15202B",
   },
 
   inputBorderColor: "#C3D3DF",
