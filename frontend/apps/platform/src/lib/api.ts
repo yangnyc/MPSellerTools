@@ -31,7 +31,31 @@ export class ApiError extends Error {
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
+// How many requests are under way, for the loading bar (components/LoadingBar.tsx).
+let pending = 0;
+const pendingListeners = new Set<() => void>();
+const changePending = (by: number) => {
+  pending += by;
+  pendingListeners.forEach((listener) => listener());
+};
+export const pendingRequests = () => pending;
+export const subscribeToPendingRequests = (listener: () => void) => {
+  pendingListeners.add(listener);
+  return () => {
+    pendingListeners.delete(listener);
+  };
+};
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  changePending(1);
+  try {
+    return await send<T>(path, init);
+  } finally {
+    changePending(-1);
+  }
+}
+
+async function send<T>(path: string, init: RequestInit): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
 

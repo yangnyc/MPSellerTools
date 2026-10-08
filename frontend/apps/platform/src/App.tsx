@@ -6,6 +6,7 @@ import { useMaterialUIController } from "context";
 import routes, { type AppRoute } from "./routes";
 import LoginPage from "./pages/LoginPage";
 import { useAuth } from "./auth/useAuth";
+import { PageLoader } from "./components/LoadingBar";
 
 // A sidenav group has no page of its own; its sub-items do.
 const withSubItems = (allRoutes: AppRoute[]): AppRoute[] =>
@@ -27,7 +28,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useAuth();
 
   if (status === "loading") {
-    return null;
+    return <PageLoader />;
   }
   if (status === "anonymous") {
     return <Navigate to="/login" replace />;

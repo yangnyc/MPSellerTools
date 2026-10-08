@@ -6,6 +6,7 @@ import muiThemeFor from "assets/themes";
 import { AuthProvider } from "./auth/AuthContext";
 import ThemeSync from "./auth/ThemeSync";
 import { SnackbarProvider } from "./components/SnackbarProvider";
+import LoadingBar from "./components/LoadingBar";
 import App from "./App";
 
 // MDSnackbar renders as a sibling of {children} in SnackbarProvider (not a
@@ -32,6 +33,7 @@ export default function ThemedApp() {
   return (
     <ThemeProvider theme={muiThemeFor(themeName, darkMode)}>
       <CssBaseline />
+      <LoadingBar />
       <AuthProvider>
         <ThemeSync />
         <SnackbarProvider>

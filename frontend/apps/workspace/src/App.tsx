@@ -7,12 +7,13 @@ import routes, { type AppRoute } from "./routes";
 import LoginPage from "./pages/LoginPage";
 import ProductViewPage from "./pages/ProductViewPage";
 import { useAuth } from "./auth/useAuth";
+import { PageLoader } from "./components/LoadingBar";
 
 function RequireAuth({ children, allowedRoles }: { children: ReactNode; allowedRoles?: string[] }) {
   const { status, user } = useAuth();
 
   if (status === "loading") {
-    return null;
+    return <PageLoader />;
   }
   if (status === "anonymous") {
     return <Navigate to="/login" replace />;
