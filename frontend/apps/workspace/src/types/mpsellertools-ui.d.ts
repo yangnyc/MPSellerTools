@@ -29,6 +29,7 @@ declare module "context" {
   export function setThemeName(dispatch: any, value: string): void;
   export function applyThemeSettings(dispatch: any, value: any): void;
   export const defaultThemeSettings: any;
+  export const themeOptions: { id: string }[];
 }
 
 declare module "assets/*" {

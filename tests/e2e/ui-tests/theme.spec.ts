@@ -5,8 +5,13 @@ const me = { id: "admin", email: "admin@example.test", displayName: "Admin", rol
 // Serves a signed-in profile with the given saved theme and records every
 // theme the page saves back to it. Like the hosts, it keeps the last settings
 // saved for each look (a theme in light or in dark mode) and serves them when
-// the page switches to it.
-async function mockApi(page: Page, savedTheme: Record<string, unknown> | null) {
+// the page switches to it. `otherLooks` are looks saved earlier, besides the
+// one the profile was left in.
+async function mockApi(
+  page: Page,
+  savedTheme: Record<string, unknown> | null,
+  otherLooks: Record<string, unknown>[] = [],
+) {
   const saves: Record<string, unknown>[] = [];
   const looks = new Map<string, Record<string, unknown>>();
   const lastDark = new Map<string, boolean>();
@@ -16,6 +21,7 @@ async function mockApi(page: Page, savedTheme: Record<string, unknown> | null) {
       lastDark.set(theme.themeName, Boolean(theme.darkMode));
     }
   };
+  otherLooks.forEach(remember);
   remember(savedTheme);
   page.on("pageerror", (error) => { throw error; });
   await page.route(/\/\/[^/]+\/api\//, async (route) => {
@@ -83,12 +89,15 @@ test("a theme whose preset is dark switches the app to dark mode when picked", a
 });
 
 test("a theme name saved on the profile is applied on load, and one saved without a name is the default", async ({ page }) => {
-  await mockApi(page, {
+  const loaded = await mockApi(page, {
     themeName: "sapphire", darkMode: false, whiteSidenav: false, sidenavTint: null, sidenavColor: "rose", fixedNavbar: true,
   });
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(245, 245, 245)");
   await page.getByLabel("Display settings").click();
   await expect(themePicker(page)).toHaveValue("sapphire");
+  // Applying the saved theme is not a change, so nothing is written back.
+  await page.waitForTimeout(800);
+  expect(loaded).toHaveLength(0);
 
   const saves = await mockApi(page, {
     darkMode: false, whiteSidenav: false, sidenavTint: null, sidenavColor: "harbor", fixedNavbar: true,
@@ -172,4 +181,63 @@ test("each theme offers its own sidenav swatches, and a saved one it does not of
   await page.getByTitle("balihai").last().click();
   await expect(page.locator(".MuiDrawer-paper").first()).toHaveCSS("background-image", /rgb\(138, 157, 178\)/);
   await expect.poll(() => saves.at(-1)).toMatchObject({ themeName: "astro", sidenavTint: "balihai", sidenavColor: "cream" });
+});
+
+// Every background the page and the sidenav show, frame by frame, until `stop` is called.
+async function watchBackgrounds(page: Page) {
+  await page.evaluate(() => {
+    const seen = { page: [] as string[], sidenav: [] as string[] };
+    const note = (list: string[], value: string) => {
+      if (list.at(-1) !== value) list.push(value);
+    };
+    const state = { seen, running: true };
+    (window as unknown as { backgrounds: typeof state }).backgrounds = state;
+    const sample = () => {
+      const drawer = document.querySelector(".MuiDrawer-paper");
+      note(seen.page, getComputedStyle(document.body).backgroundColor);
+      if (drawer) {
+        const style = getComputedStyle(drawer);
+        note(seen.sidenav, `${style.backgroundColor} ${style.backgroundImage}`);
+      }
+      if (state.running) requestAnimationFrame(sample);
+    };
+    sample();
+  });
+  return () =>
+    page.evaluate(() => {
+      const state = (window as unknown as { backgrounds: { seen: { page: string[]; sidenav: string[] }; running: boolean } }).backgrounds;
+      state.running = false;
+      return state.seen;
+    });
+}
+
+test("switching to a theme or a mode used before goes straight to its saved look, with no other colours in between", async ({ page }) => {
+  // Astro Novalite was last left in light mode with a tinted sidenav: nothing like its dark preset.
+  const astroLight = {
+    themeName: "astro", darkMode: false, whiteSidenav: false, sidenavTint: "balihai", sidenavColor: "sand", fixedNavbar: true,
+  };
+  const astroDark = { ...astroLight, darkMode: true, sidenavTint: "graphite", sidenavColor: "frost" };
+  await mockApi(page, null, [astroDark, astroLight]);
+  await page.getByLabel("Display settings").click();
+  // Let the opening panel settle, so only the switch itself is watched.
+  await page.waitForTimeout(600);
+
+  let stop = await watchBackgrounds(page);
+  await themePicker(page).selectOption({ label: "Astro Novalite" });
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(250, 246, 234)");
+  await page.waitForTimeout(700);
+  let seen = await stop();
+  expect(seen.page).toEqual(["rgb(246, 249, 251)", "rgb(250, 246, 234)"]);
+  expect(seen.sidenav).toHaveLength(2);
+  expect(seen.sidenav[1]).toMatch(/rgb\(138, 157, 178\)/);
+
+  // Its dark mode comes back the same way.
+  stop = await watchBackgrounds(page);
+  await page.getByRole("switch").last().click();
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(30, 31, 42)");
+  await page.waitForTimeout(700);
+  seen = await stop();
+  expect(seen.page).toEqual(["rgb(250, 246, 234)", "rgb(30, 31, 42)"]);
+  expect(seen.sidenav).toHaveLength(2);
+  expect(seen.sidenav[1]).toMatch(/rgb\(58, 63, 75\)/);
 });
