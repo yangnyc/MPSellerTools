@@ -38,49 +38,101 @@ public class ListingService(TenantDbContext db, IEnumerable<IChannelAdapter> ada
         return new ChannelContext(account, market, settings.RootElement.Clone());
     }
 
-    public async Task<ListingBundle?> LoadAsync(Guid listingId, CancellationToken cancellationToken)
+    public async Task<ListingBundle?> LoadAsync(Guid listingId, CancellationToken cancellationToken) =>
+        (await LoadManyAsync([listingId], cancellationToken)).FirstOrDefault();
+
+    /// <summary>
+    /// Reads many listings with a fixed number of queries, however many there
+    /// are, in the order asked for. One that no longer exists is left out.
+    /// </summary>
+    public async Task<List<ListingBundle>> LoadManyAsync(IReadOnlyList<Guid> listingIds, CancellationToken cancellationToken)
     {
-        var listing = await db.ChannelListings.AsNoTracking().FirstOrDefaultAsync(l => l.Id == listingId, cancellationToken);
-        if (listing is null)
+        var bundles = new List<ListingBundle>(listingIds.Count);
+        foreach (var chunk in listingIds.Chunk(500))
         {
-            return null;
+            bundles.AddRange(await LoadChunkAsync(chunk, cancellationToken));
+        }
+        return bundles;
+    }
+
+    // Each list of ids goes to the database as one parameter (EF.Parameter) rather than one per id:
+    // with hundreds of separate parameters SQL Server took seconds over every one of these queries.
+    private async Task<List<ListingBundle>> LoadChunkAsync(Guid[] listingIds, CancellationToken cancellationToken)
+    {
+        var listings = await db.ChannelListings.AsNoTracking().Where(l => EF.Parameter(listingIds).Contains(l.Id)).ToDictionaryAsync(l => l.Id, cancellationToken);
+        if (listings.Count == 0)
+        {
+            return [];
         }
 
-        var market = await db.ChannelMarkets.AsNoTracking().FirstAsync(m => m.Id == listing.ChannelMarketId, cancellationToken);
-        var account = await db.ChannelAccounts.AsNoTracking().FirstAsync(a => a.Id == market.ChannelAccountId, cancellationToken);
-        var variant = await db.ProductVariants.AsNoTracking().FirstAsync(v => v.Id == listing.VariantId, cancellationToken);
-        var product = await db.Products.AsNoTracking().FirstAsync(p => p.Id == variant.ProductId, cancellationToken);
-        var mapping = product.Category is null
-            ? null
-            : await db.CategoryMappings.AsNoTracking()
-                .FirstOrDefaultAsync(c => c.ChannelMarketId == market.Id && c.InternalCategory == product.Category, cancellationToken);
-        var balance = await db.InventoryBalances.AsNoTracking()
-            .FirstOrDefaultAsync(b => b.VariantId == variant.Id && b.LocationId == InventoryLocation.DefaultId, cancellationToken);
-        var identifiers = await db.ProductIdentifiers.AsNoTracking()
-            .Where(i => i.ProductId == product.Id || i.VariantId == variant.Id)
-            .ToListAsync(cancellationToken);
-        var available = await (
-            from media in db.ProductMedia.AsNoTracking()
-            join asset in db.MediaAssets.AsNoTracking() on media.MediaAssetId equals asset.Id
-            where media.ProductId == product.Id && (media.VariantId == null || media.VariantId == variant.Id)
-            orderby media.Purpose, media.Position
-            select new ListingImage(media.Id, asset.Url)).ToListAsync(cancellationToken);
-        // A chosen picture that has since been removed from the product simply drops out.
-        var selection = ParseSelection(listing.ImageSelectionJson);
-        var images = selection is null
-            ? available.Select(i => i.Url).ToList()
-            : selection.Select(id => available.FirstOrDefault(i => i.Id == id)?.Url).OfType<string>().ToList();
-        var references = await db.ExternalReferences.AsNoTracking()
-            .Where(r => r.OwnerType == ExternalOwnerType.ChannelListing && r.OwnerId == listing.Id)
-            .ToDictionaryAsync(r => r.ResourceType, r => r.Value, cancellationToken);
+        var marketIds = listings.Values.Select(l => l.ChannelMarketId).Distinct().ToList();
+        var markets = await db.ChannelMarkets.AsNoTracking().Where(m => EF.Parameter(marketIds).Contains(m.Id)).ToDictionaryAsync(m => m.Id, cancellationToken);
+        var accountIds = markets.Values.Select(m => m.ChannelAccountId).Distinct().ToList();
+        var accounts = await db.ChannelAccounts.AsNoTracking().Where(a => EF.Parameter(accountIds).Contains(a.Id)).ToDictionaryAsync(a => a.Id, cancellationToken);
+        var variantIds = listings.Values.Select(l => l.VariantId).Distinct().ToList();
+        var variants = await db.ProductVariants.AsNoTracking().Where(v => EF.Parameter(variantIds).Contains(v.Id)).ToDictionaryAsync(v => v.Id, cancellationToken);
+        var productIds = variants.Values.Select(v => v.ProductId).Distinct().ToList();
+        var products = await db.Products.AsNoTracking().Where(p => EF.Parameter(productIds).Contains(p.Id)).ToDictionaryAsync(p => p.Id, cancellationToken);
 
-        var (group, groupReady) = await LoadGroupAsync(listing.Id, cancellationToken);
-        var snapshot = ListingComposer.Compose(
-            product, variant, listing, market, account.Channel, mapping, balance?.AvailableToSell ?? 0, identifiers, images, group,
-            references.GetValueOrDefault(ExternalResourceType.CatalogItem));
-        var work = new ListingWork(
-            snapshot, listing.DesiredState, listing.ContentVersion, listing.PriceVersion, listing.InventoryVersion, references, groupReady);
-        return new ListingBundle(listing, ContextFor(account, market), work) { AvailableImages = available, ImageSelection = selection, ProductId = product.Id };
+        // Matched without regard to case, as the database itself compares a category's name.
+        var mappings = (await db.CategoryMappings.AsNoTracking().Where(c => EF.Parameter(marketIds).Contains(c.ChannelMarketId)).ToListAsync(cancellationToken))
+            .GroupBy(c => c.ChannelMarketId)
+            .ToDictionary(g => g.Key, g => g.GroupBy(c => c.InternalCategory, StringComparer.OrdinalIgnoreCase).ToDictionary(c => c.Key, c => c.First(), StringComparer.OrdinalIgnoreCase));
+        var balances = (await db.InventoryBalances.AsNoTracking()
+                .Where(b => EF.Parameter(variantIds).Contains(b.VariantId) && b.LocationId == InventoryLocation.DefaultId).ToListAsync(cancellationToken))
+            .GroupBy(b => b.VariantId).ToDictionary(g => g.Key, g => g.First());
+        // Two queries rather than one "either" condition, which SQL Server plans badly over two long lists.
+        var productIdentifiers = (await db.ProductIdentifiers.AsNoTracking()
+                .Where(i => i.ProductId != null && EF.Parameter(productIds).Contains(i.ProductId.Value)).ToListAsync(cancellationToken))
+            .ToLookup(i => i.ProductId!.Value);
+        var variantIdentifiers = (await db.ProductIdentifiers.AsNoTracking()
+                .Where(i => i.VariantId != null && EF.Parameter(variantIds).Contains(i.VariantId.Value)).ToListAsync(cancellationToken))
+            .ToLookup(i => i.VariantId!.Value);
+        var media = (await (
+            from picture in db.ProductMedia.AsNoTracking()
+            join asset in db.MediaAssets.AsNoTracking() on picture.MediaAssetId equals asset.Id
+            where EF.Parameter(productIds).Contains(picture.ProductId)
+            orderby picture.Purpose, picture.Position
+            select new { picture.ProductId, picture.VariantId, Image = new ListingImage(picture.Id, asset.Url) }).ToListAsync(cancellationToken))
+            .ToLookup(m => m.ProductId);
+        var references = (await db.ExternalReferences.AsNoTracking()
+                .Where(r => r.OwnerType == ExternalOwnerType.ChannelListing && EF.Parameter(listingIds).Contains(r.OwnerId)).ToListAsync(cancellationToken))
+            .ToLookup(r => r.OwnerId);
+        // Few listings belong to a variation group, so those are read one by one.
+        var grouped = (await db.ListingGroupMembers.AsNoTracking()
+            .Where(m => EF.Parameter(listingIds).Contains(m.ChannelListingId)).Select(m => m.ChannelListingId).ToListAsync(cancellationToken)).ToHashSet();
+
+        var bundles = new List<ListingBundle>(listings.Count);
+        foreach (var listingId in listingIds)
+        {
+            if (!listings.TryGetValue(listingId, out var listing))
+            {
+                continue;
+            }
+
+            var market = markets[listing.ChannelMarketId];
+            var account = accounts[market.ChannelAccountId];
+            var variant = variants[listing.VariantId];
+            var product = products[variant.ProductId];
+            var mapping = product.Category is not null && mappings.TryGetValue(market.Id, out var ofMarket) ? ofMarket.GetValueOrDefault(product.Category) : null;
+            var available = media[product.Id].Where(m => m.VariantId == null || m.VariantId == variant.Id).Select(m => m.Image).ToList();
+            // A chosen picture that has since been removed from the product simply drops out.
+            var selection = ParseSelection(listing.ImageSelectionJson);
+            var images = selection is null
+                ? available.Select(i => i.Url).ToList()
+                : selection.Select(id => available.FirstOrDefault(i => i.Id == id)?.Url).OfType<string>().ToList();
+            var ownReferences = references[listing.Id].ToDictionary(r => r.ResourceType, r => r.Value);
+            var ownIdentifiers = productIdentifiers[product.Id].Concat(variantIdentifiers[variant.Id]).DistinctBy(i => i.Id).ToList();
+
+            var (group, groupReady) = grouped.Contains(listing.Id) ? await LoadGroupAsync(listing.Id, cancellationToken) : (null, true);
+            var snapshot = ListingComposer.Compose(
+                product, variant, listing, market, account.Channel, mapping, balances.GetValueOrDefault(variant.Id)?.AvailableToSell ?? 0, ownIdentifiers, images, group,
+                ownReferences.GetValueOrDefault(ExternalResourceType.CatalogItem));
+            var work = new ListingWork(
+                snapshot, listing.DesiredState, listing.ContentVersion, listing.PriceVersion, listing.InventoryVersion, ownReferences, groupReady);
+            bundles.Add(new ListingBundle(listing, ContextFor(account, market), work) { AvailableImages = available, ImageSelection = selection, ProductId = product.Id });
+        }
+        return bundles;
     }
 
     public static List<Guid>? ParseSelection(string? json) =>

@@ -26,6 +26,9 @@ namespace MPSellerTools.TenantHost.Controllers;
 public class ChannelListingsController(
     TenantDbContext db, ListingService listings, SyncEngine engine, IOptions<MarketplaceOptions> options, AuditLogger audit) : ControllerBase
 {
+    /// <summary>The most listings one answer carries.</summary>
+    private const int MaxListed = 10000;
+
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] Guid? productId, [FromQuery] Guid? accountId, CancellationToken cancellationToken)
     {
@@ -36,15 +39,9 @@ public class ChannelListingsController(
             where (productId == null || variant.ProductId == productId) && (accountId == null || market.ChannelAccountId == accountId)
             orderby listing.SellerSku
             select listing.Id;
-        var responses = new List<ChannelListingResponse>();
-        foreach (var id in await query.Take(500).ToListAsync(cancellationToken))
-        {
-            if (await listings.LoadAsync(id, cancellationToken) is { } bundle)
-            {
-                responses.Add(ToResponse(bundle));
-            }
-        }
-        return Ok(responses);
+        // Read together: a company can have thousands of listings on one marketplace.
+        var ids = await query.Take(MaxListed).ToListAsync(cancellationToken);
+        return Ok((await listings.LoadManyAsync(ids, cancellationToken)).Select(ToResponse).ToList());
     }
 
     [HttpGet("{id:guid}")]
