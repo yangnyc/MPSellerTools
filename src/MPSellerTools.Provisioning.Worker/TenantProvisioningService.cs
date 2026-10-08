@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MPSellerTools.Core.Business;
 using MPSellerTools.Core.Notifications;
@@ -22,6 +23,7 @@ namespace MPSellerTools.Provisioning.Worker;
 /// </summary>
 public class TenantProvisioningService(
     ProvisioningOptions options,
+    IConfiguration configuration,
     TenantProcessSupervisor supervisor,
     IHttpClientFactory httpClientFactory,
     string localDataDirectory,
@@ -42,8 +44,7 @@ public class TenantProvisioningService(
         }
 
         var databaseName = tenant.DatabaseName ?? $"MPSellerTools_Tenant_{tenant.Slug.Replace('-', '_')}";
-        var connectionString =
-            $"Server=(localdb)\\MSSQLLocalDB;Database={databaseName};Trusted_Connection=True;TrustServerCertificate=True";
+        var connectionString = TenantConnectionString(databaseName);
 
         await using var tenantDb = CreateTenantDbContext(connectionString);
         await tenantDb.Database.MigrateAsync(cancellationToken);
@@ -90,8 +91,7 @@ public class TenantProvisioningService(
             throw new InvalidOperationException($"Tenant {tenant.Id} cannot be resumed: missing prior provisioning state.");
         }
 
-        var connectionString =
-            $"Server=(localdb)\\MSSQLLocalDB;Database={tenant.DatabaseName};Trusted_Connection=True;TrustServerCertificate=True";
+        var connectionString = TenantConnectionString(tenant.DatabaseName);
 
         await using var tenantDb = CreateTenantDbContext(connectionString);
         if (!await tenantDb.Database.CanConnectAsync(cancellationToken))
@@ -159,8 +159,7 @@ public class TenantProvisioningService(
             throw new InvalidOperationException($"Tenant {tenant.Id} has an unexpected database name '{databaseName}'; refusing to drop it.");
         }
 
-        var connectionString =
-            $"Server=(localdb)\\MSSQLLocalDB;Database={databaseName};Trusted_Connection=True;TrustServerCertificate=True";
+        var connectionString = TenantConnectionString(databaseName);
         await using (var tenantDb = CreateTenantDbContext(connectionString))
         {
             await tenantDb.Database.EnsureDeletedAsync(cancellationToken);
@@ -194,6 +193,10 @@ public class TenantProvisioningService(
     /// one it is localhost, the only name the development certificate is valid for.
     /// </summary>
     private string InternalUrl(Tenant tenant) => options.BehindProxy ? PublicUrl(tenant) : LocalUrl(tenant);
+
+    /// <summary>A company's database is on the same server as the registry, under its own name.</summary>
+    private string TenantConnectionString(string databaseName) =>
+        new SqlConnectionStringBuilder(configuration.GetConnectionString("PlatformDatabase")) { InitialCatalog = databaseName }.ConnectionString;
 
     private static TenantDbContext CreateTenantDbContext(string connectionString)
     {
