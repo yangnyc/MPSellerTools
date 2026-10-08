@@ -11,6 +11,19 @@ namespace MPSellerTools.TenantHost.Services;
 /// <summary>What the store said about itself: its address, its store views and its base currency.</summary>
 public record MagentoTestResult(string? StoreAddress, IReadOnlyList<string> StoreViews, string? Currency);
 
+/// <summary>
+/// A category of the store. <see cref="Path"/> is its name with its parents', below the store's root
+/// category ("Medicine Cabinet / Pain &amp; Fever"); the root itself (level 1) is just its own name.
+/// </summary>
+public record MagentoStoreCategory(long Id, long ParentId, string Name, string Path, int Level, bool IsActive, int ProductCount);
+
+/// <summary>
+/// <see cref="Matched"/> products of the store have the SKU prefix; <see cref="Removed"/> were deleted from
+/// it this time (or would be, in a dry run), <see cref="Kept"/> were left because this workspace still lists
+/// them, and <see cref="Remaining"/> are still to go.
+/// </summary>
+public record MagentoRemovalResult(bool DryRun, int Matched, int Removed, int Kept, int Remaining);
+
 /// <summary><see cref="Listings"/> is how many products the store reported; <see cref="Created"/> how many of them were new to the catalog here.</summary>
 public record MagentoImportResult(int Created, int Listings);
 
@@ -34,6 +47,122 @@ public class MagentoSync(TenantDbContext db, ChannelHttp http, ChannelSecrets se
             stores.Select(s => MagentoApi.Text(s, "base_url")).FirstOrDefault(url => url is not null),
             stores.Select(s => MagentoApi.Text(s, "code")).OfType<string>().ToList(),
             stores.Select(s => MagentoApi.Text(s, "base_currency_code")).FirstOrDefault(code => code is not null));
+    }
+
+    /// <summary>
+    /// Deletes from the store products whose SKU starts with <paramref name="skuPrefix"/>, up to
+    /// <paramref name="limit"/> at a time, so a large clear-out is made in several calls. A product this
+    /// workspace still has a Magento listing for is never deleted here: that one is taken off sale from its
+    /// listing instead. With <paramref name="dryRun"/> nothing is deleted and the counts say what would be.
+    /// </summary>
+    public async Task<MagentoRemovalResult> RemoveStoreProductsAsync(
+        ChannelAccount account, string skuPrefix, int limit, bool dryRun, CancellationToken cancellationToken)
+    {
+        var root = MagentoApi.Root(MagentoApi.Setting(account, "baseUrl"));
+        // In a LIKE the store reads % and _ as wildcards; a prefix is meant letter for letter.
+        var pattern = Uri.EscapeDataString(skuPrefix.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_") + "%");
+        var managed = (await (
+            from listing in db.ChannelListings.AsNoTracking()
+            join market in db.ChannelMarkets.AsNoTracking() on listing.ChannelMarketId equals market.Id
+            where market.ChannelAccountId == account.Id && listing.SellerSku.StartsWith(skuPrefix)
+            select listing.SellerSku).ToListAsync(cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var (matched, kept, removable) = (0, 0, new List<string>());
+        for (var page = 1; page <= MaxPages && removable.Count < limit; page++)
+        {
+            var response = await MagentoApi.SendAsync(
+                http, secrets, account, HttpMethod.Get,
+                $"{root}/rest/all/V1/products?searchCriteria[filter_groups][0][filters][0][field]=sku"
+                + $"&searchCriteria[filter_groups][0][filters][0][value]={pattern}"
+                + "&searchCriteria[filter_groups][0][filters][0][condition_type]=like"
+                + $"&searchCriteria[pageSize]={PageSize}&searchCriteria[currentPage]={page}&fields=items[sku],total_count",
+                null, cancellationToken);
+            var items = response.Body.TryGetProperty("items", out var list) && list.ValueKind == JsonValueKind.Array ? list.EnumerateArray().ToList() : [];
+            matched = (int)(MagentoApi.Number(response.Body, "total_count") ?? 0);
+            foreach (var sku in items.Select(i => MagentoApi.Text(i, "sku")).OfType<string>())
+            {
+                // The store's LIKE does not tell upper from lower case; the prefix here is meant as written.
+                if (!sku.StartsWith(skuPrefix, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                if (managed.Contains(sku))
+                {
+                    kept++;
+                }
+                else if (removable.Count < limit)
+                {
+                    removable.Add(sku);
+                }
+            }
+            if (items.Count < PageSize || page * PageSize >= matched)
+            {
+                break;
+            }
+        }
+
+        if (!dryRun)
+        {
+            foreach (var sku in removable)
+            {
+                // 404: already gone, which is what was wanted.
+                await MagentoApi.SendAsync(
+                    http, secrets, account, HttpMethod.Delete, $"{root}/rest/all/V1/products/{Uri.EscapeDataString(sku)}", null, cancellationToken, 404);
+            }
+            audit.Log("MagentoStoreProductsRemoved", $"prefix={skuPrefix}; removed={removable.Count}");
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        return new MagentoRemovalResult(dryRun, matched, removable.Count, kept, Math.Max(0, matched - kept - removable.Count));
+    }
+
+    /// <summary>The store's whole category tree, parents before their children. The catalog's own root (level 0) is left out.</summary>
+    public async Task<List<MagentoStoreCategory>> GetCategoriesAsync(ChannelAccount account, CancellationToken cancellationToken)
+    {
+        var root = MagentoApi.Root(MagentoApi.Setting(account, "baseUrl"));
+        var response = await MagentoApi.SendAsync(http, secrets, account, HttpMethod.Get, $"{root}/rest/all/V1/categories", null, cancellationToken);
+        var categories = new List<MagentoStoreCategory>();
+        Collect(response.Body, "", categories);
+        return categories;
+    }
+
+    private static void Collect(JsonElement node, string parentPath, List<MagentoStoreCategory> into)
+    {
+        if (node.ValueKind != JsonValueKind.Object || MagentoApi.Number(node, "id") is not { } id)
+        {
+            return;
+        }
+
+        var level = (int)(MagentoApi.Number(node, "level") ?? 0);
+        var name = MagentoApi.Text(node, "name")?.Trim() ?? "";
+        // The store's root category (level 1) is where paths start, so it is not part of its children's.
+        var path = level <= 1 ? name : parentPath.Length == 0 ? name : $"{parentPath} / {name}";
+        if (level >= 1)
+        {
+            into.Add(new MagentoStoreCategory(
+                (long)id, (long)(MagentoApi.Number(node, "parent_id") ?? 0), name, path, level,
+                node.TryGetProperty("is_active", out var active) && active.ValueKind == JsonValueKind.True,
+                (int)(MagentoApi.Number(node, "product_count") ?? 0)));
+        }
+        if (node.TryGetProperty("children_data", out var children) && children.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var child in children.EnumerateArray())
+            {
+                Collect(child, level <= 1 ? "" : path, into);
+            }
+        }
+    }
+
+    /// <summary>Creates a category in the store under <paramref name="parentId"/> and returns the number the store gave it.</summary>
+    public async Task<long> CreateCategoryAsync(
+        ChannelAccount account, string name, long parentId, bool isActive, bool includeInMenu, CancellationToken cancellationToken)
+    {
+        var root = MagentoApi.Root(MagentoApi.Setting(account, "baseUrl"));
+        var response = await MagentoApi.SendAsync(
+            http, secrets, account, HttpMethod.Post, $"{root}/rest/all/V1/categories",
+            new { category = new { parent_id = parentId, name, is_active = isActive, include_in_menu = includeInMenu } }, cancellationToken);
+        return MagentoApi.Number(response.Body, "id") is { } id
+            ? (long)id
+            : throw new ChannelException(SyncErrorClass.Transient, "Magento created a category but did not say which.", ambiguous: true);
     }
 
     /// <summary>

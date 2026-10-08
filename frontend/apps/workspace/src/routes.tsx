@@ -12,6 +12,7 @@ import MarketplaceAddProductPage from "./pages/marketplace/MarketplaceAddProduct
 import MarketplaceSettingsPage from "./pages/marketplace/MarketplaceSettingsPage";
 import SyncQueuePage from "./pages/marketplace/SyncQueuePage";
 import JobsPage from "./pages/JobsPage";
+import MagentoCategoriesPage from "./pages/marketplace/MagentoCategoriesPage";
 import InventoryPage from "./pages/InventoryPage";
 import { AMAZON, EBAY, MAGENTO, WALMART, settingsPath, type Marketplace } from "./api/channels";
 import AuditPage from "./pages/AuditPage";
@@ -44,7 +45,7 @@ export type AppRoute = {
 // A marketplace's sidenav group: its products, the page that adds a product to
 // it, what it reports as posted, and its account settings. `first` goes ahead of those, for a page only
 // that marketplace has. Settings under a name of their own (Magento's "Connection") lead the group.
-function marketplaceGroup(marketplace: Marketplace, first: AppRoute[] = []): AppRoute {
+function marketplaceGroup(marketplace: Marketplace, first: AppRoute[] = [], last: AppRoute[] = []): AppRoute {
   const key = marketplace.name.toLowerCase();
   const settings: AppRoute = {
     type: "collapse",
@@ -92,6 +93,7 @@ function marketplaceGroup(marketplace: Marketplace, first: AppRoute[] = []): App
         component: <ListingsPage key={key} marketplace={marketplace} />,
         roles: ["TenantAdmin"],
       },
+      ...last,
       ...(marketplace.settingsName ? [] : [settings]),
     ],
   };
@@ -155,7 +157,18 @@ const routes: AppRoute[] = [
   ]),
   marketplaceGroup(AMAZON),
   marketplaceGroup(WALMART),
-  marketplaceGroup(MAGENTO),
+  // A store's categories are its own to shape, so Magento has a page for them the marketplaces do not.
+  marketplaceGroup(MAGENTO, [], [
+    {
+      type: "collapse",
+      name: "Categories",
+      key: "magento-categories",
+      icon: <Icon fontSize="small">account_tree</Icon>,
+      route: "/magento/categories",
+      component: <MagentoCategoriesPage />,
+      roles: ["TenantAdmin"],
+    },
+  ]),
   // After the places the orders come from.
   {
     type: "collapse",

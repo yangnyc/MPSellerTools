@@ -143,13 +143,23 @@ public static class MagentoPayloads
                 extension_attributes = new
                 {
                     stock_item = Stock(s.Quantity),
-                    category_links = int.TryParse(s.ExternalCategoryId, NumberStyles.None, CultureInfo.InvariantCulture, out _)
-                        ? new[] { new { category_id = s.ExternalCategoryId, position = 0 } }
+                    category_links = CategoryId(s, context) is { } categoryId
+                        ? new[] { new { category_id = categoryId, position = 0 } }
                         : null,
                 },
                 custom_attributes = custom.Count > 0 ? custom : null,
             },
         };
+    }
+
+    /// <summary>
+    /// The store category the product goes into: the one its own category is mapped to, or failing that the
+    /// account's "defaultCategoryId". Null when neither is a category number.
+    /// </summary>
+    public static string? CategoryId(ListingSnapshot s, ChannelContext context)
+    {
+        var id = string.IsNullOrWhiteSpace(s.ExternalCategoryId) ? context.Setting("defaultCategoryId") : s.ExternalCategoryId;
+        return int.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out _) ? id : null;
     }
 
     public static object Price(ListingSnapshot s) => new { product = new { price = s.Price } };

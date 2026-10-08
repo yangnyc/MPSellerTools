@@ -367,9 +367,9 @@ test("Magento has its own menu, led by the connection page, where the store's ad
   // The group is open, as the page shown is one of its own.
   const sidebar = page.locator(".MuiDrawer-paper").filter({ has: page.getByText("MP Seller Tools", { exact: true }) });
   const links = sidebar.locator('a[href^="/magento"]');
-  await expect(links).toHaveCount(4);
+  await expect(links).toHaveCount(5);
   expect(await links.evaluateAll((items) => items.map((item) => item.getAttribute("href")))).toEqual([
-    "/magento/connection", "/magento", "/magento/add-product", "/magento/listings",
+    "/magento/connection", "/magento", "/magento/add-product", "/magento/listings", "/magento/categories",
   ]);
   await expect(sidebar.locator('a[href="/magento/connection"]')).toHaveText(/Connection/);
 
@@ -439,4 +439,91 @@ test("a listing that was published but never reached the marketplace can be sent
   await page.getByRole("button", { name: "Send to Amazon again" }).click();
   await expect(page.getByText("Queued for Amazon again.")).toBeVisible();
   expect(writes).toEqual(["POST /api/channel-listings/l1/retry"]);
+});
+
+test("Magento's categories page maps your categories to the store's, creates the missing ones and sets a default", async ({ page }) => {
+  const magento = account({
+    id: "a-magento", channel: 4, name: "Magento", sellerId: null, hasCredentials: true, liveWritesEnabled: true, effectiveLiveWrites: true,
+    markets: [{ id: "m-magento", marketplaceCode: "default", language: "en-US", currency: "USD" }],
+  });
+  const categories = {
+    storeReachable: true, storeError: null, defaultCategoryId: null, liveWrites: true,
+    storeCategories: [
+      { id: 2, parentId: 1, name: "Default Category", path: "Default Category", level: 1, isActive: true, productCount: 9 },
+      { id: 10, parentId: 2, name: "Medicine", path: "Medicine", level: 2, isActive: true, productCount: 4 },
+      { id: 11, parentId: 10, name: "Pain", path: "Medicine / Pain", level: 3, isActive: false, productCount: 1 },
+    ],
+    categories: [
+      { category: "Garden", products: 3, mappingId: null, storeCategoryId: null, storeCategoryPath: null, storeCategoryMissing: false },
+      { category: "Medicine / Pain", products: 12, mappingId: "map-1", storeCategoryId: "11", storeCategoryPath: "Medicine / Pain", storeCategoryMissing: false },
+      { category: "Old Range", products: 0, mappingId: "map-2", storeCategoryId: "99", storeCategoryPath: null, storeCategoryMissing: true },
+    ],
+  };
+  const bulk = { dryRun: true, mapped: 1, created: 1, items: [{ category: "Garden", storeCategoryId: null, storeCategoryPath: "Garden", created: 1, error: null }] };
+  await mockApi(
+    page,
+    { "/api/channels": [magento], "/api/magento/categories": categories },
+    {
+      "/api/magento/categories/create-missing": bulk,
+      "/api/magento/categories/match": { dryRun: false, mapped: 0, created: 0, items: [] },
+      "/api/magento/categories/remove-unused": { removed: 1 },
+      "/api/magento/categories/create": { id: 12, parentId: 10, name: "Sleep", path: "Medicine / Sleep", level: 3, isActive: true, productCount: 0 },
+    },
+  );
+  await page.goto("/magento/categories");
+  await expect(page.getByRole("heading", { name: "Magento categories" })).toBeVisible();
+
+  // Each of your categories, with how many products it has and where it stands with the store.
+  const garden = page.getByRole("row").filter({ hasText: "Garden" });
+  await expect(garden.getByText("3 products")).toBeVisible();
+  await expect(garden.getByText("Not mapped", { exact: true }).last()).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "Medicine / Pain" }).getByLabel("Store category for Medicine / Pain")).toHaveValue("11");
+  // One mapped to a category the store no longer has is called out.
+  await expect(page.getByText("Mapped to categories the store no longer has")).toBeVisible();
+
+  // The store's own tree, with what is disabled there.
+  await expect(page.getByText("#11")).toBeVisible();
+  await expect(page.getByText("Disabled", { exact: true })).toBeVisible();
+
+  // Choosing a store category saves the mapping at once; choosing none removes it.
+  await garden.getByLabel("Store category for Garden").selectOption("10");
+  await expect(page.getByText("Garden now goes to Medicine.")).toBeVisible();
+  await page.getByLabel("Store category for Medicine / Pain").selectOption("");
+  await expect(page.getByText("Medicine / Pain is no longer mapped.")).toBeVisible();
+
+  // The advanced side: matching by name, a preview of what creating would do, then doing it with the chosen options.
+  await page.getByRole("button", { name: "Match by name" }).click();
+  await expect(page.getByText("No unmapped category has a namesake in the store.")).toBeVisible();
+  await page.getByLabel("Shown in the store's menu").first().uncheck();
+  await page.getByRole("button", { name: "Preview" }).click();
+  const plan = page.getByRole("dialog");
+  await expect(plan.getByText("1 category to create in the store, 1 to map. Nothing has been changed yet.")).toBeVisible();
+  await plan.getByRole("button", { name: "Create and map" }).click();
+  await expect(page.getByText("1 created in the store, 1 mapped.")).toBeVisible();
+
+  // Options: a default for the unmapped, clearing mappings nothing uses, and sending published products again.
+  await page.getByLabel("Default category").selectOption("2");
+  await page.getByRole("button", { name: "Save default" }).click();
+  await expect(page.getByText("Unmapped products now go to that category.")).toBeVisible();
+  await page.getByRole("button", { name: "Remove 1 unused mapping" }).click();
+  await expect(page.getByText("1 unused mapping(s) removed.")).toBeVisible();
+
+  // One category made by hand, inside another.
+  await page.getByRole("button", { name: "New store category" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Name").fill("Sleep");
+  await dialog.getByLabel("Inside").selectOption("10");
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByText("Medicine / Sleep was created in the store.")).toBeVisible();
+
+  expect(writes).toEqual([
+    'PUT /api/channels/category-mappings {"channelMarketId":"m-magento","internalCategory":"Garden","externalCategoryId":"10"}',
+    "DELETE /api/channels/category-mappings/map-1",
+    "POST /api/magento/categories/match",
+    'POST /api/magento/categories/create-missing {"isActive":true,"includeInMenu":false,"dryRun":true}',
+    'POST /api/magento/categories/create-missing {"isActive":true,"includeInMenu":false,"dryRun":false}',
+    'PUT /api/magento/categories/default {"categoryId":"2"}',
+    "POST /api/magento/categories/remove-unused",
+    'POST /api/magento/categories/create {"name":"Sleep","parentId":10,"isActive":true,"includeInMenu":false}',
+  ]);
 });

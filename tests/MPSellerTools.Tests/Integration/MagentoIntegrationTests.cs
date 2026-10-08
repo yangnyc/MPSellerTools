@@ -269,4 +269,109 @@ public class MagentoIntegrationTests(MarketplaceFixture fixture) : IClassFixture
         Assert.Equal(2, line.GetProperty("quantity").GetInt32());
         Assert.Equal(20m, line.GetProperty("unitPrice").GetDecimal());
     }
+
+    private const string Tree = """
+        {"id":1,"parent_id":0,"name":"Root Catalog","level":0,"product_count":0,"children_data":[
+          {"id":2,"parent_id":1,"name":"Default Category","is_active":true,"level":1,"product_count":9,"children_data":[
+            {"id":10,"parent_id":2,"name":"Medicine","is_active":true,"level":2,"product_count":4,"children_data":[
+              {"id":11,"parent_id":10,"name":"Pain","is_active":false,"level":3,"product_count":1,"children_data":[]}]}]}]}
+        """;
+
+    [Fact]
+    public async Task Categories_are_matched_by_name_created_in_the_store_where_missing_and_fall_back_to_a_default()
+    {
+        using var admin = await fixture.AdminAsync("magento-categories@example.com");
+        var (_, marketId) = await MagentoAsync(admin);
+        await fixture.WithDbAsync(db => db.CategoryMappings.Where(m => m.ChannelMarketId == marketId).ExecuteDeleteAsync());
+        // Three categories of the company's own: one the store has by its path, one it has nothing of, one inside another.
+        await fixture.CreateProductAsync(admin, "CAT-A", category: "Medicine / Pain");
+        await fixture.CreateProductAsync(admin, "CAT-B", category: "Garden");
+        var (_, nestedVariant) = await fixture.CreateProductAsync(admin, "CAT-C", category: "Medicine / Sleep");
+
+        fixture.Magento.On("GET", "/rest/all/V1/categories", Tree);
+        var page = await admin.GetFromJsonAsync<JsonElement>("/api/magento/categories");
+        Assert.True(page.GetProperty("storeReachable").GetBoolean());
+        // The store's tree, parents first, with each category's path below the store's root.
+        Assert.Equal(["Default Category", "Medicine", "Medicine / Pain"], page.GetProperty("storeCategories").EnumerateArray().Select(c => c.GetProperty("path").GetString()));
+        var mine = page.GetProperty("categories").EnumerateArray().Where(c => c.GetProperty("category").GetString() is "Medicine / Pain" or "Garden" or "Medicine / Sleep").ToList();
+        Assert.Equal(3, mine.Count);
+        Assert.All(mine, c => Assert.Equal(JsonValueKind.Null, c.GetProperty("storeCategoryId").ValueKind));
+
+        // Matching takes the one the store already has, and creates nothing.
+        var matched = await MarketplaceFixture.JsonAsync(await PostAsync(admin, "/api/magento/categories/match"));
+        Assert.Contains(matched.GetProperty("items").EnumerateArray(), i => i.GetProperty("category").GetString() == "Medicine / Pain" && i.GetProperty("storeCategoryId").GetString() == "11");
+        Assert.Equal(0, fixture.Magento.Count("POST", "/rest/all/V1/categories"));
+
+        // A dry run of creating the rest says what it would do and does none of it.
+        var plan = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, "/api/magento/categories/create-missing", new { dryRun = true }));
+        Assert.True(plan.GetProperty("dryRun").GetBoolean());
+        Assert.Equal(0, fixture.Magento.Count("POST", "/rest/all/V1/categories"));
+
+        // For real: "Garden" under the root; "Sleep" under the "Medicine" the store already has, which is not made twice.
+        var next = 100;
+        fixture.Magento.On("POST", "/rest/all/V1/categories", _ => ChannelRouter.Json($$"""{"id":{{next++}}}"""));
+        var created = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PostJsonWithAntiforgeryAsync(
+            admin, "/api/magento/categories/create-missing", new { isActive = true, includeInMenu = false }));
+        var mineCreated = created.GetProperty("items").EnumerateArray().Where(i => i.GetProperty("category").GetString() is "Garden" or "Medicine / Sleep").ToList();
+        Assert.Equal(2, mineCreated.Count);
+        Assert.All(mineCreated, i => Assert.Equal(1, i.GetProperty("created").GetInt32()));
+        var posts = fixture.Magento.Requests.Where(r => r.StartsWith($"POST {Store}/rest/all/V1/categories ", StringComparison.Ordinal)).ToList();
+        Assert.Contains(posts, r => r.Contains("\"parent_id\":2,\"name\":\"Garden\",\"is_active\":true,\"include_in_menu\":false"));
+        Assert.Contains(posts, r => r.Contains("\"parent_id\":10,\"name\":\"Sleep\""));
+        Assert.DoesNotContain(posts, r => r.Contains("\"name\":\"Medicine\""));
+
+        // A product in the new category is sent into it.
+        var sleepId = mineCreated.Single(i => i.GetProperty("category").GetString() == "Medicine / Sleep").GetProperty("storeCategoryId").GetString();
+        var listingId = await fixture.SaveListingAsync(admin, marketId, nestedVariant);
+        var preview = await MarketplaceFixture.JsonAsync(await PostAsync(admin, $"/api/channel-listings/{listingId}/preview"));
+        Assert.Contains($"\"category_id\":\"{sleepId}\"", preview.GetRawText());
+
+        // With its mapping removed, it goes to the account's default category instead; with no default, to none.
+        var mappingId = (await admin.GetFromJsonAsync<JsonElement>("/api/magento/categories")).GetProperty("categories").EnumerateArray()
+            .Single(c => c.GetProperty("category").GetString() == "Medicine / Sleep").GetProperty("mappingId").GetString();
+        Assert.Equal(HttpStatusCode.NoContent, (await TenantApiHelpers.DeleteWithAntiforgeryAsync(admin, $"/api/channels/category-mappings/{mappingId}")).StatusCode);
+        Assert.DoesNotContain("category_links", (await MarketplaceFixture.JsonAsync(await PostAsync(admin, $"/api/channel-listings/{listingId}/preview"))).GetRawText());
+        Assert.Equal(HttpStatusCode.NoContent, (await TenantApiHelpers.PutJsonWithAntiforgeryAsync(admin, "/api/magento/categories/default", new { categoryId = "2" })).StatusCode);
+        Assert.Contains("\"category_id\":\"2\"", (await MarketplaceFixture.JsonAsync(await PostAsync(admin, $"/api/channel-listings/{listingId}/preview"))).GetRawText());
+        Assert.Equal("2", (await admin.GetFromJsonAsync<JsonElement>("/api/magento/categories")).GetProperty("defaultCategoryId").GetString());
+        // The account's other settings are untouched by that.
+        Assert.Equal(HttpStatusCode.OK, (await PostAsync(admin, $"/api/channel-listings/{listingId}/validate")).StatusCode);
+        await TenantApiHelpers.PutJsonWithAntiforgeryAsync(admin, "/api/magento/categories/default", new { categoryId = (string?)null });
+
+        // The store unreachable: the company's own side of the page still comes.
+        fixture.Magento.On("GET", "/rest/all/V1/categories", """{"message":"Service unavailable"}""", HttpStatusCode.ServiceUnavailable);
+        var offline = await admin.GetFromJsonAsync<JsonElement>("/api/magento/categories");
+        Assert.False(offline.GetProperty("storeReachable").GetBoolean());
+        Assert.NotEmpty(offline.GetProperty("categories").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Store_products_are_removed_by_sku_prefix_except_the_ones_still_listed_here()
+    {
+        using var admin = await fixture.AdminAsync("magento-remove@example.com");
+        var (_, marketId) = await MagentoAsync(admin);
+        // One of the old products is still listed from here; it is not to be deleted.
+        var (_, variantId) = await fixture.CreateProductAsync(admin, "OLD-0002");
+        await fixture.SaveListingAsync(admin, marketId, variantId);
+
+        fixture.Magento.On("GET", "/rest/all/V1/products?", """
+            {"total_count":4,"items":[{"sku":"OLD-0001"},{"sku":"OLD-0002"},{"sku":"OLD-0003"},{"sku":"old-lower"}]}
+            """);
+        fixture.Magento.On("DELETE", "/rest/all/V1/products/", "true");
+
+        // A prefix too short to be meant is refused, and the default is only to count.
+        Assert.Equal(HttpStatusCode.BadRequest, (await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, "/api/magento/store-products/remove", new { skuPrefix = "O" })).StatusCode);
+        var count = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, "/api/magento/store-products/remove", new { skuPrefix = "OLD-" }));
+        Assert.True(count.GetProperty("dryRun").GetBoolean());
+        Assert.Equal((2, 1), (count.GetProperty("removed").GetInt32(), count.GetProperty("kept").GetInt32()));
+        Assert.Equal(0, fixture.Magento.Count("DELETE", "/rest/all/V1/products/"));
+        // The search asks the store for SKUs beginning with the prefix.
+        Assert.Contains(fixture.Magento.Requests, r => r.Contains("[value]=OLD-%25") && r.Contains("[condition_type]=like"));
+
+        var removed = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PostJsonWithAntiforgeryAsync(
+            admin, "/api/magento/store-products/remove", new { skuPrefix = "OLD-", dryRun = false, limit = 50 }));
+        Assert.Equal((2, 1), (removed.GetProperty("removed").GetInt32(), removed.GetProperty("kept").GetInt32()));
+        var deletes = fixture.Magento.Requests.Where(r => r.StartsWith("DELETE ", StringComparison.Ordinal)).ToList();
+        Assert.Equal([$"DELETE {Store}/rest/all/V1/products/OLD-0001", $"DELETE {Store}/rest/all/V1/products/OLD-0003"], deletes);
+    }
 }

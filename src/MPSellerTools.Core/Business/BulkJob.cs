@@ -19,6 +19,12 @@ public enum BulkJobType
 
     /// <summary>Reads what the marketplace or store itself has on sale (eBay, Magento).</summary>
     ReadStore,
+
+    /// <summary>
+    /// Sends every listing that is wanted on sale again, whether or not it arrived before: for a change the
+    /// listings do not show by themselves, such as which of the store's categories a product category goes to.
+    /// </summary>
+    SendEverythingAgain,
 }
 
 public enum BulkJobStatus

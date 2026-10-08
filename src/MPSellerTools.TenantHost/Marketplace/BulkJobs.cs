@@ -102,7 +102,7 @@ public class BulkJobRunner(
         ofAccount = job.Type switch
         {
             BulkJobType.PublishDrafts => ofAccount.Where(l => l.DesiredState == ListingDesiredState.Draft),
-            BulkJobType.TakeOffSale => ofAccount.Where(l => l.DesiredState == ListingDesiredState.Active),
+            BulkJobType.TakeOffSale or BulkJobType.SendEverythingAgain => ofAccount.Where(l => l.DesiredState == ListingDesiredState.Active),
             BulkJobType.SendAgain => ofAccount.Where(l => l.DesiredState == ListingDesiredState.Active
                 && (l.ObservedStatus == ListingObservedStatus.Unknown || l.ObservedStatus == ListingObservedStatus.NotListed
                     || l.ObservedStatus == ListingObservedStatus.Rejected)),
@@ -186,7 +186,7 @@ public class BulkJobRunner(
         {
             BulkJobType.PublishDrafts => "queued for publishing",
             BulkJobType.TakeOffSale => "queued to come off sale",
-            BulkJobType.SendAgain => "queued to be sent again",
+            BulkJobType.SendAgain or BulkJobType.SendEverythingAgain => "queued to be sent again",
             _ => "ready to publish",
         };
         var summary = job.Total == 0
@@ -220,6 +220,7 @@ public class BulkJobRunner(
                 return null;
 
             case BulkJobType.SendAgain:
+            case BulkJobType.SendEverythingAgain:
                 db.OutboxEvents.Add(new OutboxEvent { Type = OutboxEvent.ListingContentChanged, SubjectId = listing.Id, CreatedAtUtc = now });
                 return null;
 

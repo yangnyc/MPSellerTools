@@ -308,6 +308,7 @@ export const ChannelsApi = {
     }),
   update: (accountId: string, data: ChannelAccountUpdate) =>
     apiFetch<ChannelAccount>(`/api/channels/${accountId}`, { method: "PUT", body: JSON.stringify(data) }),
+  removeCategoryMapping: (mappingId: string) => apiFetch<void>(`/api/channels/category-mappings/${mappingId}`, { method: "DELETE" }),
   // Write-only: what is saved is never sent back.
   setCredentials: (accountId: string, credentials: Record<string, string>) =>
     apiFetch<void>(`/api/channels/${accountId}/credentials`, { method: "PUT", body: JSON.stringify({ credentials }) }),
@@ -316,7 +317,7 @@ export const ChannelsApi = {
     apiFetch<CatalogSearchResult[]>(`/api/channels/${accountId}/catalog-search?q=${encodeURIComponent(query)}`),
 };
 
-export type BulkJobType = 0 | 1 | 2 | 3 | 4; // PublishDrafts, TakeOffSale, SendAgain, CheckListings, ReadStore
+export type BulkJobType = 0 | 1 | 2 | 3 | 4 | 5; // PublishDrafts, TakeOffSale, SendAgain, CheckListings, ReadStore, SendEverythingAgain
 export type BulkJobStatus = 0 | 1 | 2 | 3 | 4 | 5; // Queued, Running, Succeeded, CompletedWithErrors, Failed, Cancelled
 
 // What each kind of job is called, and what it does, in the order they are offered.
@@ -326,6 +327,7 @@ export const BULK_JOB_TYPES: Record<BulkJobType, { label: string; help: string }
   2: { label: "Send again what did not arrive", help: "Sends again every listing that was published but never reached the sales channel, or was turned down." },
   3: { label: "Check every listing", help: "Checks each listing again and records what stops it being published. Nothing is sent." },
   4: { label: "Read the store's listings", help: "Reads what eBay or the Magento store itself has, into Listings. Products new to your catalog are added to it." },
+  5: { label: "Send every published listing again", help: "Sends everything that is on sale again, whether or not it arrived before: for a change the listings do not show by themselves, such as a category now going elsewhere." },
 };
 
 // A large piece of work on one sales channel's listings, carried out in the background.
@@ -362,6 +364,51 @@ export const BulkJobsApi = {
   // A new job for the same work, which picks up whatever is left to do.
   runAgain: (id: string) => apiFetch<BulkJob>(`/api/bulk-jobs/${id}/run-again`, { method: "POST" }),
   remove: (id: string) => apiFetch<void>(`/api/bulk-jobs/${id}`, { method: "DELETE" }),
+};
+
+// A category of the Magento store. `path` is its name with its parents', below the store's root category.
+export type MagentoStoreCategory = { id: number; parentId: number; name: string; path: string; level: number; isActive: boolean; productCount: number };
+
+// One of the company's own product categories, and where it goes in the store.
+export type MagentoCategoryRow = {
+  category: string;
+  products: number;
+  mappingId: string | null;
+  storeCategoryId: string | null;
+  storeCategoryPath: string | null;
+  // Mapped to a number the store no longer has.
+  storeCategoryMissing: boolean;
+};
+
+export type MagentoCategories = {
+  storeReachable: boolean;
+  storeError: string | null;
+  storeCategories: MagentoStoreCategory[];
+  categories: MagentoCategoryRow[];
+  // Where a product goes whose own category is not mapped.
+  defaultCategoryId: string | null;
+  // Whether anything may be created in the store from here.
+  liveWrites: boolean;
+};
+
+// What matching or creating did (or, in a dry run, would do) for each category.
+export type MagentoCategoryBulk = {
+  dryRun: boolean;
+  mapped: number;
+  created: number;
+  items: { category: string; storeCategoryId: string | null; storeCategoryPath: string; created: number; error: string | null }[];
+};
+
+export const MagentoCategoriesApi = {
+  get: () => apiFetch<MagentoCategories>("/api/magento/categories"),
+  create: (data: { name: string; parentId: number | null; isActive: boolean; includeInMenu: boolean }) =>
+    apiFetch<MagentoStoreCategory>("/api/magento/categories/create", { method: "POST", body: JSON.stringify(data) }),
+  // With dryRun, nothing is created or mapped: the answer says what would be.
+  createMissing: (data: { isActive: boolean; includeInMenu: boolean; dryRun: boolean }) =>
+    apiFetch<MagentoCategoryBulk>("/api/magento/categories/create-missing", { method: "POST", body: JSON.stringify(data) }),
+  match: () => apiFetch<MagentoCategoryBulk>("/api/magento/categories/match", { method: "POST" }),
+  setDefault: (categoryId: string | null) => apiFetch<void>("/api/magento/categories/default", { method: "PUT", body: JSON.stringify({ categoryId }) }),
+  removeUnused: () => apiFetch<{ removed: number }>("/api/magento/categories/remove-unused", { method: "POST" }),
 };
 
 export type MagentoStore = { storeAddress: string | null; storeViews: string[]; currency: string | null };

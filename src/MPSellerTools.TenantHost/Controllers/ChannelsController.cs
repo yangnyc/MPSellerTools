@@ -267,6 +267,21 @@ public class ChannelsController(
         return Ok(ToResponse(mapping));
     }
 
+    /// <summary>Removes a mapping: the category's products then go to no category of the marketplace's, or to its default.</summary>
+    [HttpDelete("category-mappings/{mappingId:guid}")]
+    public async Task<IActionResult> RemoveCategoryMapping(Guid mappingId, CancellationToken cancellationToken)
+    {
+        var mapping = await db.CategoryMappings.FirstOrDefaultAsync(c => c.Id == mappingId, cancellationToken);
+        if (mapping is null)
+        {
+            return NotFound();
+        }
+
+        db.CategoryMappings.Remove(mapping);
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
     /// <summary>Fetches the mapped category's requirements from the channel and stores them with their source and version.</summary>
     [HttpPost("category-mappings/{mappingId:guid}/fetch-requirements")]
     public async Task<IActionResult> FetchRequirements(Guid mappingId, CancellationToken cancellationToken)
