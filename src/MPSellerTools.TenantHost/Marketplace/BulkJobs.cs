@@ -24,6 +24,9 @@ public class BulkJobRunner(
     /// <summary>How many items are read, done and written together.</summary>
     private const int BatchSize = 100;
 
+    /// <summary>How many times a batch is tried when a listing in it was changed by something else meanwhile.</summary>
+    private const int MaxBatchAttempts = 5;
+
     /// <summary>How many of a job's failures are kept with it; the rest are only counted.</summary>
     private const int MaxErrorsKept = 100;
 
@@ -126,38 +129,55 @@ public class BulkJobRunner(
                 return;
             }
 
-            var bundles = (await listings.LoadManyAsync(batch, cancellationToken)).ToDictionary(b => b.Listing.Id);
-            var tracked = await db.ChannelListings.Where(l => EF.Parameter(batch).Contains(l.Id)).ToDictionaryAsync(l => l.Id, cancellationToken);
-            var now = DateTime.UtcNow;
-            foreach (var id in batch)
+            // The sync queue works on the same listings and may change one between its being read here and
+            // written; the batch is then read and done again, from the counts it started with.
+            var before = (job.Processed, job.Succeeded, job.Failed, Errors: errors.Count);
+            for (var attempt = 1; ; attempt++)
             {
-                job.Processed++;
-                // Removed since the job began: nothing to do, and nothing wrong.
-                if (!bundles.TryGetValue(id, out var bundle) || !tracked.TryGetValue(id, out var listing))
+                var bundles = (await listings.LoadManyAsync(batch, cancellationToken)).ToDictionary(b => b.Listing.Id);
+                var tracked = await db.ChannelListings.Where(l => EF.Parameter(batch).Contains(l.Id)).ToDictionaryAsync(l => l.Id, cancellationToken);
+                var now = DateTime.UtcNow;
+                foreach (var id in batch)
                 {
-                    job.Succeeded++;
-                    continue;
-                }
-
-                var problem = Apply(job.Type, listing, bundle, now);
-                if (problem is null)
-                {
-                    job.Succeeded++;
-                }
-                else
-                {
-                    job.Failed++;
-                    if (errors.Count < MaxErrorsKept)
+                    job.Processed++;
+                    // Removed since the job began: nothing to do, and nothing wrong.
+                    if (!bundles.TryGetValue(id, out var bundle) || !tracked.TryGetValue(id, out var listing))
                     {
-                        errors.Add(new BulkJobError(listing.SellerSku, problem.Length > 500 ? problem[..500] : problem));
+                        job.Succeeded++;
+                        continue;
+                    }
+
+                    var problem = Apply(job.Type, listing, bundle, now);
+                    if (problem is null)
+                    {
+                        job.Succeeded++;
+                    }
+                    else
+                    {
+                        job.Failed++;
+                        if (errors.Count < MaxErrorsKept)
+                        {
+                            errors.Add(new BulkJobError(listing.SellerSku, problem.Length > 500 ? problem[..500] : problem));
+                        }
                     }
                 }
-            }
 
-            job.ErrorsJson = errors.Count == 0 ? null : JsonSerializer.Serialize(errors, Json);
-            job.HeartbeatAtUtc = DateTime.UtcNow;
-            // The listings, the events that send them on, and the job's progress, together.
-            await db.SaveChangesAsync(cancellationToken);
+                job.ErrorsJson = errors.Count == 0 ? null : JsonSerializer.Serialize(errors, Json);
+                job.HeartbeatAtUtc = DateTime.UtcNow;
+                // The listings, the events that send them on, and the job's progress, together.
+                try
+                {
+                    await db.SaveChangesAsync(cancellationToken);
+                    break;
+                }
+                catch (DbUpdateConcurrencyException) when (attempt < MaxBatchAttempts)
+                {
+                    db.ChangeTracker.Clear();
+                    (job.Processed, job.Succeeded, job.Failed) = (before.Processed, before.Succeeded, before.Failed);
+                    errors.RemoveRange(before.Errors, errors.Count - before.Errors);
+                    db.Attach(job);
+                }
+            }
             db.ChangeTracker.Clear();
             db.Attach(job);
         }
