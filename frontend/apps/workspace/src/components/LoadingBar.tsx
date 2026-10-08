@@ -1,8 +1,8 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
-import LinearProgress from "@mui/material/LinearProgress";
 import { pendingRequests, subscribeToPendingRequests } from "../lib/api";
+import ProgressBar from "./ProgressBar";
 
 // A thin bar across the top of the window while the server is being asked
 // for anything, on every page: the page's own placeholders say what is
@@ -19,11 +19,7 @@ export default function LoadingBar() {
 
   if (!shown) return null;
   return (
-    <LinearProgress
-      aria-label="Loading"
-      color="info"
-      sx={{ position: "fixed", top: 0, left: 0, right: 0, height: 3, borderRadius: 0, zIndex: (theme) => theme.zIndex.modal + 1 }}
-    />
+    <ProgressBar label="Loading" height={3} sx={{ position: "fixed", top: 0, left: 0, right: 0, borderRadius: 0, zIndex: 1400 }} />
   );
 }
 

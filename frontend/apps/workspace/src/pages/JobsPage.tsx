@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Icon from "@mui/material/Icon";
-import LinearProgress from "@mui/material/LinearProgress";
 import MDButton from "components/MDButton";
 import MDInput from "components/MDInput";
 import DataTable from "examples/Tables/DataTable";
@@ -21,6 +20,7 @@ import {
   type KitTone,
 } from "examples/Kit";
 import PageShell from "../components/PageShell";
+import ProgressBar from "../components/ProgressBar";
 import { useSnackbar } from "../components/useSnackbar";
 import { ApiError } from "../lib/api";
 import {
@@ -54,15 +54,14 @@ type Change = React.ChangeEvent<HTMLInputElement>;
 function Progress({ job }: { job: BulkJob }) {
   const { c } = useKit();
   const counted = job.total > 0;
-  const percent = counted ? Math.round((job.processed / job.total) * 100) : job.status === 1 ? 0 : 100;
+  const percent = job.status === 0 ? 0 : counted ? (job.processed / job.total) * 100 : 100;
   return (
-    <Box sx={{ minWidth: 160 }}>
-      <LinearProgress
-        aria-label={`${BULK_JOB_TYPES[job.type].label} progress`}
-        variant={job.status === 1 && !counted ? "indeterminate" : "determinate"}
-        value={job.status === 0 ? 0 : percent}
-        color={job.status === 4 ? "error" : job.status === 3 ? "warning" : job.status === 2 ? "success" : "info"}
-        sx={{ height: 6, borderRadius: 3 }}
+    <Box sx={{ width: 160, maxWidth: "100%" }}>
+      <ProgressBar
+        label={`${BULK_JOB_TYPES[job.type].label} progress`}
+        // Running, and not counted yet: busy, without a figure.
+        value={job.status === 1 && !counted ? undefined : percent}
+        tone={job.status === 4 ? "error" : job.status === 3 ? "warning" : job.status === 2 ? "success" : "info"}
       />
       <Box sx={{ mt: 0.5, fontSize: "0.75rem", color: c.muted }}>
         {counted ? `${job.processed.toLocaleString()} of ${job.total.toLocaleString()}` : job.status === 0 ? "Not started" : job.status === 1 ? "Working…" : "—"}

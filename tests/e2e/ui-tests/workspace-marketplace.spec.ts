@@ -376,9 +376,20 @@ test("Magento has its own menu, led by the connection page, where the store's ad
   await expect(page.getByRole("heading", { name: "Magento connection" })).toBeVisible();
   // A store is one site: there is no sandbox to choose.
   await expect(page.getByLabel("Environment")).toHaveCount(0);
-  await page.getByLabel("Store address").fill("https://shop.example.test");
+  await page.getByRole("textbox", { name: "Store address" }).fill("https://shop.example.test");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Magento connection saved.")).toBeVisible();
+  // Once saved, the address is a link to the store, and a button brings the field back to change it.
+  await expect(page.getByRole("textbox", { name: "Store address" })).toHaveCount(0);
+  const storeLink = page.getByRole("link", { name: "Open store address https://shop.example.test" });
+  await expect(storeLink).toHaveAttribute("href", "https://shop.example.test");
+  await expect(storeLink).toHaveAttribute("target", "_blank");
+  await page.getByRole("button", { name: "Edit store address" }).click();
+  await expect(page.getByRole("textbox", { name: "Store address" })).toHaveValue("https://shop.example.test");
+  // The settings never filled in stay open fields.
+  await expect(page.getByRole("textbox", { name: "Attribute set ID" })).toBeVisible();
+  await page.getByRole("button", { name: "Reset" }).click();
+  await expect(storeLink).toBeVisible();
 
   await page.getByLabel("Integration access token").fill("token-from-magento");
   await page.getByRole("button", { name: "Save credentials" }).click();

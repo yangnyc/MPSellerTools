@@ -114,6 +114,8 @@ public class BulkJobRunner(
         var ids = await Scope(job).ToListAsync(cancellationToken);
         // Carried on after an interruption, what was already done is no longer in scope; the counts go on from where they were.
         job.Total = job.Processed + ids.Count;
+        // Written at once, so the page shows how much there is to do before the first batch is through.
+        await db.SaveChangesAsync(cancellationToken);
         var errors = ParseErrors(job.ErrorsJson);
 
         foreach (var batch in ids.Chunk(BatchSize))

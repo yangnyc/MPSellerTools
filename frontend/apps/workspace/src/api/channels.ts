@@ -23,8 +23,9 @@ export type Marketplace = {
   credentials: { key: string; label: string }[];
   // Where the secrets are kept instead, when not here.
   credentialsNote?: string;
-  // The account's non-secret settings the marketplace's adapter reads.
-  settings: { key: string; label: string; help: string }[];
+  // The account's non-secret settings the marketplace's adapter reads. `link`: the value is an address,
+  // shown as a link to open once saved, with a button to change it.
+  settings: { key: string; label: string; help: string; link?: boolean }[];
   // Whether its catalog can be searched for an item to offer on.
   catalogSearch: boolean;
   // What the marketplace calls the place a category maps to.
@@ -111,7 +112,7 @@ export const MAGENTO: Marketplace = {
   credentialsHelp:
     "The access token of an integration created in the Magento admin under System › Extensions › Integrations, with access to Catalog, Inventory and Sales. Magento 2.4.4 and later also need “Allow OAuth Access Tokens to be used as standalone Bearer tokens” switched on, under Stores › Configuration › Services › OAuth.",
   settings: [
-    { key: "baseUrl", label: "Store address", help: "Where the store is, starting with https://. Its API is reached under /rest." },
+    { key: "baseUrl", label: "Store address", help: "Where the store is, starting with https://. Its API is reached under /rest.", link: true },
     { key: "attributeSetId", label: "Attribute set ID", help: "The attribute set new products are filed under. Leave empty for Default (4)." },
     { key: "weightUnit", label: "Weight unit", help: "The store's own weight unit: lbs or kgs. Leave empty for lbs." },
   ],

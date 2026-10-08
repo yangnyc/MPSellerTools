@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import Box from "@mui/material/Box";
+import Icon from "@mui/material/Icon";
+import Link from "@mui/material/Link";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Switch from "@mui/material/Switch";
 import MDButton from "components/MDButton";
@@ -52,10 +54,14 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
   const [mappings, setMappings] = useState<CategoryMapping[]>([]);
   const [internalCategory, setInternalCategory] = useState("");
   const [externalCategory, setExternalCategory] = useState("");
+  // The saved settings being changed. One that is saved and left alone shows as its value (a link, when it
+  // is an address) with a button to change it, rather than as a field that is always open to a stray edit.
+  const [editingLinks, setEditingLinks] = useState<string[]>([]);
 
   const show = useCallback((found: ChannelAccount | null) => {
     setAccount(found);
     setForm(found ? toForm(found) : null);
+    setEditingLinks([]);
   }, []);
 
   const load = useCallback(
@@ -223,16 +229,52 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
                   {marketplace.asksSellerId && (
                     <MDInput label="Seller ID" fullWidth value={form.sellerId} onChange={(e: Change) => set("sellerId", e.target.value)} />
                   )}
-                  {marketplace.settings.map((setting) => (
-                    <MDInput
-                      key={setting.key}
-                      label={setting.label}
-                      fullWidth
-                      value={form.settings[setting.key] ?? ""}
-                      onChange={(e: Change) => set("settings", { ...form.settings, [setting.key]: e.target.value })}
-                      helperText={setting.help}
-                    />
-                  ))}
+                  {marketplace.settings.map((setting) => {
+                    const saved = String(account.settings?.[setting.key] ?? "");
+                    // A saved address is something to open; any saved value becomes a field again only when asked to.
+                    const address = setting.link || /^https:\/\//i.test(saved);
+                    return saved && !editingLinks.includes(setting.key) ? (
+                      <Box key={setting.key} sx={{ minWidth: 0 }}>
+                        <Box sx={{ mb: 0.5, fontSize: "0.75rem", color: c.muted }}>{setting.label}</Box>
+                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                          {address ? (
+                            <Link
+                              href={saved}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={`Open ${setting.label.toLowerCase()} ${saved}`}
+                              sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, minWidth: 0, fontSize: "0.9375rem", color: c.accent, overflowWrap: "anywhere" }}
+                            >
+                              {saved}
+                              <Icon sx={{ flexShrink: 0, fontSize: "1rem !important" }}>open_in_new</Icon>
+                            </Link>
+                          ) : (
+                            <Box sx={{ minWidth: 0, fontSize: "0.9375rem", color: c.text, overflowWrap: "anywhere" }}>{saved}</Box>
+                          )}
+                          <MDButton
+                            variant="outlined"
+                            color="info"
+                            size="small"
+                            onClick={() => setEditingLinks([...editingLinks, setting.key])}
+                            aria-label={`Edit ${setting.label.toLowerCase()}`}
+                            startIcon={<Icon>edit</Icon>}
+                            sx={{ flexShrink: 0 }}
+                          >
+                            Edit
+                          </MDButton>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <MDInput
+                        key={setting.key}
+                        label={setting.label}
+                        fullWidth
+                        value={form.settings[setting.key] ?? ""}
+                        onChange={(e: Change) => set("settings", { ...form.settings, [setting.key]: e.target.value })}
+                        helperText={setting.help}
+                      />
+                    );
+                  })}
                 </Box>
 
                 <Box sx={{ display: "grid", gap: 2, pt: 1, borderTop: `1px solid ${c.border}` }}>
@@ -257,7 +299,7 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
                 </MDInput>
 
                 <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
-                  <MDButton variant="text" color="secondary" disabled={!!busy} onClick={() => setForm(toForm(account))}>
+                  <MDButton variant="text" color="secondary" disabled={!!busy} onClick={() => show(account)}>
                     Reset
                   </MDButton>
                   <MDButton type="submit" variant="gradient" color="info" disabled={!!busy}>
