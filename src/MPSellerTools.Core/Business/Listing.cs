@@ -11,6 +11,9 @@ public enum SalesChannel
 
     /// <summary>The company's own website: published locally, with no outside API to call.</summary>
     Website,
+
+    /// <summary>The company's own Magento Open Source store, reached through its REST API.</summary>
+    Magento,
 }
 
 public enum ListingStatus

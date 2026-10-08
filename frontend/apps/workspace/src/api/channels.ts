@@ -3,7 +3,7 @@ import { apiFetch } from "../lib/api";
 // Mirrors MarketplaceContracts.cs in MPSellerTools.TenantHost.Contracts: the
 // company's sales channels and how its products are offered on them.
 
-export type ChannelKind = 0 | 1 | 2 | 3; // Ebay, Amazon, Walmart, Website
+export type ChannelKind = 0 | 1 | 2 | 3 | 4; // Ebay, Amazon, Walmart, Website, Magento
 
 // What the workspace needs to know to give a marketplace its pages: the same
 // two pages serve every marketplace, told apart only by this.
@@ -29,7 +29,18 @@ export type Marketplace = {
   catalogSearch: boolean;
   // What the marketplace calls the place a category maps to.
   categoryLabel: string;
+  // What its settings page is called, when not "Settings"; the page then leads its menu.
+  settingsName?: string;
+  // Said under the credentials: where they come from.
+  credentialsHelp?: string;
+  // Whether the saved address and credentials can be tried out from its settings page.
+  connectionTest?: boolean;
+  // Whether it has a single site, with no sandbox beside production.
+  singleEnvironment?: boolean;
 };
+
+// Where a marketplace's settings page lives.
+export const settingsPath = (marketplace: Marketplace) => `${marketplace.path}/${marketplace.settingsName ? "connection" : "settings"}`;
 
 export const EBAY: Marketplace = {
   kind: 0,
@@ -87,6 +98,30 @@ export const WALMART: Marketplace = {
   categoryLabel: "Walmart product type",
 };
 
+// The company's own Magento Open Source store, reached through its REST API. Its one "marketplace" is the store's default view.
+export const MAGENTO: Marketplace = {
+  kind: 4,
+  name: "Magento",
+  marketplaceCode: "default",
+  path: "/magento",
+  icon: "shopping_bag",
+  asksSellerId: false,
+  publishNeeds: "Magento also needs the store's address and access token, on the Connection page, before the draft can be published.",
+  credentials: [{ key: "accessToken", label: "Integration access token" }],
+  credentialsHelp:
+    "The access token of an integration created in the Magento admin under System › Extensions › Integrations, with access to Catalog, Inventory and Sales. Magento 2.4.4 and later also need “Allow OAuth Access Tokens to be used as standalone Bearer tokens” switched on, under Stores › Configuration › Services › OAuth.",
+  settings: [
+    { key: "baseUrl", label: "Store address", help: "Where the store is, starting with https://. Its API is reached under /rest." },
+    { key: "attributeSetId", label: "Attribute set ID", help: "The attribute set new products are filed under. Leave empty for Default (4)." },
+    { key: "weightUnit", label: "Weight unit", help: "The store's own weight unit: lbs or kgs. Leave empty for lbs." },
+  ],
+  catalogSearch: false,
+  categoryLabel: "Magento category ID",
+  settingsName: "Connection",
+  connectionTest: true,
+  singleEnvironment: true,
+};
+
 export type PriceConflictPolicy = 0 | 1 | 2; // RestoreLocal, ImportRemote, ReportConflict
 
 // Everything about an account that can be changed after it was added. Credentials are saved separately.
@@ -106,7 +141,7 @@ export type ChannelAccountUpdate = {
 export type CatalogSearchResult = { catalogItemId: string; title: string | null; brand: string | null };
 
 // Every marketplace the workspace has pages for, in the order they are shown.
-export const marketplaces = (): Marketplace[] => [EBAY, AMAZON, WALMART];
+export const marketplaces = (): Marketplace[] => [EBAY, AMAZON, WALMART, MAGENTO];
 
 export type ChannelMarket = { id: string; marketplaceCode: string; language: string; currency: string };
 
@@ -272,6 +307,18 @@ export const ChannelsApi = {
   // Asks the marketplace itself, so it needs live access to be on for the account.
   catalogSearch: (accountId: string, query: string) =>
     apiFetch<CatalogSearchResult[]>(`/api/channels/${accountId}/catalog-search?q=${encodeURIComponent(query)}`),
+};
+
+export type MagentoStore = { storeAddress: string | null; storeViews: string[]; currency: string | null };
+
+// listings: how many products the store reported; created: how many of them were new to the catalog here.
+export type MagentoImport = { created: number; listings: number };
+
+export const MagentoApi = {
+  // Reaches the store with the saved address and token, and says which store answered.
+  test: () => apiFetch<MagentoStore>("/api/magento/test", { method: "POST" }),
+  // Reads the store's catalog as the listings on Magento.
+  importListings: () => apiFetch<MagentoImport>("/api/magento/import/listings", { method: "POST" }),
 };
 
 export type InventoryItem = {

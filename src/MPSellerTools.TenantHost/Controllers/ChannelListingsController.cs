@@ -78,7 +78,7 @@ public class ChannelListingsController(
         }
 
         var account = await db.ChannelAccounts.AsNoTracking().FirstAsync(a => a.Id == market.ChannelAccountId, cancellationToken);
-        if (request.FulfillmentMode == FulfillmentMode.ChannelFulfilled && account.Channel is SalesChannel.Ebay or SalesChannel.Website)
+        if (request.FulfillmentMode == FulfillmentMode.ChannelFulfilled && account.Channel is SalesChannel.Ebay or SalesChannel.Website or SalesChannel.Magento)
         {
             return Problem($"{account.Channel} has no fulfillment by the channel.", statusCode: StatusCodes.Status400BadRequest);
         }

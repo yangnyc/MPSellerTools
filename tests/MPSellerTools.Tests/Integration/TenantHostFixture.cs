@@ -70,6 +70,9 @@ public class TenantHostFixture : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>Stands in for Walmart's Marketplace API.</summary>
     public ChannelRouter Walmart { get; } = new();
 
+    /// <summary>Stands in for a Magento store's REST API.</summary>
+    public ChannelRouter Magento { get; } = new();
+
     /// <summary>
     /// The host's "Marketplace" settings. The sync worker and the startup
     /// backfill are off for every test host: tests that want them run them
@@ -88,6 +91,8 @@ public class TenantHostFixture : WebApplicationFactory<Program>, IAsyncLifetime
                 .ConfigurePrimaryHttpMessageHandler(() => new FakeChannelApi(Amazon));
             services.AddHttpClient(TenantHost.Marketplace.Channels.ChannelHttp.WalmartClient)
                 .ConfigurePrimaryHttpMessageHandler(() => new FakeChannelApi(Walmart));
+            services.AddHttpClient(TenantHost.Marketplace.Channels.ChannelHttp.MagentoClient)
+                .ConfigurePrimaryHttpMessageHandler(() => new FakeChannelApi(Magento));
         });
     }
 

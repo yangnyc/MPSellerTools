@@ -182,6 +182,9 @@ builder.Services.AddScoped<EbaySync>();
 builder.Services.Configure<MarketplaceOptions>(builder.Configuration.GetSection(MarketplaceOptions.SectionName));
 builder.Services.AddHttpClient(ChannelHttp.AmazonClient, client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddHttpClient(ChannelHttp.WalmartClient, client => client.Timeout = TimeSpan.FromSeconds(30));
+// A redirect is not followed: the store address is checked before a call, and where a redirect leads is not.
+builder.Services.AddHttpClient(ChannelHttp.MagentoClient, client => client.Timeout = TimeSpan.FromSeconds(30))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddSingleton<ChannelTokenCache>();
 builder.Services.AddSingleton<ChannelRateLimiter>();
 builder.Services.AddScoped<ChannelHttp>();
@@ -190,6 +193,8 @@ builder.Services.AddScoped<IChannelAdapter, EbayChannelAdapter>();
 builder.Services.AddScoped<IChannelAdapter, AmazonChannelAdapter>();
 builder.Services.AddScoped<IChannelAdapter, WalmartChannelAdapter>();
 builder.Services.AddScoped<IChannelAdapter, WebsiteChannelAdapter>();
+builder.Services.AddScoped<IChannelAdapter, MagentoChannelAdapter>();
+builder.Services.AddScoped<MagentoSync>();
 builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<ListingService>();
 builder.Services.AddScoped<OrderIngestionService>();

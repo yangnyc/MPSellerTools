@@ -11,6 +11,7 @@ import { useSnackbar } from "../../components/useSnackbar";
 import { ApiError } from "../../lib/api";
 import {
   ChannelsApi,
+  MagentoApi,
   SyncApi,
   type CategoryMapping,
   type ChannelAccount,
@@ -92,7 +93,7 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
       // Settings left empty are not saved at all, so the marketplace's defaults apply.
       const settings = Object.fromEntries(Object.entries(form.settings).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v));
       show(await ChannelsApi.update(account.id, { ...form, channel: marketplace.kind, sellerId: form.sellerId.trim() || null, settings }));
-      notify(`${name} settings saved.`, "success");
+      notify(`${name} ${(marketplace.settingsName ?? "Settings").toLowerCase()} saved.`, "success");
     }, "Could not save the settings.");
 
   const saveCredentials = () =>
@@ -113,6 +114,14 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
       await load();
       notify("Category saved.", "success");
     }, "Could not save the category.");
+
+  // Tries the address and token as saved, not as typed: both are saved first.
+  const testConnection = () =>
+    run("test", async () => {
+      const store = await MagentoApi.test();
+      const views = store.storeViews.length > 0 ? ` Store views: ${store.storeViews.join(", ")}.` : "";
+      notify(`Connected to ${store.storeAddress ?? name}.${views}`, "success");
+    }, `Could not reach ${name}.`);
 
   const importOrders = () =>
     run("import", async () => {
@@ -138,8 +147,8 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
   return (
     <PageShell>
       <PageHeader
-        icon="tune"
-        title={`${name} settings`}
+        icon={marketplace.settingsName ? "link" : "tune"}
+        title={`${name} ${(marketplace.settingsName ?? "Settings").toLowerCase()}`}
         subtitle={`How this workspace talks to ${name}, and what it is allowed to do there.`}
         actions={
           <MDButton component={RouterLink} to={path} variant="outlined" color="info" size="small">
@@ -197,18 +206,20 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
                 sx={{ display: "grid", gap: 2.5 }}
               >
                 <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2.5 }}>
-                  <MDInput
-                    select
-                    label="Environment"
-                    fullWidth
-                    SelectProps={{ native: true }}
-                    InputLabelProps={{ shrink: true }}
-                    value={form.environment}
-                    onChange={(e: Change) => set("environment", Number(e.target.value) as 0 | 1)}
-                  >
-                    <option value={0}>Sandbox</option>
-                    <option value={1}>Production</option>
-                  </MDInput>
+                  {!marketplace.singleEnvironment && (
+                    <MDInput
+                      select
+                      label="Environment"
+                      fullWidth
+                      SelectProps={{ native: true }}
+                      InputLabelProps={{ shrink: true }}
+                      value={form.environment}
+                      onChange={(e: Change) => set("environment", Number(e.target.value) as 0 | 1)}
+                    >
+                      <option value={0}>Sandbox</option>
+                      <option value={1}>Production</option>
+                    </MDInput>
+                  )}
                   {marketplace.asksSellerId && (
                     <MDInput label="Seller ID" fullWidth value={form.sellerId} onChange={(e: Change) => set("sellerId", e.target.value)} />
                   )}
@@ -287,8 +298,14 @@ export default function MarketplaceSettingsPage({ marketplace }: { marketplace: 
                         onChange={(e: Change) => setCredentials({ ...credentials, [key]: e.target.value })}
                       />
                     ))}
+                    {marketplace.credentialsHelp && <Box sx={hint}>{marketplace.credentialsHelp}</Box>}
                     <Box sx={hint}>{account.hasCredentials ? "Saving replaces all of the credentials already stored." : `Needed before anything can be sent to ${name}.`}</Box>
-                    <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                    <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
+                      {marketplace.connectionTest && (
+                        <MDButton variant="outlined" color="info" disabled={!account.hasCredentials || !!busy} onClick={testConnection}>
+                          {busy === "test" ? "Testing…" : "Test connection"}
+                        </MDButton>
+                      )}
                       <MDButton type="submit" variant="gradient" color="info" disabled={!credentialsComplete || !!busy}>
                         {busy === "credentials" ? "Saving…" : "Save credentials"}
                       </MDButton>

@@ -42,6 +42,12 @@ public static class ChannelImageRules
             "JPEG or PNG, up to 5 MB.",
             "Square, 1500 px or more; 2200 px recommended.",
             "Walmart Marketplace item spec (mainImageUrl, productSecondaryImageURL) and Walmart's image guidelines"),
+        SalesChannel.Magento => new(
+            0, 50,
+            "Pictures are not sent to Magento from here; add them to the product in the store's admin.",
+            "JPEG, PNG or GIF, uploaded in the store's admin.",
+            "As the store's theme asks.",
+            "Magento's catalog API takes a picture as file contents (media_gallery_entries), not as an address"),
         _ => Website,
     };
 }

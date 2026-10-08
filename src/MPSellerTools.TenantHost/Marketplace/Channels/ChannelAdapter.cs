@@ -231,6 +231,7 @@ public class ChannelHttp(IHttpClientFactory httpClientFactory, ChannelRateLimite
 {
     public const string AmazonClient = "amazon";
     public const string WalmartClient = "walmart";
+    public const string MagentoClient = "magento";
 
     private static readonly JsonSerializerOptions Json = new() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
 
@@ -316,7 +317,7 @@ public class ChannelHttp(IHttpClientFactory httpClientFactory, ChannelRateLimite
         }
     }
 
-    // The channels' error shapes: {"errors":[{"message"}]}, {"error_description"}, {"error":[{"description"}]}.
+    // The channels' error shapes: {"errors":[{"message"}]}, {"error_description"}, {"error":[{"description"}]}, {"message"}.
     private static string ErrorText(JsonElement body)
     {
         if (body.ValueKind == JsonValueKind.Object)
@@ -324,6 +325,12 @@ public class ChannelHttp(IHttpClientFactory httpClientFactory, ChannelRateLimite
             if (body.TryGetProperty("error_description", out var description) && description.ValueKind == JsonValueKind.String)
             {
                 return Truncate(description.GetString()!);
+            }
+
+            // Magento's.
+            if (body.TryGetProperty("message", out var plain) && plain.ValueKind == JsonValueKind.String && plain.GetString() is { Length: > 0 } text)
+            {
+                return Truncate(text);
             }
 
             foreach (var listName in new[] { "errors", "error" })

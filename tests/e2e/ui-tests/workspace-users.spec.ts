@@ -140,5 +140,5 @@ test("the sidebar is in three groups separated by visible lines", async ({ page 
   const line = sidebar.locator(".MuiList-root > hr").first();
   await expect(line).toHaveCSS("background-image", "none");
   await expect(line).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-  expect(entries).toEqual(["Dashboard", "Products", "Listings", "Orders", "Inventory", "eBay", "Amazon", "Walmart", "Sync queue", "---", "Tasks", "Audit", "---", "Settings", "Profile", "Users"]);
+  expect(entries).toEqual(["Dashboard", "Products", "Listings", "Orders", "Inventory", "eBay", "Amazon", "Walmart", "Magento", "Sync queue", "---", "Tasks", "Audit", "---", "Settings", "Profile", "Users"]);
 });

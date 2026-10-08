@@ -51,7 +51,7 @@ and stop the whole thing.
 
 - Products with variants (own SKU, price and stock), pictures, brands and categories.
 - Orders, tasks, company settings, users and invitations, audit log.
-- Sales channels: Amazon, eBay, Walmart and the company's own website, with
+- Sales channels: Amazon, eBay, Walmart, a Magento store and the company's own website, with
   per-channel content, price, quantity and pictures for each listing.
 - A sync queue that carries changes to the channels, inventory accounting and
   low-stock monitoring. **Off by default** — see

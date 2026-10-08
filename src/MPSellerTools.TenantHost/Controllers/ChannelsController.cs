@@ -151,7 +151,12 @@ public class ChannelsController(
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
-        var required = account.Channel == SalesChannel.Amazon ? new[] { "clientId", "clientSecret", "refreshToken" } : ["clientId", "clientSecret"];
+        var required = account.Channel switch
+        {
+            SalesChannel.Amazon => new[] { "clientId", "clientSecret", "refreshToken" },
+            SalesChannel.Magento => ["accessToken"],
+            _ => ["clientId", "clientSecret"],
+        };
         var given = (request.Credentials ?? []).ToDictionary(c => c.Key, c => c.Value?.Trim() ?? "");
         if (required.Any(key => !given.TryGetValue(key, out var value) || value.Length is 0 or > 4000))
         {

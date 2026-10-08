@@ -259,6 +259,7 @@ public class OrderIngestionService(TenantDbContext db, InventoryService inventor
         SalesChannel.Amazon => "AMZ",
         SalesChannel.Walmart => "WMT",
         SalesChannel.Website => "WEB",
+        SalesChannel.Magento => "MAG",
         _ => "EBAY",
     };
 

@@ -30,7 +30,7 @@ import {
   type ListingStatus,
   type Listings,
 } from "../api/types";
-import { AMAZON, EBAY, type Marketplace } from "../api/channels";
+import { AMAZON, EBAY, MAGENTO, MagentoApi, type Marketplace } from "../api/channels";
 import { LISTING_STATUS_TONE } from "../lib/status";
 
 type StatusFilter = "all" | ListingStatus;
@@ -59,8 +59,8 @@ function sitePrice(listing: Listing) {
 
 // Every posting, or with `marketplace` only that marketplace's: the same page sits in each marketplace's menu.
 export default function ListingsPage({ marketplace }: { marketplace?: Marketplace }) {
-  // eBay is the one site that can be read on request; the others report through the sync queue.
-  const readsEbay = !marketplace || marketplace.kind === EBAY.kind;
+  // eBay and a Magento store can be read on request; the others report through the sync queue.
+  const reader = !marketplace || marketplace.kind === EBAY.kind ? "eBay" : marketplace.kind === MAGENTO.kind ? "Magento" : null;
   const where = marketplace?.name ?? "your marketplaces";
   const { user, logout } = useAuth();
   const { notify } = useSnackbar();
@@ -82,21 +82,26 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
 
   useEffect(fetchData, [fetchData]);
 
-  // Listings come from the site itself, so refreshing them is the eBay product import.
+  // Listings come from the site itself, so refreshing them is the eBay product import, or a read of the Magento store's catalog.
   const refresh = async () => {
     setRefreshing(true);
     try {
-      const result = await EbayApi.importProducts();
-      // The rest was read; the reason the site's own listings were not is eBay's.
-      if (result.warning) notify(`Read from eBay: ${result.listings} posted. ${result.warning}`, "warning");
-      else notify(`Read from eBay: ${result.listings} posted.`, "success");
+      if (reader === "Magento") {
+        const store = await MagentoApi.importListings();
+        notify(`Read from Magento: ${store.listings} in the store, ${store.created} new to your catalog.`, "success");
+      } else {
+        const result = await EbayApi.importProducts();
+        // The rest was read; the reason the site's own listings were not is eBay's.
+        if (result.warning) notify(`Read from eBay: ${result.listings} posted. ${result.warning}`, "warning");
+        else notify(`Read from eBay: ${result.listings} posted.`, "success");
+      }
       fetchData();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         await logout();
         return;
       }
-      notify(err instanceof ApiError ? err.message : "Could not read from eBay.", "error");
+      notify(err instanceof ApiError ? err.message : `Could not read from ${reader}.`, "error");
     } finally {
       setRefreshing(false);
     }
@@ -186,7 +191,7 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
 
   const refreshButton = (size: "small" | "medium") => (
     <MDButton variant="gradient" color="info" size={size} disabled={refreshing} onClick={refresh} startIcon={<Icon>sync</Icon>}>
-      {refreshing ? "Reading eBay…" : "Refresh from eBay"}
+      {refreshing ? `Reading ${reader}…` : `Refresh from ${reader}`}
     </MDButton>
   );
   const connectButton = (
@@ -209,7 +214,7 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
             `Your products as posted on ${where}.`
           )
         }
-        actions={isTenantAdmin && readsEbay && data?.connected && refreshButton("medium")}
+        actions={isTenantAdmin && reader && data?.connected && refreshButton("medium")}
       />
 
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 3, mb: 3 }}>
@@ -238,9 +243,11 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
             icon="sell"
             title="Nothing posted yet"
             message={
-              marketplace && !readsEbay
+              marketplace && reader !== "eBay"
                 ? data?.connected
-                  ? `${marketplace.name} has not reported any of your products as on sale yet. A product shows up here once ${marketplace.name} confirms it.`
+                  ? reader
+                    ? `Nothing has been read from ${marketplace.name} yet, or the store has no products. Refreshing reads its catalog.`
+                    : `${marketplace.name} has not reported any of your products as on sale yet. A product shows up here once ${marketplace.name} confirms it.`
                   : isTenantAdmin
                     ? `Add ${marketplace.name} as a sales channel and the products it reports as on sale show up here.`
                     : `${marketplace.name} is not set up yet. A company admin can add it.`
@@ -252,7 +259,7 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
                   ? "eBay reported nothing on sale on this account."
                   : "eBay reported no posted items the last time it was read."
             }
-            action={isTenantAdmin && (!data?.connected ? connectButton : readsEbay && refreshButton("small"))}
+            action={isTenantAdmin && (!data?.connected ? connectButton : reader && refreshButton("small"))}
           />
         )}
         {!loading && !error && (listings?.length ?? 0) > 0 && (

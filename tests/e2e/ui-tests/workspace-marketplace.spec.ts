@@ -347,3 +347,56 @@ test("a product's own page shows it on every marketplace, and adds, edits and pu
   await page.getByRole("button", { name: "Edit on Amazon" }).click();
   await expect(page.getByRole("dialog").getByLabel("Price on Amazon")).toHaveValue("14.5");
 });
+test("Magento has its own menu, led by the connection page, where the store's address and token are saved and tried out", async ({ page }) => {
+  const magento = account({
+    id: "a-magento", channel: 4, name: "Magento", sellerId: null, hasCredentials: true,
+    markets: [{ id: "m-magento", marketplaceCode: "default", language: "en-US", currency: "USD" }],
+  });
+  await mockApi(
+    page,
+    { "/api/channels": [magento], "/api/listings": { listings: [], connected: true, lastSyncedAtUtc: null } },
+    {
+      "/api/channels/a-magento": { ...magento, settings: { baseUrl: "https://shop.example.test" } },
+      "/api/magento/test": { storeAddress: "https://shop.example.test/", storeViews: ["default", "de"], currency: "USD" },
+      "/api/magento/import/listings": { created: 2, listings: 5 },
+    },
+  );
+  await page.goto("/magento/connection");
+
+  // Connection first, then its products, adding one, and what the store itself reports.
+  // The group is open, as the page shown is one of its own.
+  const sidebar = page.locator(".MuiDrawer-paper").filter({ has: page.getByText("MP Seller Tools", { exact: true }) });
+  const links = sidebar.locator('a[href^="/magento"]');
+  await expect(links).toHaveCount(4);
+  expect(await links.evaluateAll((items) => items.map((item) => item.getAttribute("href")))).toEqual([
+    "/magento/connection", "/magento", "/magento/add-product", "/magento/listings",
+  ]);
+  await expect(sidebar.locator('a[href="/magento/connection"]')).toHaveText(/Connection/);
+
+  await expect(page.getByRole("heading", { name: "Magento connection" })).toBeVisible();
+  // A store is one site: there is no sandbox to choose.
+  await expect(page.getByLabel("Environment")).toHaveCount(0);
+  await page.getByLabel("Store address").fill("https://shop.example.test");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Magento connection saved.")).toBeVisible();
+
+  await page.getByLabel("Integration access token").fill("token-from-magento");
+  await page.getByRole("button", { name: "Save credentials" }).click();
+  await expect(page.getByText("Magento credentials saved.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Test connection" }).click();
+  await expect(page.getByText("Connected to https://shop.example.test/. Store views: default, de.")).toBeVisible();
+
+  // Its listings are read from the store on request.
+  await sidebar.locator('a[href="/magento/listings"]').click();
+  await expect(page.getByRole("heading", { name: "Magento listings" })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh from Magento" }).first().click();
+  await expect(page.getByText("Read from Magento: 5 in the store, 2 new to your catalog.")).toBeVisible();
+
+  expect(writes).toEqual([
+    'PUT /api/channels/a-magento {"name":"Magento","environment":0,"sellerId":null,"settings":{"baseUrl":"https://shop.example.test"},"isEnabled":true,"liveWritesEnabled":false,"inventorySyncEnabled":false,"orderImportEnabled":false,"priceConflictPolicy":2,"channel":4}',
+    'PUT /api/channels/a-magento/credentials {"credentials":{"accessToken":"token-from-magento"}}',
+    "POST /api/magento/test",
+    "POST /api/magento/import/listings",
+  ]);
+});

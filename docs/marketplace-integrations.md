@@ -133,6 +133,43 @@ Behaviour to know:
 - A listing is set up by match when it has an `existingCatalogItemId` or the
   attribute `walmart.setup = match`.
 
+## Magento — Open Source REST API
+
+The company's own Magento store, at the address in the account's `baseUrl`
+setting. Every call carries the access token of an integration created in
+the store's admin (`Authorization: Bearer …`). **Everything in this section
+is from prior knowledge of Magento 2's REST API and was only run against a
+fake of it in the tests, never against a real store.**
+
+| Operation | Used for | Status |
+| --- | --- | --- |
+| `GET /rest/V1/store/storeConfigs` | the connection check: which store answered, its views and currency | From prior knowledge |
+| `POST /rest/all/V1/products` with `product.sku` | creating the product, or updating the one with that SKU | From prior knowledge. Sent as a simple product, visible in catalog and search, enabled only when it is meant to be on sale |
+| `product.extension_attributes.stock_item`, `category_links` | quantity and category on the same call | From prior knowledge |
+| `PUT /rest/all/V1/products/{sku}` | price; taking a product off sale (`status = 2`) | From prior knowledge |
+| `PUT /rest/V1/products/{sku}/stockItems/1` | quantity | From prior knowledge. A store using several stock sources (MSI) may need the source-items API instead; **not implemented** |
+| `GET /rest/all/V1/products/{sku}` | what the store holds for a listing | From prior knowledge |
+| `GET /rest/all/V1/products?searchCriteria[...]` | reading the catalog as the listings there | From prior knowledge |
+| `GET /rest/V1/stockItems/lowStock/?scopeId=0&qty=…` | every product's stock in one call | From prior knowledge. When the store refuses it, listings are recorded without a quantity |
+| `GET /rest/V1/orders?searchCriteria[...]` on `updated_at` | order import | From prior knowledge |
+| Pictures (`media_gallery_entries`) | — | **Not implemented**: the API takes file contents, not an address |
+| Configurable products, tier prices, multiple websites | — | Not implemented |
+
+Behaviour to know:
+
+- Magento 2.4.4 and later refuse an integration token used on its own until
+  *Allow OAuth Access Tokens to be used as standalone Bearer tokens* is
+  switched on (Stores › Configuration › Services › OAuth).
+- The store address has to be a public `https://` one. An address on this
+  machine or a private network is refused before any call, and redirects
+  are not followed.
+- A draft is saved in the store disabled; publishing enables it; taking it
+  off sale disables it again. Nothing is deleted from the store.
+- A listing's attributes are sent as Magento custom attributes, under
+  Magento's own attribute codes.
+- Reading the catalog files a product under the one here with its SKU, or
+  makes a new one; a product already here is not changed.
+
 ## Company website
 
 No external API. Publishing is a local state change carried out by the same

@@ -118,7 +118,7 @@ public record SaveChannelAccountRequest(
     bool OrderImportEnabled,
     PriceConflictPolicy PriceConflictPolicy);
 
-/// <summary>Amazon: clientId, clientSecret, refreshToken. Walmart: clientId, clientSecret. Write-only.</summary>
+/// <summary>Amazon: clientId, clientSecret, refreshToken. Walmart: clientId, clientSecret. Magento: accessToken. Write-only.</summary>
 public record SetCredentialsRequest(Dictionary<string, string> Credentials);
 
 public record SaveMarketRequest(string MarketplaceCode, string? Language, string? Currency);

@@ -162,8 +162,8 @@ export type EbayOrderImport = { created: number; updated: number; productsCreate
 // `warning`: why the listings made on the eBay site could not be read, when they could not.
 export type EbayProductImport = { created: number; updated: number; listings: number; warning?: string | null };
 
-export type SalesChannel = 0 | 1 | 2 | 3; // Ebay, Amazon, Walmart, Website
-export const SALES_CHANNEL_LABELS: Record<SalesChannel, string> = { 0: "eBay", 1: "Amazon", 2: "Walmart", 3: "Website" };
+export type SalesChannel = 0 | 1 | 2 | 3 | 4; // Ebay, Amazon, Walmart, Website, Magento
+export const SALES_CHANNEL_LABELS: Record<SalesChannel, string> = { 0: "eBay", 1: "Amazon", 2: "Walmart", 3: "Website", 4: "Magento" };
 
 export type ListingStatus = 0 | 1 | 2; // Live, OutOfStock, Ended
 export const LISTING_STATUS_LABELS: Record<ListingStatus, string> = {

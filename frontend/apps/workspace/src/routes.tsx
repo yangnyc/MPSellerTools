@@ -12,7 +12,7 @@ import MarketplaceAddProductPage from "./pages/marketplace/MarketplaceAddProduct
 import MarketplaceSettingsPage from "./pages/marketplace/MarketplaceSettingsPage";
 import SyncQueuePage from "./pages/marketplace/SyncQueuePage";
 import InventoryPage from "./pages/InventoryPage";
-import { AMAZON, EBAY, WALMART, type Marketplace } from "./api/channels";
+import { AMAZON, EBAY, MAGENTO, WALMART, settingsPath, type Marketplace } from "./api/channels";
 import AuditPage from "./pages/AuditPage";
 import ProfilePage from "./pages/ProfilePage";
 import UserBulkPage from "./pages/advanced/UserBulkPage";
@@ -42,9 +42,18 @@ export type AppRoute = {
 
 // A marketplace's sidenav group: its products, the page that adds a product to
 // it, what it reports as posted, and its account settings. `first` goes ahead of those, for a page only
-// that marketplace has.
+// that marketplace has. Settings under a name of their own (Magento's "Connection") lead the group.
 function marketplaceGroup(marketplace: Marketplace, first: AppRoute[] = []): AppRoute {
   const key = marketplace.name.toLowerCase();
+  const settings: AppRoute = {
+    type: "collapse",
+    name: marketplace.settingsName ?? "Settings",
+    key: `${key}-settings`,
+    icon: <Icon fontSize="small">{marketplace.settingsName ? "link" : "tune"}</Icon>,
+    route: settingsPath(marketplace),
+    component: <MarketplaceSettingsPage key={key} marketplace={marketplace} />,
+    roles: ["TenantAdmin"],
+  };
   return {
     type: "collapse",
     name: marketplace.name,
@@ -53,6 +62,7 @@ function marketplaceGroup(marketplace: Marketplace, first: AppRoute[] = []): App
     roles: ["TenantAdmin"],
     collapse: [
       ...first,
+      ...(marketplace.settingsName ? [settings] : []),
       {
         type: "collapse",
         name: `Products on ${marketplace.name}`,
@@ -81,15 +91,7 @@ function marketplaceGroup(marketplace: Marketplace, first: AppRoute[] = []): App
         component: <ListingsPage key={key} marketplace={marketplace} />,
         roles: ["TenantAdmin"],
       },
-      {
-        type: "collapse",
-        name: "Settings",
-        key: `${key}-settings`,
-        icon: <Icon fontSize="small">tune</Icon>,
-        route: `${marketplace.path}/settings`,
-        component: <MarketplaceSettingsPage key={key} marketplace={marketplace} />,
-        roles: ["TenantAdmin"],
-      },
+      ...(marketplace.settingsName ? [] : [settings]),
     ],
   };
 }
@@ -150,6 +152,7 @@ const routes: AppRoute[] = [
   ]),
   marketplaceGroup(AMAZON),
   marketplaceGroup(WALMART),
+  marketplaceGroup(MAGENTO),
   {
     type: "collapse",
     name: "Sync queue",
