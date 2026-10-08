@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Icon from "@mui/material/Icon";
 import MDButton from "components/MDButton";
@@ -11,6 +11,7 @@ import ListingEditDialog from "./ListingEditDialog";
 import { useSnackbar } from "../../components/useSnackbar";
 import { ApiError } from "../../lib/api";
 import {
+  BulkJobsApi,
   ChannelListingsApi,
   ChannelsApi,
   type ChannelAccount,
@@ -29,6 +30,7 @@ export default function MarketplaceListingsPage({ marketplace }: { marketplace: 
   const { name, path } = marketplace;
   const { c } = useKit();
   const { notify } = useSnackbar();
+  const navigate = useNavigate();
 
   const [account, setAccount] = useState<ChannelAccount | null>(null);
   const [listings, setListings] = useState<ChannelListing[]>([]);
@@ -89,6 +91,15 @@ export default function MarketplaceListingsPage({ marketplace }: { marketplace: 
       }
       await load();
     }, "Could not publish.");
+
+  // Thousands of drafts are not published one click at a time: this hands them to a job.
+  const publishAll = () =>
+    run("publish-all", async () => {
+      if (!account) return;
+      await BulkJobsApi.start(0, account.id);
+      notify(`Publishing every ${name} draft was queued as a job.`, "success");
+      navigate("/jobs");
+    }, "Could not queue the job.");
 
   const sendAgain = (listing: ChannelListing) =>
     run(listing.id, async () => {
@@ -186,7 +197,18 @@ export default function MarketplaceListingsPage({ marketplace }: { marketplace: 
         icon={marketplace.icon}
         title={name}
         subtitle={`Your products offered on ${name}.`}
-        actions={account && addButton("medium")}
+        actions={
+          account && (
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {listings.some((l) => l.desiredState === 0) && (
+                <MDButton variant="outlined" color="info" disabled={!!busy} onClick={publishAll} startIcon={<Icon>playlist_play</Icon>}>
+                  {busy === "publish-all" ? "Queuing…" : "Publish all drafts"}
+                </MDButton>
+              )}
+              {addButton("medium")}
+            </Box>
+          )
+        }
       />
 
       {loading && <StateBlock kind="loading" title={`Loading ${name}`} />}

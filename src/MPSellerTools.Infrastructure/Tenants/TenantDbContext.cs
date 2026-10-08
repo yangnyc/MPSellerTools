@@ -74,6 +74,9 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options)
 
     public DbSet<InboxEvent> InboxEvents => Set<InboxEvent>();
 
+    /// <summary>Large pieces of work carried out in the background, item by item.</summary>
+    public DbSet<BulkJob> BulkJobs => Set<BulkJob>();
+
     // Added here rather than where the context is registered, so the host,
     // the provisioning worker and the tests all get it.
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
@@ -90,6 +93,13 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options)
             entity.Property(p => p.RowVersion).IsRowVersion();
             entity.Property(p => p.Brand).HasMaxLength(200);
             entity.Property(p => p.Category).HasMaxLength(100);
+        });
+
+        builder.Entity<BulkJob>(entity =>
+        {
+            // How the worker finds the next one, and how the list is read.
+            entity.HasIndex(j => new { j.Status, j.CreatedAtUtc });
+            entity.HasOne<ChannelAccount>().WithMany().HasForeignKey(j => j.ChannelAccountId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<Order>(entity =>

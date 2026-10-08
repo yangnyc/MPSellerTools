@@ -18,6 +18,40 @@ Out of the box, after the migration:
 - orders do **not** touch stock, exactly as before;
 - the worker runs, gives old products their default variant, and otherwise finds nothing to do.
 
+## Bulk jobs
+
+Work on thousands of listings is not done one click at a time. A **bulk
+job** is asked for once — on the workspace's **Jobs** page, or with
+*Publish all drafts* on a marketplace's product page — and carried out in
+the background by `BulkJobWorker` in the tenant's host.
+
+| Job | What it does to each listing of the account |
+| --- | --- |
+| Publish every draft | checks it; if it passes, marks it wanted on sale. One held back stays a draft, with the reason |
+| Take everything off sale | marks everything wanted on sale as wanted off sale |
+| Send again what did not arrive | queues again what is wanted on sale but is not sent, not listed or was rejected |
+| Check every listing | checks it and records what stops it being published; sends nothing |
+| Read the store's listings | eBay and Magento only: the same read as *Refresh* on the Listings page |
+
+- Jobs are rows in the tenant's own database (`BulkJobs`), run one at a
+  time, oldest first, a hundred listings to a batch. Progress is written
+  after each batch.
+- A job only *queues* its listings: the sync queue then sends each one,
+  at its own pace and with its own retries, exactly as a single Publish
+  would. With live writes off for the account that is a dry run.
+- Stopping a waiting job cancels it at once; a running one stops after the
+  batch it is on. What it already did stays done.
+- A job works out what is left from the listings as they are, so one cut
+  short by a restart is carried on by the next host to start, and *Run
+  again* picks up whatever a finished job did not do.
+- The same job cannot be queued twice at once for one account. The first
+  hundred items held back are kept with the job; the rest are only counted.
+- `Marketplace:WorkerEnabled = false` stops this worker too.
+
+API: `GET /api/bulk-jobs`, `POST /api/bulk-jobs` (`type`, `channelAccountId`),
+`POST /api/bulk-jobs/{id}/cancel`, `POST /api/bulk-jobs/{id}/run-again`,
+`DELETE /api/bulk-jobs/{id}`. TenantAdmin only.
+
 ## Configuration
 
 Host-wide, in the `Marketplace` section of the tenant host's configuration

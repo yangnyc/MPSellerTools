@@ -203,6 +203,9 @@ builder.Services.AddScoped<CatalogBackfill>();
 builder.Services.AddScoped<SyncHealthReader>();
 builder.Services.AddScoped<LowStockMonitor>();
 builder.Services.AddHostedService<ChannelSyncWorker>();
+// Bulk jobs: large pieces of work on a channel's listings, queued in the tenant's database.
+builder.Services.AddScoped<BulkJobRunner>();
+builder.Services.AddHostedService<BulkJobWorker>();
 
 var app = builder.Build();
 

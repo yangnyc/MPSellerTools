@@ -315,6 +315,54 @@ export const ChannelsApi = {
     apiFetch<CatalogSearchResult[]>(`/api/channels/${accountId}/catalog-search?q=${encodeURIComponent(query)}`),
 };
 
+export type BulkJobType = 0 | 1 | 2 | 3 | 4; // PublishDrafts, TakeOffSale, SendAgain, CheckListings, ReadStore
+export type BulkJobStatus = 0 | 1 | 2 | 3 | 4 | 5; // Queued, Running, Succeeded, CompletedWithErrors, Failed, Cancelled
+
+// What each kind of job is called, and what it does, in the order they are offered.
+export const BULK_JOB_TYPES: Record<BulkJobType, { label: string; help: string }> = {
+  0: { label: "Publish every draft", help: "Checks each draft and publishes the ones that pass. The ones held back stay drafts, with the reason." },
+  1: { label: "Take everything off sale", help: "Asks for every listing that is on sale, or on its way there, to come off sale. Nothing is deleted." },
+  2: { label: "Send again what did not arrive", help: "Sends again every listing that was published but never reached the sales channel, or was turned down." },
+  3: { label: "Check every listing", help: "Checks each listing again and records what stops it being published. Nothing is sent." },
+  4: { label: "Read the store's listings", help: "Reads what eBay or the Magento store itself has, into Listings. Products new to your catalog are added to it." },
+};
+
+// A large piece of work on one sales channel's listings, carried out in the background.
+export type BulkJob = {
+  id: string;
+  type: BulkJobType;
+  status: BulkJobStatus;
+  channelAccountId: string;
+  // Null when the sales channel has since been removed.
+  accountName: string | null;
+  channel: ChannelKind | null;
+  // 0 for work that is not counted in items (reading a store).
+  total: number;
+  processed: number;
+  succeeded: number;
+  failed: number;
+  cancelRequested: boolean;
+  summary: string | null;
+  lastError: string | null;
+  // The first items held back, and why.
+  errors: { item: string; message: string }[];
+  createdByEmail: string;
+  createdAtUtc: string;
+  startedAtUtc: string | null;
+  finishedAtUtc: string | null;
+};
+
+export const BulkJobsApi = {
+  list: () => apiFetch<BulkJob[]>("/api/bulk-jobs"),
+  start: (type: BulkJobType, channelAccountId: string) =>
+    apiFetch<BulkJob>("/api/bulk-jobs", { method: "POST", body: JSON.stringify({ type, channelAccountId }) }),
+  // A waiting job is cancelled at once; a running one stops after the items it is on.
+  cancel: (id: string) => apiFetch<BulkJob>(`/api/bulk-jobs/${id}/cancel`, { method: "POST" }),
+  // A new job for the same work, which picks up whatever is left to do.
+  runAgain: (id: string) => apiFetch<BulkJob>(`/api/bulk-jobs/${id}/run-again`, { method: "POST" }),
+  remove: (id: string) => apiFetch<void>(`/api/bulk-jobs/${id}`, { method: "DELETE" }),
+};
+
 export type MagentoStore = { storeAddress: string | null; storeViews: string[]; currency: string | null };
 
 // listings: how many products the store reported; created: how many of them were new to the catalog here.

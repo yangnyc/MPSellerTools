@@ -11,6 +11,7 @@ import MarketplaceListingsPage from "./pages/marketplace/MarketplaceListingsPage
 import MarketplaceAddProductPage from "./pages/marketplace/MarketplaceAddProductPage";
 import MarketplaceSettingsPage from "./pages/marketplace/MarketplaceSettingsPage";
 import SyncQueuePage from "./pages/marketplace/SyncQueuePage";
+import JobsPage from "./pages/JobsPage";
 import InventoryPage from "./pages/InventoryPage";
 import { AMAZON, EBAY, MAGENTO, WALMART, settingsPath, type Marketplace } from "./api/channels";
 import AuditPage from "./pages/AuditPage";
@@ -160,6 +161,16 @@ const routes: AppRoute[] = [
     icon: <Icon fontSize="small">sync</Icon>,
     route: "/sync",
     component: <SyncQueuePage />,
+    roles: ["TenantAdmin"],
+  },
+  // Large pieces of work asked for once and carried out in the background.
+  {
+    type: "collapse",
+    name: "Jobs",
+    key: "jobs",
+    icon: <Icon fontSize="small">playlist_play</Icon>,
+    route: "/jobs",
+    component: <JobsPage />,
     roles: ["TenantAdmin"],
   },
   // Between the lines: following up on the work, apart from the selling above.
