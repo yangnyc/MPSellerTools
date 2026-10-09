@@ -121,9 +121,9 @@ public class ProductsController(TenantDbContext db, AuditLogger audit) : Control
         }
 
         var skus = rows.Select(r => r.Sku?.Trim() ?? "").Where(s => s.Length > 0).Distinct().ToList();
-        var existing = await db.Products.Where(p => skus.Contains(p.Sku)).ToDictionaryAsync(p => p.Sku, StringComparer.OrdinalIgnoreCase);
+        var existing = await db.Products.Where(p => EF.Parameter(skus).Contains(p.Sku)).ToDictionaryAsync(p => p.Sku, StringComparer.OrdinalIgnoreCase);
         // A SKU held by another product's variant cannot become a product of its own.
-        var variantSkus = (await db.ProductVariants.AsNoTracking().Where(v => skus.Contains(v.Sku) && !v.IsDefault).Select(v => v.Sku).ToListAsync())
+        var variantSkus = (await db.ProductVariants.AsNoTracking().Where(v => EF.Parameter(skus).Contains(v.Sku) && !v.IsDefault).Select(v => v.Sku).ToListAsync())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var errors = new List<ImportProductError>();

@@ -91,7 +91,7 @@ public class EbaySync(
         items = items.Where(i => i.Sku.Length <= 64).DistinctBy(i => i.Sku).ToList();
 
         var skus = items.Select(i => i.Sku).ToList();
-        var products = await db.Products.Where(p => skus.Contains(p.Sku)).ToDictionaryAsync(p => p.Sku, cancellationToken);
+        var products = await db.Products.Where(p => EF.Parameter(skus).Contains(p.Sku)).ToDictionaryAsync(p => p.Sku, cancellationToken);
 
         var listings = await db.Listings
             .Where(l => l.Channel == SalesChannel.Ebay)
@@ -180,7 +180,7 @@ public class EbaySync(
 
         var unfiled = (onSale ?? []).Where(l => l.ItemId.Length <= 64 && !seenListingIds.Contains(l.ItemId)).DistinctBy(l => l.ItemId).ToList();
         var unfiledSkus = unfiled.Select(SkuOf).Where(sku => !products.ContainsKey(sku)).Distinct().ToList();
-        foreach (var known in await db.Products.Where(p => unfiledSkus.Contains(p.Sku)).ToListAsync(cancellationToken))
+        foreach (var known in await db.Products.Where(p => EF.Parameter(unfiledSkus).Contains(p.Sku)).ToListAsync(cancellationToken))
         {
             products[known.Sku] = known;
         }

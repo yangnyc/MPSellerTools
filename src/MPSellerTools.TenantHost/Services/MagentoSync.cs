@@ -298,7 +298,8 @@ public class MagentoSync(TenantDbContext db, ChannelHttp http, ChannelSecrets se
             .ToList();
 
         var skus = found.Select(p => p.Sku!).Distinct().ToList();
-        var products = (await db.Products.Where(p => skus.Contains(p.Sku)).ToListAsync(cancellationToken)).ToDictionary(p => p.Sku);
+        // The SKUs go to the database as one parameter: as thousands of separate ones the query ran past its time limit.
+        var products = (await db.Products.Where(p => EF.Parameter(skus).Contains(p.Sku)).ToListAsync(cancellationToken)).ToDictionary(p => p.Sku);
         var listings = await db.Listings.Where(l => l.Channel == SalesChannel.Magento).ToDictionaryAsync(l => l.ExternalId, cancellationToken);
         var seen = new HashSet<string>();
 
