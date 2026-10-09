@@ -183,6 +183,62 @@ public class ChannelsController(
         return NoContent();
     }
 
+    /// <summary>
+    /// Changes some of the saved credentials and keeps the rest: only the ones given, and not left empty,
+    /// are replaced. What is saved is still never sent back, so this is the way to correct one of several.
+    /// </summary>
+    [HttpPost("{id:guid}/credentials/edit")]
+    public async Task<IActionResult> EditCredentials(Guid id, [FromBody] SetCredentialsRequest request, CancellationToken cancellationToken)
+    {
+        var account = await db.ChannelAccounts.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        if (account is null)
+        {
+            return NotFound();
+        }
+        if (string.IsNullOrEmpty(account.CredentialsProtected))
+        {
+            return Problem("No credentials are saved for this account yet. Add them first.", statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var saved = secrets.Unprotect(account).ToDictionary(c => c.Key, c => c.Value);
+        var changed = (request.Credentials ?? []).Select(c => (c.Key, Value: c.Value?.Trim() ?? "")).Where(c => c.Value.Length > 0).ToList();
+        // Only a credential the account already has can be changed this way, so a mistyped name adds nothing.
+        if (changed.Count == 0 || changed.Any(c => !saved.ContainsKey(c.Key) || c.Value.Length > 4000))
+        {
+            return Problem($"Enter a new value for at least one of: {string.Join(", ", saved.Keys)}.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        foreach (var (key, value) in changed)
+        {
+            saved[key] = value;
+        }
+        account.CredentialsProtected = secrets.Protect(saved);
+        account.LastError = null;
+        account.UpdatedAtUtc = DateTime.UtcNow;
+        tokens.Invalidate(account.Id);
+        audit.Log("ChannelCredentialsEdited", $"channel={account.Channel}; name={account.Name}; changed={string.Join(",", changed.Select(c => c.Key))}");
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>Removes the saved credentials. Nothing can be sent to the channel or read from it until new ones are added.</summary>
+    [HttpDelete("{id:guid}/credentials")]
+    public async Task<IActionResult> RemoveCredentials(Guid id, CancellationToken cancellationToken)
+    {
+        var account = await db.ChannelAccounts.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        if (account is null)
+        {
+            return NotFound();
+        }
+
+        account.CredentialsProtected = null;
+        account.UpdatedAtUtc = DateTime.UtcNow;
+        tokens.Invalidate(account.Id);
+        audit.Log("ChannelCredentialsRemoved", $"channel={account.Channel}; name={account.Name}");
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/markets")]
     public async Task<IActionResult> AddMarket(Guid id, [FromBody] SaveMarketRequest request, CancellationToken cancellationToken)
     {

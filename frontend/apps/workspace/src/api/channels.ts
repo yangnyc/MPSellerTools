@@ -312,6 +312,10 @@ export const ChannelsApi = {
   // Write-only: what is saved is never sent back.
   setCredentials: (accountId: string, credentials: Record<string, string>) =>
     apiFetch<void>(`/api/channels/${accountId}/credentials`, { method: "PUT", body: JSON.stringify({ credentials }) }),
+  // Changes only the ones given and keeps the rest.
+  editCredentials: (accountId: string, credentials: Record<string, string>) =>
+    apiFetch<void>(`/api/channels/${accountId}/credentials/edit`, { method: "POST", body: JSON.stringify({ credentials }) }),
+  removeCredentials: (accountId: string) => apiFetch<void>(`/api/channels/${accountId}/credentials`, { method: "DELETE" }),
   // Asks the marketplace itself, so it needs live access to be on for the account.
   catalogSearch: (accountId: string, query: string) =>
     apiFetch<CatalogSearchResult[]>(`/api/channels/${accountId}/catalog-search?q=${encodeURIComponent(query)}`),

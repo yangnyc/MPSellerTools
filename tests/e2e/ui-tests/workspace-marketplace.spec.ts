@@ -151,11 +151,17 @@ test("a marketplace's settings save its switches and its credentials separately,
   // On for the account but not for the workspace is still a dry run, and the page says so.
   await expect(page.getByText("Still a dry run")).toBeVisible();
 
-  await expect(page.getByRole("button", { name: "Save credentials" })).toBeDisabled();
+  // What happens when the two prices differ is said in full under the choice.
+  await page.getByLabel("When Amazon's price and mine differ").selectOption({ label: "My price wins: put it back on Amazon" });
+  await expect(page.getByTestId("price-choice-means")).toContainText("sent to Amazon again, overwriting whatever was set there");
+  await page.getByLabel("When Amazon's price and mine differ").selectOption({ label: "Ask me: leave both prices as they are (safest)" });
+
+  // None saved yet, so the fields are there to add them.
+  await expect(page.getByRole("button", { name: "Add credentials" })).toBeDisabled();
   await page.getByLabel("LWA client ID").fill("id");
   await page.getByLabel("LWA client secret").fill("secret");
   await page.getByLabel("Refresh token").fill("token");
-  await page.getByRole("button", { name: "Save credentials" }).click();
+  await page.getByRole("button", { name: "Add credentials" }).click();
   await expect(page.getByText("Amazon credentials saved.")).toBeVisible();
   await expect(page.getByLabel("LWA client secret")).toHaveValue("");
 
@@ -400,9 +406,16 @@ test("Magento has its own menu, led by the connection page, where the store's ad
   await page.getByRole("button", { name: "Reset" }).click();
   await expect(storeLink).toBeVisible();
 
+  // Saved credentials show no field: only that they are saved, and what can be done with them.
+  await expect(page.getByLabel("Integration access token")).toHaveCount(0);
+  await expect(page.getByText("Saved and in use.", { exact: false })).toBeVisible();
+  // One credential only, so there is nothing to change in part: it is replaced or removed.
+  await expect(page.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Replace" }).click();
   await page.getByLabel("Integration access token").fill("token-from-magento");
   await page.getByRole("button", { name: "Save credentials" }).click();
   await expect(page.getByText("Magento credentials saved.")).toBeVisible();
+  await expect(page.getByLabel("Integration access token")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Test connection" }).click();
   await expect(page.getByText("Connected to https://shop.example.test/. Store views: default, de.")).toBeVisible();
@@ -442,13 +455,27 @@ test("a standing problem stays in the notifications, in red, until it is resolve
   const panel = page.getByRole("dialog", { name: "Notifications" });
   const alert = panel.getByTestId("sticky-alert");
   await expect(alert).toContainText("point at a store category that no longer exists");
-  await expect(alert).toContainText("Stays here until it is resolved.");
+  await expect(alert).toContainText("Stays here until it is resolved or dismissed.");
   await expect(panel.getByRole("button", { name: "Clear all" })).toHaveCount(0);
   await expect(unread).toHaveText("1");
 
   // It leads to where it is put right.
   await alert.getByRole("button", { name: "Repair mappings" }).click();
   await expect(page).toHaveURL(/\/magento\/categories$/);
+
+  // Dismissed, it is off the bell and out of the panel, and stays out after a reload, while it says the same thing.
+  await page.getByRole("button", { name: "Notifications" }).click();
+  await panel.getByRole("button", { name: /^Dismiss: 2 Magento category mappings/ }).click();
+  await expect(panel.getByTestId("sticky-alert")).toHaveCount(0);
+  await expect(unread).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Magento categories" })).toBeVisible();
+  await expect(unread).toHaveCount(0);
+
+  // When the problem changes, it is shown again.
+  gets["/api/alerts"] = [{ ...problem, title: "3 Magento category mappings point at a store category that no longer exists" }];
+  await page.reload();
+  await expect(unread).toHaveText("1");
 });
 
 test("a listing that was published but never reached the marketplace can be sent again from the product's page", async ({ page }) => {

@@ -26,6 +26,7 @@ import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
 import { ApiError } from "../lib/api";
 import { OrdersApi, ProductsApi, UsersApi } from "../api/resources";
+import { ChannelsApi, SyncApi } from "../api/channels";
 import { ORDER_STATUS_LABELS, type Order, type OrderStatus, type Product, type UserSummary } from "../api/types";
 import { NEXT_STATUSES, ORDER_STATUS_TONE } from "../lib/status";
 
@@ -39,6 +40,40 @@ export default function OrdersPage() {
   const { notify } = useSnackbar();
   const { c } = useKit();
   const isTenantAdmin = user?.roles.includes("TenantAdmin") ?? false;
+  const [reading, setReading] = useState(false);
+
+  // Reads the sales channels' orders now, rather than at the next scheduled time: from every channel that
+  // is switched on and set to import orders. Each read is queued; the orders arrive here as it is done.
+  const readNewOrders = async () => {
+    setReading(true);
+    try {
+      // The company's own website (3) has no orders to read.
+      const accounts = (await ChannelsApi.list()).filter((a) => a.channel !== 3 && a.isEnabled);
+      const importing = accounts.filter((a) => a.orderImportEnabled);
+      if (importing.length === 0) {
+        notify(
+          accounts.length === 0
+            ? "There is no sales channel to read orders from yet. Add one from its menu first."
+            : `Order import is off for ${accounts.map((a) => a.name).join(", ")}. Switch on Import orders in the channel's settings, then try again.`,
+          "warning"
+        );
+        return;
+      }
+      const results = await Promise.allSettled(importing.map((a) => SyncApi.importOrders(a.id)));
+      const failed = importing.filter((_, i) => results[i].status === "rejected").map((a) => a.name);
+      const queued = importing.filter((_, i) => results[i].status === "fulfilled").map((a) => a.name);
+      if (queued.length > 0) {
+        notify(`Reading new orders from ${queued.join(", ")}. They appear here in a minute or two; reload the page to see them.`, "success");
+      }
+      if (failed.length > 0) {
+        notify(`Orders could not be asked for from ${failed.join(", ")}. Check that channel's connection in its settings.`, "error");
+      }
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : "Could not ask for new orders.", "error");
+    } finally {
+      setReading(false);
+    }
+  };
 
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -268,9 +303,14 @@ export default function OrdersPage() {
         }
         actions={
           isTenantAdmin && (
-            <MDButton variant="gradient" color="info" onClick={openCreate} startIcon={<Icon>add</Icon>}>
-              Create order
-            </MDButton>
+            <>
+              <MDButton variant="outlined" color="info" disabled={reading} onClick={readNewOrders} startIcon={<Icon>sync</Icon>}>
+                {reading ? "Asking…" : "Read new orders"}
+              </MDButton>
+              <MDButton variant="gradient" color="info" onClick={openCreate} startIcon={<Icon>add</Icon>}>
+                Create order
+              </MDButton>
+            </>
           )
         }
       />

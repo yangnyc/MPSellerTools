@@ -145,6 +145,39 @@ public class AmazonImportTests(MarketplaceFixture fixture) : IClassFixture<Marke
     }
 
     [Fact]
+    public async Task Saved_credentials_can_be_changed_in_part_or_removed()
+    {
+        using var admin = await AmazonAsync("amazon-credentials@example.com");
+        var account = (await admin.GetFromJsonAsync<JsonElement>("/api/channels")).EnumerateArray().First(a => a.GetProperty("channel").GetInt32() == (int)SalesChannel.Amazon);
+        var id = account.GetProperty("id").GetGuid();
+
+        // One of the three is changed; the other two stay as they were saved.
+        Assert.Equal(HttpStatusCode.NoContent, (await TenantApiHelpers.PostJsonWithAntiforgeryAsync(
+            admin, $"/api/channels/{id}/credentials/edit", new { credentials = new { clientSecret = "amzn-new-secret-value", refreshToken = "" } })).StatusCode);
+        await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, "/api/amazon/import/lookup", new { query = "B0TESTAAA1" });
+        var asked = fixture.Amazon.Requests.Last(r => r.Contains("/auth/o2/token", StringComparison.Ordinal));
+        Assert.Contains("client_secret=amzn-new-secret-value", asked);
+        Assert.Contains("client_id=amzn-client", asked);
+        Assert.Contains("refresh_token=amzn-refresh-token-value", asked);
+
+        // Nothing to change, or a credential the account does not have, is turned down.
+        Assert.Equal(HttpStatusCode.BadRequest, (await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, $"/api/channels/{id}/credentials/edit", new { credentials = new { clientSecret = " " } })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, $"/api/channels/{id}/credentials/edit", new { credentials = new { password = "x" } })).StatusCode);
+
+        // Removed, the account has none: nothing can be read through it, and there is nothing left to change in part.
+        Assert.Equal(HttpStatusCode.NoContent, (await TenantApiHelpers.DeleteWithAntiforgeryAsync(admin, $"/api/channels/{id}/credentials")).StatusCode);
+        var after = (await admin.GetFromJsonAsync<JsonElement>("/api/channels")).EnumerateArray().First(a => a.GetProperty("id").GetGuid() == id);
+        Assert.False(after.GetProperty("hasCredentials").GetBoolean());
+        Assert.Equal(HttpStatusCode.Conflict, (await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, $"/api/channels/{id}/credentials/edit", new { credentials = new { clientSecret = "x" } })).StatusCode);
+
+        // Put back for the other tests of this class.
+        Assert.Equal(HttpStatusCode.NoContent, (await TenantApiHelpers.PutJsonWithAntiforgeryAsync(admin, $"/api/channels/{id}/credentials", new
+        {
+            credentials = new { clientId = "amzn-client", clientSecret = "amzn-client-secret-value", refreshToken = "amzn-refresh-token-value" },
+        })).StatusCode);
+    }
+
+    [Fact]
     public async Task A_pasted_list_is_imported_by_a_background_job_that_names_what_it_held_back()
     {
         using var admin = await AmazonAsync("amazon-import-bulk@example.com");
