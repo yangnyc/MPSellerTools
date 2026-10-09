@@ -25,6 +25,12 @@ public enum BulkJobType
     /// listings do not show by themselves, such as which of the store's categories a product category goes to.
     /// </summary>
     SendEverythingAgain,
+
+    /// <summary>
+    /// Makes products out of items in Amazon's catalog, from a list of ASINs or barcodes kept in
+    /// <see cref="BulkJob.ParametersJson"/>. It works on the catalog here, not on listings.
+    /// </summary>
+    ImportFromAmazon,
 }
 
 public enum BulkJobStatus
@@ -57,6 +63,9 @@ public class BulkJob
 
     /// <summary>The sales channel account it works on.</summary>
     public Guid ChannelAccountId { get; set; }
+
+    /// <summary>What the job was given to work on, as JSON, for a type that needs more than its account; null otherwise.</summary>
+    public string? ParametersJson { get; set; }
 
     /// <summary>How many items it set out to do; 0 for work that is not counted in items (reading a store).</summary>
     public int Total { get; set; }

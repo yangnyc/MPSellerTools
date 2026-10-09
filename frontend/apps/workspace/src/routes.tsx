@@ -14,6 +14,8 @@ import SyncQueuePage from "./pages/marketplace/SyncQueuePage";
 import JobsPage from "./pages/JobsPage";
 import MagentoCategoriesPage from "./pages/marketplace/MagentoCategoriesPage";
 import InventoryPage from "./pages/InventoryPage";
+import AmazonImportItemPage from "./pages/import/AmazonImportItemPage";
+import AmazonImportBulkPage from "./pages/import/AmazonImportBulkPage";
 import { AMAZON, EBAY, MAGENTO, WALMART, settingsPath, type Marketplace } from "./api/channels";
 import AuditPage from "./pages/AuditPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -26,7 +28,7 @@ import UserActivityPage from "./pages/advanced/UserActivityPage";
 
 // Sidenav + router entries shared by TenantAdmin and Employee (brief §8).
 // Routes without a `roles` restriction are visible to both; TenantAdmin-only
-// entries (Users, Inventory, the marketplaces, Sync queue, Settings, Audit) are filtered out of the Employee's sidenav
+// entries (Users, Inventory, Import, the marketplaces, Sync queue, Settings, Audit) are filtered out of the Employee's sidenav
 // and, independently, rejected by the backend even if a request reaches the
 // API directly (brief §5/§8's "direct requests to restricted APIs must also
 // be denied").
@@ -139,6 +141,34 @@ const routes: AppRoute[] = [
         icon: <Icon fontSize="small">warehouse</Icon>,
         route: "/inventory",
         component: <InventoryPage />,
+        roles: ["TenantAdmin"],
+      },
+    ],
+  },
+  // Bringing products in from outside: looked up in a marketplace's catalog and made products here.
+  {
+    type: "collapse",
+    name: "Import",
+    key: "import",
+    icon: <Icon fontSize="small">download</Icon>,
+    roles: ["TenantAdmin"],
+    collapse: [
+      {
+        type: "collapse",
+        name: "From Amazon: one item",
+        key: "import-amazon-item",
+        icon: <Icon fontSize="small">search</Icon>,
+        route: "/import/amazon",
+        component: <AmazonImportItemPage />,
+        roles: ["TenantAdmin"],
+      },
+      {
+        type: "collapse",
+        name: "From Amazon: in bulk",
+        key: "import-amazon-bulk",
+        icon: <Icon fontSize="small">playlist_add</Icon>,
+        route: "/import/amazon/bulk",
+        component: <AmazonImportBulkPage />,
         roles: ["TenantAdmin"],
       },
     ],

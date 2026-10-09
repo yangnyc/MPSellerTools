@@ -19,7 +19,7 @@ public record BulkJobError(string Item, string Message);
 /// listings as they are, so one that was interrupted simply carries on.
 /// </summary>
 public class BulkJobRunner(
-    TenantDbContext db, ListingService listings, MagentoSync magento, EbaySync ebay, ILogger<BulkJobRunner> logger)
+    TenantDbContext db, ListingService listings, MagentoSync magento, EbaySync ebay, AmazonImport amazonImport, ILogger<BulkJobRunner> logger)
 {
     /// <summary>How many items are read, done and written together.</summary>
     private const int BatchSize = 100;
@@ -68,6 +68,10 @@ public class BulkJobRunner(
             else if (job.Type == BulkJobType.ReadStore)
             {
                 await ReadStoreAsync(job, account, cancellationToken);
+            }
+            else if (job.Type == BulkJobType.ImportFromAmazon)
+            {
+                await ImportFromAmazonAsync(job, account, cancellationToken);
             }
             else
             {
@@ -265,6 +269,110 @@ public class BulkJobRunner(
         var finished = await db.BulkJobs.FirstAsync(j => j.Id == job.Id, cancellationToken);
         finished.Processed = finished.Succeeded = finished.Total = 1;
         await FinishAsync(finished, BulkJobStatus.Succeeded, summary, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Makes a product of every item on the job's list, a lookup's worth at a time. The list is kept in the
+    /// order it is worked through, so a job that was interrupted carries on after the items it had done.
+    /// </summary>
+    private async Task ImportFromAmazonAsync(BulkJob job, ChannelAccount account, CancellationToken cancellationToken)
+    {
+        var parameters = AmazonImport.Parse(job.ParametersJson);
+        var (context, problem) = await amazonImport.ContextAsync(account, cancellationToken);
+        if (parameters is null || context is null)
+        {
+            await FinishAsync(job, BulkJobStatus.Failed, null, problem ?? "The job has no list of items to import.", cancellationToken);
+            return;
+        }
+
+        job.Total = parameters.Items.Count;
+        await db.SaveChangesAsync(cancellationToken);
+        var errors = ParseErrors(job.ErrorsJson);
+        var (created, updated) = (0, 0);
+
+        void HoldBack(AmazonImportEntry entry, string why)
+        {
+            job.Failed++;
+            if (errors.Count < MaxErrorsKept)
+            {
+                errors.Add(new BulkJobError(entry.Value, why.Length > 500 ? why[..500] : why));
+            }
+        }
+
+        var left = parameters.Items.Skip(job.Processed).ToList();
+        while (left.Count > 0)
+        {
+            if (await db.BulkJobs.AsNoTracking().Where(j => j.Id == job.Id).Select(j => j.CancelRequested).FirstAsync(cancellationToken))
+            {
+                await FinishAsync(job, BulkJobStatus.Cancelled, $"Stopped after {job.Processed} of {job.Total}.", null, cancellationToken);
+                return;
+            }
+
+            // Amazon is asked for one kind of identifier at a call.
+            var batch = left.TakeWhile(e => e.Type == left[0].Type).Take(AmazonChannelAdapter.CatalogLookupSize).ToList();
+            left.RemoveRange(0, batch.Count);
+
+            IReadOnlyList<(AmazonImportEntry Entry, AmazonCatalogItem? Item)> found = [];
+            string? refused = null;
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    found = await amazonImport.LookupAsync(context, batch, cancellationToken);
+                    break;
+                }
+                // Asked too fast, or Amazon did not answer: a short wait and the same items again.
+                catch (ChannelException ex) when (ex.ErrorClass == SyncErrorClass.Transient && attempt < 4)
+                {
+                    await Task.Delay(ex.RetryAfter is { } wait && wait > TimeSpan.Zero && wait < TimeSpan.FromMinutes(1) ? wait : TimeSpan.FromSeconds(2 * attempt), cancellationToken);
+                }
+                // The account's own trouble stops the whole job; anything else holds back only these items.
+                catch (ChannelException ex) when (ex.ErrorClass != SyncErrorClass.Authorization)
+                {
+                    refused = ex.Message;
+                    break;
+                }
+            }
+
+            foreach (var entry in batch)
+            {
+                job.Processed++;
+                var item = found.FirstOrDefault(f => f.Entry == entry).Item;
+                if (refused is not null || item is null)
+                {
+                    HoldBack(entry, refused ?? "Amazon's catalog has no item for this in the account's marketplace.");
+                    continue;
+                }
+
+                try
+                {
+                    var result = await amazonImport.ApplyAsync(item, entry.Sku ?? AmazonImport.SkuFor(item, parameters.SkuPrefix), null, 0, parameters.UpdateExisting, cancellationToken);
+                    if (result.Outcome == AmazonImportOutcome.AlreadyHere)
+                    {
+                        HoldBack(entry, $"A product with the SKU {result.Sku} is already here; it was left as it is.");
+                        continue;
+                    }
+
+                    job.Succeeded++;
+                    created += result.Outcome == AmazonImportOutcome.Created ? 1 : 0;
+                    updated += result.Outcome == AmazonImportOutcome.Updated ? 1 : 0;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    HoldBack(entry, ex.Message);
+                }
+            }
+
+            job.ErrorsJson = errors.Count == 0 ? null : JsonSerializer.Serialize(errors, Json);
+            job.HeartbeatAtUtc = DateTime.UtcNow;
+            // The products and the job's progress, together.
+            await db.SaveChangesAsync(cancellationToken);
+            db.ChangeTracker.Clear();
+            db.Attach(job);
+        }
+
+        var summary = $"{created} product(s) imported, {updated} brought up to date" + (job.Failed == 0 ? "." : $"; {job.Failed} held back.");
+        await FinishAsync(job, job.Failed == 0 ? BulkJobStatus.Succeeded : BulkJobStatus.CompletedWithErrors, summary, null, cancellationToken);
     }
 
     private async Task FinishAsync(BulkJob job, BulkJobStatus status, string? summary, string? error, CancellationToken cancellationToken)

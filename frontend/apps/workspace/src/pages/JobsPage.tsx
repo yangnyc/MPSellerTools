@@ -25,6 +25,7 @@ import { useSnackbar } from "../components/useSnackbar";
 import { ApiError } from "../lib/api";
 import {
   BULK_JOB_TYPES,
+  STARTED_ELSEWHERE,
   BulkJobsApi,
   ChannelsApi,
   type BulkJob,
@@ -344,7 +345,7 @@ export default function JobsPage() {
             value={newType}
             onChange={(e: Change) => setNewType(Number(e.target.value) as BulkJobType)}
           >
-            {(Object.keys(BULK_JOB_TYPES) as unknown as string[]).map((key) => (
+            {(Object.keys(BULK_JOB_TYPES) as unknown as string[]).filter((key) => !STARTED_ELSEWHERE.includes(Number(key) as BulkJobType)).map((key) => (
               <option key={key} value={key}>
                 {BULK_JOB_TYPES[Number(key) as BulkJobType].label}
               </option>

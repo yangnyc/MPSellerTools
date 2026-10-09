@@ -317,7 +317,7 @@ export const ChannelsApi = {
     apiFetch<CatalogSearchResult[]>(`/api/channels/${accountId}/catalog-search?q=${encodeURIComponent(query)}`),
 };
 
-export type BulkJobType = 0 | 1 | 2 | 3 | 4 | 5; // PublishDrafts, TakeOffSale, SendAgain, CheckListings, ReadStore, SendEverythingAgain
+export type BulkJobType = 0 | 1 | 2 | 3 | 4 | 5 | 6; // PublishDrafts, TakeOffSale, SendAgain, CheckListings, ReadStore, SendEverythingAgain, ImportFromAmazon
 export type BulkJobStatus = 0 | 1 | 2 | 3 | 4 | 5; // Queued, Running, Succeeded, CompletedWithErrors, Failed, Cancelled
 
 // What each kind of job is called, and what it does, in the order they are offered.
@@ -328,7 +328,11 @@ export const BULK_JOB_TYPES: Record<BulkJobType, { label: string; help: string }
   3: { label: "Check every listing", help: "Checks each listing again and records what stops it being published. Nothing is sent." },
   4: { label: "Read the store's listings", help: "Reads what eBay or the Magento store itself has, into Listings. Products new to your catalog are added to it." },
   5: { label: "Send every published listing again", help: "Sends everything that is on sale again, whether or not it arrived before: for a change the listings do not show by themselves, such as a category now going elsewhere." },
+  6: { label: "Import from Amazon", help: "Makes products out of a list of items in Amazon's catalog. It is started from Import, where the list is pasted." },
 };
+
+// A job that needs more than a sales channel to start (a list of items) is started from its own page.
+export const STARTED_ELSEWHERE: BulkJobType[] = [6];
 
 // A large piece of work on one sales channel's listings, carried out in the background.
 export type BulkJob = {
@@ -357,6 +361,7 @@ export type BulkJob = {
 
 export const BulkJobsApi = {
   list: () => apiFetch<BulkJob[]>("/api/bulk-jobs"),
+  get: (id: string) => apiFetch<BulkJob>(`/api/bulk-jobs/${id}`),
   start: (type: BulkJobType, channelAccountId: string) =>
     apiFetch<BulkJob>("/api/bulk-jobs", { method: "POST", body: JSON.stringify({ type, channelAccountId }) }),
   // A waiting job is cancelled at once; a running one stops after the items it is on.
@@ -409,6 +414,55 @@ export const MagentoCategoriesApi = {
   match: () => apiFetch<MagentoCategoryBulk>("/api/magento/categories/match", { method: "POST" }),
   setDefault: (categoryId: string | null) => apiFetch<void>("/api/magento/categories/default", { method: "PUT", body: JSON.stringify({ categoryId }) }),
   removeUnused: () => apiFetch<{ removed: number }>("/api/magento/categories/remove-unused", { method: "POST" }),
+};
+
+// Whether Amazon's catalog can be read, and through which account; `problem` says why not.
+export type AmazonImportStatus = {
+  ready: boolean;
+  accountName: string | null;
+  marketplace: string | null;
+  problem: string | null;
+  // What an imported product's SKU starts with when none is chosen: the prefix, then the ASIN.
+  skuPrefix: string;
+  maxItems: number;
+};
+
+// An item of Amazon's catalog as it would become a product.
+export type AmazonItem = {
+  asin: string;
+  title: string | null;
+  brand: string | null;
+  // The description and the bullet points, as one text.
+  description: string | null;
+  category: string | null;
+  productType: string | null;
+  listPrice: number | null;
+  currency: string | null;
+  imageUrls: string[];
+  identifiers: { type: ProductIdentifierType; value: string }[];
+  weightValue: number | null;
+  weightUnit: string | null;
+  length: number | null;
+  width: number | null;
+  height: number | null;
+  dimensionUnit: string | null;
+  suggestedSku: string;
+  // The product already under the suggested SKU, when there is one.
+  existingProductId: string | null;
+};
+
+// outcome: 0 created, 1 brought up to date.
+export type AmazonImported = { outcome: 0 | 1 | 2; productId: string; sku: string };
+
+export const AmazonImportApi = {
+  status: () => apiFetch<AmazonImportStatus>("/api/amazon/import/status"),
+  // By ASIN, the address of the item's page on Amazon, or a barcode. Nothing is saved.
+  lookup: (query: string) => apiFetch<AmazonItem>("/api/amazon/import/lookup", { method: "POST", body: JSON.stringify({ query }) }),
+  importItem: (data: { asin: string; sku: string; price: number | null; stockQuantity: number; updateExisting: boolean }) =>
+    apiFetch<AmazonImported>("/api/amazon/import/item", { method: "POST", body: JSON.stringify(data) }),
+  // One item to a line, optionally followed by a comma and the SKU to give it. Answers with the background job.
+  importBulk: (data: { lines: string; skuPrefix: string; updateExisting: boolean }) =>
+    apiFetch<{ jobId: string; total: number }>("/api/amazon/import/bulk", { method: "POST", body: JSON.stringify(data) }),
 };
 
 export type MagentoStore = { storeAddress: string | null; storeViews: string[]; currency: string | null };

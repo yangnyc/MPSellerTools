@@ -195,6 +195,7 @@ builder.Services.AddScoped<IChannelAdapter, WalmartChannelAdapter>();
 builder.Services.AddScoped<IChannelAdapter, WebsiteChannelAdapter>();
 builder.Services.AddScoped<IChannelAdapter, MagentoChannelAdapter>();
 builder.Services.AddScoped<MagentoSync>();
+builder.Services.AddScoped<AmazonImport>();
 builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<ListingService>();
 builder.Services.AddScoped<OrderIngestionService>();

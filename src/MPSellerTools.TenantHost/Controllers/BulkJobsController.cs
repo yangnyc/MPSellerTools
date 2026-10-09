@@ -74,6 +74,10 @@ public class BulkJobsController(TenantDbContext db, AuditLogger audit) : Control
         {
             return Problem("Choose the sales channel the job is for.", statusCode: StatusCodes.Status400BadRequest);
         }
+        if (request.Type == BulkJobType.ImportFromAmazon)
+        {
+            return Problem("An import from Amazon needs its list of items; start it from the Import page.", statusCode: StatusCodes.Status400BadRequest);
+        }
         if (request.Type == BulkJobType.ReadStore && account.Channel is not (SalesChannel.Ebay or SalesChannel.Magento))
         {
             return Problem($"{account.Channel} reports its listings through the sync queue; there is nothing to read on request.", statusCode: StatusCodes.Status400BadRequest);
@@ -140,9 +144,36 @@ public class BulkJobsController(TenantDbContext db, AuditLogger audit) : Control
         {
             return NotFound();
         }
-        return Unfinished.Contains(job.Status)
-            ? Problem("This job has not finished yet.", statusCode: StatusCodes.Status409Conflict)
-            : await Start(new StartBulkJobRequest(job.Type, job.ChannelAccountId), cancellationToken);
+        if (Unfinished.Contains(job.Status))
+        {
+            return Problem("This job has not finished yet.", statusCode: StatusCodes.Status409Conflict);
+        }
+        if (job.ParametersJson is null)
+        {
+            return await Start(new StartBulkJobRequest(job.Type, job.ChannelAccountId), cancellationToken);
+        }
+
+        // A job with a list of its own is queued again with the same list.
+        if (await db.BulkJobs.AnyAsync(j => j.ChannelAccountId == job.ChannelAccountId && j.Type == job.Type && Unfinished.Contains(j.Status), cancellationToken))
+        {
+            return Problem("The same job is already waiting or running for this sales channel.", statusCode: StatusCodes.Status409Conflict);
+        }
+        var again = new BulkJob
+        {
+            Id = Guid.NewGuid(),
+            Type = job.Type,
+            Status = BulkJobStatus.Queued,
+            ChannelAccountId = job.ChannelAccountId,
+            ParametersJson = job.ParametersJson,
+            Total = job.Total,
+            CreatedByUserId = Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ? userId : Guid.Empty,
+            CreatedByEmail = User.Identity?.Name ?? "unknown",
+            CreatedAtUtc = DateTime.UtcNow,
+        };
+        db.BulkJobs.Add(again);
+        audit.Log("BulkJobQueued", $"type={again.Type}; again={job.Id}");
+        await db.SaveChangesAsync(cancellationToken);
+        return Accepted(ToResponse(again, await AccountsAsync(cancellationToken)));
     }
 
     /// <summary>Removes a finished job from the list. What it did stays done.</summary>

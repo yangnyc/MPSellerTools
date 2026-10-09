@@ -156,6 +156,31 @@ public static class AmazonPayloads
 }
 
 /// <summary>
+/// What Amazon's catalog holds about one item (an ASIN): the facts a product here is made from. Weight is in
+/// lb, oz, kg or g and the dimensions in in or cm, as a product keeps them; a barcode appears once per type.
+/// </summary>
+public record AmazonCatalogItem(
+    string Asin,
+    string? Title,
+    string? Brand,
+    string? Description,
+    IReadOnlyList<string> BulletPoints,
+    string? Category,
+    string? ProductType,
+    decimal? ListPrice,
+    string? Currency,
+    IReadOnlyList<string> ImageUrls,
+    IReadOnlyDictionary<ProductIdentifierType, string> Identifiers,
+    // Every barcode Amazon has for the item, for telling which item answers a barcode that was asked for.
+    IReadOnlyList<string> Barcodes,
+    decimal? WeightValue,
+    string? WeightUnit,
+    decimal? Length,
+    decimal? Width,
+    decimal? Height,
+    string? DimensionUnit);
+
+/// <summary>
 /// Amazon through the Selling Partner API. A submission is answered with
 /// ACCEPTED long before the listing is buyable, so every write here ends as
 /// "accepted" and the listing is only called live once getListingsItem
@@ -390,6 +415,170 @@ public class AmazonChannelAdapter(ChannelHttp http, ChannelSecrets secrets, Chan
             results.Add(new CatalogSearchResult(asin, Text(summary, "itemName"), Text(summary, "brand")));
         }
         return results;
+    }
+
+    /// <summary>How many items one catalog lookup may ask for.</summary>
+    public const int CatalogLookupSize = 20;
+
+    /// <summary>
+    /// Reads items from Amazon's catalog by ASIN or by barcode, up to <see cref="CatalogLookupSize"/> at a
+    /// call, through searchCatalogItems of the Catalog Items API (2022-04-01). <paramref name="identifiersType"/>
+    /// is ASIN, UPC, EAN or GTIN. One Amazon does not know is simply not in the answer. A read: it changes
+    /// nothing on Amazon.
+    /// </summary>
+    public async Task<IReadOnlyList<AmazonCatalogItem>> GetCatalogItemsAsync(
+        ChannelContext context, IReadOnlyList<string> identifiers, string identifiersType, CancellationToken cancellationToken)
+    {
+        var market = context.Market.MarketplaceCode;
+        var url = $"{BaseUrl(context)}/catalog/2022-04-01/items?marketplaceIds={Uri.EscapeDataString(market)}"
+            + $"&identifiers={Uri.EscapeDataString(string.Join(',', identifiers))}&identifiersType={identifiersType}"
+            + $"&includedData=attributes,dimensions,identifiers,images,productTypes,summaries&pageSize={CatalogLookupSize}";
+        var response = await SendAsync(context, HttpMethod.Get, url, null, cancellationToken);
+        return response.Body.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array
+            ? items.EnumerateArray().Select(item => ToCatalogItem(item, market)).OfType<AmazonCatalogItem>().ToList()
+            : [];
+    }
+
+    private static AmazonCatalogItem? ToCatalogItem(JsonElement item, string market)
+    {
+        if (Text(item, "asin") is not { } asin)
+        {
+            return null;
+        }
+
+        var summary = OfMarket(item, "summaries", market, "marketplaceId");
+        var attributes = item.TryGetProperty("attributes", out var a) ? a : default;
+        var bullets = attributes.ValueKind == JsonValueKind.Object && attributes.TryGetProperty("bullet_point", out var points) && points.ValueKind == JsonValueKind.Array
+            ? points.EnumerateArray().Select(p => Text(p, "value")?.Trim()).Where(p => !string.IsNullOrEmpty(p)).Select(p => p!).ToList()
+            : [];
+        var listPrice = OfMarket(attributes, "list_price", market, "marketplace_id");
+
+        // Each picture comes in several sizes; the largest of each is kept, the main one first.
+        var images = OfMarket(item, "images", market, "marketplaceId");
+        var pictures = images.ValueKind == JsonValueKind.Object && images.TryGetProperty("images", out var all) && all.ValueKind == JsonValueKind.Array
+            ? all.EnumerateArray()
+                .Select(i => (Variant: Text(i, "variant") ?? "", Link: Text(i, "link"), Size: (Number(i, "height") ?? 0) * (Number(i, "width") ?? 0)))
+                .Where(i => i.Link is { Length: <= 1000 } && i.Link.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                .GroupBy(i => i.Variant)
+                .OrderBy(g => g.Key == "MAIN" ? 0 : 1).ThenBy(g => g.Key, StringComparer.Ordinal)
+                .Select(g => g.MaxBy(i => i.Size).Link!)
+                .Distinct().ToList()
+            : [];
+
+        var barcodes = new List<(ProductIdentifierType Type, string Value)>();
+        var known = OfMarket(item, "identifiers", market, "marketplaceId");
+        if (known.ValueKind == JsonValueKind.Object && known.TryGetProperty("identifiers", out var ids) && ids.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var id in ids.EnumerateArray())
+            {
+                ProductIdentifierType? type = Text(id, "identifierType")?.ToUpperInvariant() switch
+                {
+                    "UPC" => ProductIdentifierType.Upc,
+                    "EAN" => ProductIdentifierType.Ean,
+                    "GTIN" => ProductIdentifierType.Gtin,
+                    "ISBN" => ProductIdentifierType.Isbn,
+                    _ => null,
+                };
+                // Only what a product here can hold: digits of a barcode's length.
+                if (type is not null && Text(id, "identifier")?.Trim() is { Length: 8 or 10 or 12 or 13 or 14 } value && value.All(char.IsAsciiDigit))
+                {
+                    barcodes.Add((type.Value, value));
+                }
+            }
+        }
+        var identifiers = barcodes.GroupBy(b => b.Type).ToDictionary(g => g.Key, g => g.First().Value);
+        if ((Text(summary, "partNumber") ?? Text(summary, "modelNumber"))?.Trim() is { Length: > 0 and <= 64 } partNumber)
+        {
+            identifiers[ProductIdentifierType.Mpn] = partNumber;
+        }
+
+        // The item itself where Amazon has it measured, otherwise its package.
+        var dimensions = OfMarket(item, "dimensions", market, "marketplaceId");
+        var measured = dimensions.ValueKind == JsonValueKind.Object && dimensions.TryGetProperty("item", out var own) && own.ValueKind == JsonValueKind.Object ? own
+            : dimensions.ValueKind == JsonValueKind.Object && dimensions.TryGetProperty("package", out var package) ? package
+            : default;
+        var (weight, weightUnit) = Weight(measured);
+        var (length, width, height, dimensionUnit) = Size(measured);
+
+        var category = summary.ValueKind == JsonValueKind.Object && summary.TryGetProperty("browseClassification", out var browse) ? Text(browse, "displayName") : null;
+        return new AmazonCatalogItem(
+            asin,
+            Text(summary, "itemName") ?? Text(OfMarket(attributes, "item_name", market, "marketplace_id"), "value"),
+            Text(summary, "brand") ?? Text(OfMarket(attributes, "brand", market, "marketplace_id"), "value"),
+            Text(OfMarket(attributes, "product_description", market, "marketplace_id"), "value"),
+            bullets,
+            category,
+            Text(OfMarket(item, "productTypes", market, "marketplaceId"), "productType"),
+            Number(listPrice, "value"),
+            Text(listPrice, "currency"),
+            pictures,
+            identifiers,
+            barcodes.Select(b => b.Value).Distinct().ToList(),
+            weight, weightUnit, length, width, height, dimensionUnit);
+    }
+
+    /// <summary>Of a list with one entry for each marketplace, this marketplace's, or failing that the first.</summary>
+    private static JsonElement OfMarket(JsonElement parent, string name, string market, string marketProperty)
+    {
+        if (parent.ValueKind != JsonValueKind.Object || !parent.TryGetProperty(name, out var list) || list.ValueKind != JsonValueKind.Array)
+        {
+            return default;
+        }
+
+        var entries = list.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.Object).ToList();
+        return entries.FirstOrDefault(e => Text(e, marketProperty) == market) is { ValueKind: JsonValueKind.Object } match ? match : entries.FirstOrDefault();
+    }
+
+    private static decimal? Number(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value)
+            ? value.ValueKind switch
+            {
+                JsonValueKind.Number when value.TryGetDecimal(out var number) => number,
+                JsonValueKind.String when decimal.TryParse(value.GetString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed) => parsed,
+                _ => null,
+            }
+            : null;
+
+    private static (decimal? Value, string? Unit) Weight(JsonElement measured)
+    {
+        var weight = measured.ValueKind == JsonValueKind.Object && measured.TryGetProperty("weight", out var w) ? w : default;
+        var unit = Text(weight, "unit")?.ToLowerInvariant() switch
+        {
+            "pounds" => "lb",
+            "ounces" => "oz",
+            "kilograms" => "kg",
+            "grams" => "g",
+            _ => null,
+        };
+        return Number(weight, "value") is { } value and >= 0 && unit is not null ? (Math.Round(value, 4), unit) : (null, null);
+    }
+
+    /// <summary>The three dimensions in one unit, inches or centimetres; none of them when any is missing or in a unit not known here.</summary>
+    private static (decimal? Length, decimal? Width, decimal? Height, string? Unit) Size(JsonElement measured)
+    {
+        var sides = new[] { "length", "width", "height" }
+            .Select(name => measured.ValueKind == JsonValueKind.Object && measured.TryGetProperty(name, out var side) ? side : default)
+            .Select(side => (Value: Number(side, "value"), Unit: Text(side, "unit")?.ToLowerInvariant()))
+            .ToList();
+        if (sides.Any(s => s.Value is null or < 0))
+        {
+            return (null, null, null, null);
+        }
+
+        // In inches when Amazon has them in inches or feet, otherwise in centimetres.
+        var imperial = sides.All(s => s.Unit is "inches" or "feet");
+        var converted = sides.Select(s => s.Unit switch
+        {
+            "inches" => imperial ? s.Value : s.Value * 2.54m,
+            "feet" => imperial ? s.Value * 12m : s.Value * 30.48m,
+            "centimeters" => s.Value,
+            "millimeters" => s.Value / 10m,
+            "meters" => s.Value * 100m,
+            _ => null,
+        }).ToList();
+        return converted.Any(v => v is null)
+            ? (null, null, null, null)
+            : (Math.Round(converted[0]!.Value, 4), Math.Round(converted[1]!.Value, 4), Math.Round(converted[2]!.Value, 4), imperial ? "in" : "cm");
     }
 
     private static ChannelOrder? ToOrder(JsonElement order)
