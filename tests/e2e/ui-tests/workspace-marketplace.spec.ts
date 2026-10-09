@@ -411,7 +411,11 @@ test("Magento has its own menu, led by the connection page, where the store's ad
   await sidebar.locator('a[href="/magento/listings"]').click();
   await expect(page.getByRole("heading", { name: "Magento listings" })).toBeVisible();
   await page.getByRole("button", { name: "Refresh from Magento" }).first().click();
-  await expect(page.getByText("Read from Magento: 5 product(s) read from the store, 2 new to the catalog.")).toBeVisible();
+  // Said at once that it is under way, and again when it is done.
+  await expect(page.getByText("Read the store's listings (Magento) finished. 5 product(s) read from the store, 2 new to the catalog.")).toBeVisible();
+  await page.getByRole("button", { name: "Notifications" }).click();
+  await expect(page.getByRole("dialog", { name: "Notifications" }).getByText("Reading the Magento store in the background.", { exact: false })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   expect(writes).toEqual([
     'PUT /api/channels/a-magento {"name":"Magento","environment":0,"sellerId":null,"settings":{"baseUrl":"https://shop.example.test"},"isEnabled":true,"liveWritesEnabled":false,"inventorySyncEnabled":false,"orderImportEnabled":false,"priceConflictPolicy":2,"channel":4}',
@@ -419,6 +423,32 @@ test("Magento has its own menu, led by the connection page, where the store's ad
     "POST /api/magento/test",
     'POST /api/bulk-jobs {"type":4,"channelAccountId":"a-magento"}',
   ]);
+});
+
+test("a standing problem stays in the notifications, in red, until it is resolved", async ({ page }) => {
+  const problem = {
+    key: "magento-categories", title: "2 Magento category mappings point at a store category that no longer exists",
+    message: "Allergy, First Aid. Products in them are refused when sent. Open Magento → Categories and press Repair mappings.",
+    action: "Repair mappings", link: "/magento/categories",
+  };
+  const gets: Record<string, unknown> = { "/api/alerts": [problem] };
+  await mockApi(page, gets);
+  await page.goto("/dashboard");
+
+  // On the bell without anything having been shown, and it does not go when the panel is opened or cleared.
+  const unread = page.getByTestId("notifications-unread");
+  await expect(unread).toHaveText("1");
+  await page.getByRole("button", { name: "Notifications" }).click();
+  const panel = page.getByRole("dialog", { name: "Notifications" });
+  const alert = panel.getByTestId("sticky-alert");
+  await expect(alert).toContainText("point at a store category that no longer exists");
+  await expect(alert).toContainText("Stays here until it is resolved.");
+  await expect(panel.getByRole("button", { name: "Clear all" })).toHaveCount(0);
+  await expect(unread).toHaveText("1");
+
+  // It leads to where it is put right.
+  await alert.getByRole("button", { name: "Repair mappings" }).click();
+  await expect(page).toHaveURL(/\/magento\/categories$/);
 });
 
 test("a listing that was published but never reached the marketplace can be sent again from the product's page", async ({ page }) => {

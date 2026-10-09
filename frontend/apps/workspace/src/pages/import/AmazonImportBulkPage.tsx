@@ -10,6 +10,7 @@ import { InlineAlert, PageHeader, Section, StateBlock, useKit } from "examples/K
 import PageShell from "../../components/PageShell";
 import ProgressBar from "../../components/ProgressBar";
 import { useSnackbar } from "../../components/useSnackbar";
+import { watchJob } from "../../components/jobWatch";
 import { ApiError } from "../../lib/api";
 import { AMAZON, AmazonImportApi, BulkJobsApi, settingsPath, type AmazonImportStatus, type BulkJob } from "../../api/channels";
 
@@ -81,7 +82,8 @@ export default function AmazonImportBulkPage() {
       setJob(null);
       setJobId(queued.jobId);
       setLines("");
-      notify(`${queued.total.toLocaleString()} item(s) queued for import.`, "success");
+      watchJob(queued.jobId);
+      notify(`${queued.total.toLocaleString()} item(s) queued for import. You will get a notification when it is done; you can leave this page.`, "success");
     } catch (err) {
       setError(message(err, "Could not start the import."));
     } finally {

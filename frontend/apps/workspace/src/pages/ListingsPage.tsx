@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Icon from "@mui/material/Icon";
@@ -21,6 +21,7 @@ import {
 import PageShell from "../components/PageShell";
 import { useAuth } from "../auth/useAuth";
 import { useSnackbar } from "../components/useSnackbar";
+import { JOB_FINISHED, isJobWatched, watchJob } from "../components/jobWatch";
 import { ApiError } from "../lib/api";
 import { EbayApi, ListingsApi } from "../api/resources";
 import {
@@ -34,6 +35,9 @@ import { AMAZON, BulkJobsApi, ChannelsApi, EBAY, MAGENTO, type BulkJob, type Mar
 import { LISTING_STATUS_TONE } from "../lib/status";
 
 type StatusFilter = "all" | ListingStatus;
+
+// The store read this tab started, remembered so the button still shows it under way after moving between pages.
+const READ_JOB = "mpst.magento-read-job";
 
 const LISTING_STATUSES: ListingStatus[] = [0, 1, 2];
 
@@ -71,6 +75,11 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // The background job reading the Magento store, while one this tab started is under way.
+  const [readJobId, setReadJobId] = useState<string | null>(() => {
+    const id = window.sessionStorage.getItem(READ_JOB);
+    return id && isJobWatched(id) ? id : null;
+  });
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const fetchData = useCallback(() => {
@@ -82,35 +91,38 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
 
   useEffect(fetchData, [fetchData]);
 
-  const onPage = useRef(true);
+  // The job watcher says when the read is done, wherever the user is by then; here the list is read again.
   useEffect(() => {
-    onPage.current = true;
-    return () => {
-      onPage.current = false;
+    const finished = (event: Event) => {
+      const job = (event as CustomEvent<BulkJob>).detail;
+      if (job.type !== 4) return;
+      window.sessionStorage.removeItem(READ_JOB);
+      setReadJobId(null);
+      fetchData();
     };
-  }, []);
+    window.addEventListener(JOB_FINISHED, finished);
+    return () => window.removeEventListener(JOB_FINISHED, finished);
+  }, [fetchData]);
 
   // A store's whole catalog takes longer to read than a page can wait for an answer, so it is read by a
-  // background job, which is followed here until it is done. One already under way is followed instead.
-  const readMagento = async (): Promise<BulkJob | null> => {
+  // background job. The user is told at once that it has started, and again, by notification, when it is
+  // done. One already under way is followed instead of a second being started.
+  const readMagento = async () => {
     const account = (await ChannelsApi.list()).find((a) => a.channel === MAGENTO.kind);
-    if (!account) throw new ApiError(400, "Add Magento as a sales channel first.");
-    const waiting = (job: BulkJob) => job.status === 0 || job.status === 1;
+    if (!account) throw new ApiError(400, "Add Magento as a sales channel first, on its Connection page.");
     let job: BulkJob;
     try {
       job = await BulkJobsApi.start(4, account.id);
+      notify("Reading the Magento store in the background. You will get a notification when it is done; you can leave this page.", "info");
     } catch (err) {
-      const running = err instanceof ApiError && err.status === 409 ? (await BulkJobsApi.list()).find((j) => j.type === 4 && j.channelAccountId === account.id && waiting(j)) : undefined;
+      const running = err instanceof ApiError && err.status === 409 ? (await BulkJobsApi.list()).find((j) => j.type === 4 && j.channelAccountId === account.id && (j.status === 0 || j.status === 1)) : undefined;
       if (!running) throw err;
       job = running;
+      notify("The Magento store is already being read. You will get a notification when it is done.", "info");
     }
-    while (waiting(job)) {
-      await new Promise((resolve) => window.setTimeout(resolve, 2000));
-      // Left the page: the job carries on, and is on the Jobs page.
-      if (!onPage.current) return null;
-      job = await BulkJobsApi.get(job.id);
-    }
-    return job;
+    window.sessionStorage.setItem(READ_JOB, job.id);
+    setReadJobId(job.id);
+    watchJob(job.id);
   };
 
   // Listings come from the site itself, so refreshing them is the eBay product import, or a read of the Magento store's catalog.
@@ -118,10 +130,8 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
     setRefreshing(true);
     try {
       if (reader === "Magento") {
-        const job = await readMagento();
-        if (!job) return;
-        if (job.status === 2) notify(`Read from Magento: ${job.summary}`, "success");
-        else notify(job.lastError ?? job.summary ?? "Could not read from Magento.", "error");
+        await readMagento();
+        return;
       } else {
         const result = await EbayApi.importProducts();
         // The rest was read; the reason the site's own listings were not is eBay's.
@@ -223,8 +233,8 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
   const unitsSold = listings?.reduce((sum, l) => sum + (l.soldQuantity ?? 0), 0);
 
   const refreshButton = (size: "small" | "medium") => (
-    <MDButton variant="gradient" color="info" size={size} disabled={refreshing} onClick={refresh} startIcon={<Icon>sync</Icon>}>
-      {refreshing ? `Reading ${reader}…` : `Refresh from ${reader}`}
+    <MDButton variant="gradient" color="info" size={size} disabled={refreshing || !!readJobId} onClick={refresh} startIcon={<Icon>sync</Icon>}>
+      {refreshing || readJobId ? `Reading ${reader}…` : `Refresh from ${reader}`}
     </MDButton>
   );
   const connectButton = (

@@ -6,6 +6,7 @@ import { useMaterialUIController } from "context";
 import routes, { type AppRoute } from "./routes";
 import LoginPage from "./pages/LoginPage";
 import ProductViewPage from "./pages/ProductViewPage";
+import JobWatcher from "./components/JobWatcher";
 import { useAuth } from "./auth/useAuth";
 import { PageLoader } from "./components/LoadingBar";
 
@@ -74,6 +75,7 @@ export default function App() {
           <Configurator />
         </>
       )}
+      <JobWatcher />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         {renderProtectedRoutes(routes)}

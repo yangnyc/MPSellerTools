@@ -22,6 +22,7 @@ import {
 import PageShell from "../components/PageShell";
 import ProgressBar from "../components/ProgressBar";
 import { useSnackbar } from "../components/useSnackbar";
+import { watchJob } from "../components/jobWatch";
 import { ApiError } from "../lib/api";
 import {
   BULK_JOB_TYPES,
@@ -126,9 +127,9 @@ export default function JobsPage() {
 
   const start = () =>
     run("start", async () => {
-      await BulkJobsApi.start(newType, newAccount);
+      watchJob((await BulkJobsApi.start(newType, newAccount)).id);
       setStarting(false);
-      notify("The job was queued. It starts when the ones ahead of it are done.", "success");
+      notify("The job was queued. It starts when the ones ahead of it are done. You will get a notification when it has finished.", "success");
     }, "Could not queue the job.");
 
   const stop = (job: BulkJob) =>
@@ -139,9 +140,9 @@ export default function JobsPage() {
 
   const runAgain = (job: BulkJob) =>
     run(job.id, async () => {
-      await BulkJobsApi.runAgain(job.id);
+      watchJob((await BulkJobsApi.runAgain(job.id)).id);
       setDetailId(null);
-      notify("Queued again. It works on whatever is left to do.", "success");
+      notify("Queued again. It works on whatever is left to do. You will get a notification when it has finished.", "success");
     }, "Could not queue the job again.");
 
   const remove = (job: BulkJob) =>
