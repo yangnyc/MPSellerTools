@@ -38,7 +38,9 @@ export default function JobWatcher() {
             const job = await BulkJobsApi.get(id);
             if (job.status === 0 || job.status === 1) continue;
             keep(watched().filter((other) => other !== id));
-            notify(...report(job));
+            const [text, severity] = report(job);
+            // A job that failed becomes a standing alert, which is where it is kept; said twice it would be counted twice.
+            notify(text, severity, { toastOnly: job.status === 4 });
             window.dispatchEvent(new CustomEvent<BulkJob>(JOB_FINISHED, { detail: job }));
           } catch (err) {
             // Removed from the list, or not this user's to see: nothing more will be heard of it.

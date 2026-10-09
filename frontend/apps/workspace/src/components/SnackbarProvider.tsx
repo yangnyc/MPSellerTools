@@ -16,6 +16,27 @@ type Kept = { items: NotificationEntry[]; unread: number };
 // something else simply means starting empty.
 const storageKey = (userId: string) => `mpst.notifications.${userId}`;
 
+// What a standing alert says, for telling whether a dismissed one has changed since.
+const said = (alert: StickyAlert) => `${alert.title}|${alert.message}`;
+const dismissedKey = (userId: string) => `mpst.dismissed-alerts.${userId}`;
+
+function loadDismissed(userId: string | null): Record<string, string> {
+  try {
+    const kept = userId ? JSON.parse(window.localStorage.getItem(dismissedKey(userId)) ?? "{}") : {};
+    return kept && typeof kept === "object" && !Array.isArray(kept) ? kept : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveDismissed(userId: string, dismissed: Record<string, string>) {
+  try {
+    window.localStorage.setItem(dismissedKey(userId), JSON.stringify(dismissed));
+  } catch {
+    // Dismissed for this visit only.
+  }
+}
+
 function load(userId: string | null): Kept {
   try {
     const kept = userId ? JSON.parse(window.localStorage.getItem(storageKey(userId)) ?? "null") : null;
@@ -62,11 +83,39 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
   // background job finishes, and whenever a page says it has just put one right.
   // Kept with whose they are, so one user's are never shown to the next.
   const [found, setFound] = useState<{ owner: string | null; items: StickyAlert[] }>({ owner: null, items: [] });
-  const alerts = found.owner === ownerId ? found.items : [];
+  // The ones dismissed here, each by what it said when dismissed: one that says something new is shown again.
+  const [dismissed, setDismissed] = useState<Record<string, string>>(() => loadDismissed(userId));
+  const [dismissedOwner, setDismissedOwner] = useState(userId);
+  if (dismissedOwner !== userId) {
+    setDismissedOwner(userId);
+    setDismissed(loadDismissed(userId));
+  }
+  const alerts = (found.owner === ownerId ? found.items : []).filter((alert) => dismissed[alert.key] !== said(alert));
+  const dismissAlert = useCallback(
+    (key: string) => {
+      const alert = found.items.find((item) => item.key === key);
+      if (!alert || !ownerId) return;
+      setDismissed((current) => {
+        const next = { ...current, [key]: said(alert) };
+        saveDismissed(ownerId, next);
+        return next;
+      });
+    },
+    [found.items, ownerId]
+  );
   const refreshAlerts = useCallback(() => {
     if (!ownerId) return;
     apiFetch<StickyAlert[]>("/api/alerts")
-      .then((items) => setFound({ owner: ownerId, items: Array.isArray(items) ? items : [] }))
+      .then((items) => {
+        const current = Array.isArray(items) ? items : [];
+        setFound({ owner: ownerId, items: current });
+        // A problem that has gone is forgotten, so it is shown if it ever comes back.
+        setDismissed((was) => {
+          const still = Object.fromEntries(Object.entries(was).filter(([key]) => current.some((alert) => alert.key === key)));
+          if (Object.keys(still).length !== Object.keys(was).length) saveDismissed(ownerId, still);
+          return Object.keys(still).length === Object.keys(was).length ? was : still;
+        });
+      })
       // Not known this time; what was last known stays shown.
       .catch(() => undefined);
   }, [ownerId]);
@@ -81,15 +130,16 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
     };
   }, [ownerId, refreshAlerts]);
 
-  const notify = useCallback((msg: string, sev: Severity = "info") => {
+  const notify = useCallback((msg: string, sev: Severity = "info", options?: { toastOnly?: boolean }) => {
     const at = new Date().toISOString();
     setMessage(msg);
     setSeverity(sev);
     setShownCount((count) => count + 1);
+    setOpen(true);
+    if (options?.toastOnly) return;
     // Numbered on from the newest one kept, which is first.
     setNotifications((list) => [{ id: (list[0]?.id ?? 0) + 1, message: msg, severity: sev, at }, ...list].slice(0, maxNotifications));
     setUnreadCount((count) => Math.min(count + 1, maxNotifications));
-    setOpen(true);
   }, []);
 
   const markNotificationsRead = useCallback(() => setUnreadCount(0), []);
@@ -107,7 +157,18 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
 
   return (
     <SnackbarContext.Provider
-      value={{ notify, notifications, unreadCount, markNotificationsRead, clearNotifications, dismissNotification, alerts, refreshAlerts }}
+      value={{
+        notify,
+        notifications,
+        // Never more than there are to read, whatever was counted before some were removed.
+        unreadCount: Math.min(unreadCount, notifications.length),
+        markNotificationsRead,
+        clearNotifications,
+        dismissNotification,
+        alerts,
+        dismissAlert,
+        refreshAlerts,
+      }}
     >
       {children}
       <MDSnackbar

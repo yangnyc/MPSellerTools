@@ -42,7 +42,7 @@ function NotificationsButton({ notifications, sx }) {
   const { c } = kit;
   const [anchor, setAnchor] = useState(null);
   const [page, setPage] = useState(0);
-  const { items, unreadCount, onRead, onClear, onDismiss } = notifications;
+  const { items, unreadCount, onRead, onClear, onDismiss, onDismissSticky } = notifications;
   // Standing problems: above the list, in red, with no way to clear them but putting them right.
   const sticky = notifications.sticky ?? [];
   const navigate = useNavigate();
@@ -214,8 +214,21 @@ function NotificationsButton({ notifications, sx }) {
                   >
                     {alert.action}
                   </Box>
-                  <Box sx={{ mt: 0.5, fontSize: "0.75rem", color: c.muted }}>Stays here until it is resolved.</Box>
+                  <Box sx={{ mt: 0.5, fontSize: "0.75rem", color: c.muted }}>
+                    {onDismissSticky ? "Stays here until it is resolved or dismissed." : "Stays here until it is resolved."}
+                  </Box>
                 </Box>
+                {onDismissSticky && (
+                  <Tooltip title="Dismiss">
+                    <IconButton
+                      aria-label={`Dismiss: ${alert.title}`}
+                      onClick={() => onDismissSticky(alert.key)}
+                      sx={{ flexShrink: 0, ml: "auto", width: 28, height: 28, color: kit.tone("error").fg, "&:hover": { opacity: 0.7 } }}
+                    >
+                      <Icon sx={{ fontSize: "1rem !important" }}>close</Icon>
+                    </IconButton>
+                  </Tooltip>
+                )}
               </Box>
             ))}
           </Box>
@@ -297,6 +310,7 @@ const notificationsPropType = PropTypes.shape({
   onRead: PropTypes.func.isRequired,
   onClear: PropTypes.func.isRequired,
   onDismiss: PropTypes.func,
+  onDismissSticky: PropTypes.func,
 });
 
 NotificationsButton.propTypes = {

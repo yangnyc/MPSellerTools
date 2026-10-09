@@ -75,7 +75,7 @@ public class DashboardController(TenantDbContext db, SyncHealthReader health, IO
 
         var jobsSince = now.AddDays(-JobDays);
         var jobs = await db.BulkJobs.AsNoTracking().Where(j => j.CreatedAtUtc >= jobsSince || j.Status == BulkJobStatus.Queued || j.Status == BulkJobStatus.Running)
-            .Select(j => new { j.Status, j.Summary, j.LastError, j.FinishedAtUtc }).ToListAsync(cancellationToken);
+            .Select(j => new { j.Type, j.ChannelAccountId, j.Status, j.Summary, j.LastError, j.FinishedAtUtc, j.CreatedAtUtc }).ToListAsync(cancellationToken);
         var last = jobs.Where(j => j.FinishedAtUtc != null).OrderByDescending(j => j.FinishedAtUtc).FirstOrDefault();
 
         var products = db.Products.AsNoTracking().Where(p => !p.IsArchived);
@@ -84,7 +84,8 @@ public class DashboardController(TenantDbContext db, SyncHealthReader health, IO
             channels,
             jobs.Count(j => j.Status == BulkJobStatus.Running),
             jobs.Count(j => j.Status == BulkJobStatus.Queued),
-            jobs.Count(j => j.Status is BulkJobStatus.Failed or BulkJobStatus.CompletedWithErrors),
+            // A job run again since, and gone through, no longer needs a look: only the newest of each kind for each channel counts.
+            jobs.GroupBy(j => (j.Type, j.ChannelAccountId)).Count(g => g.MaxBy(j => j.CreatedAtUtc)!.Status is BulkJobStatus.Failed or BulkJobStatus.CompletedWithErrors),
             JobDays,
             last?.LastError ?? last?.Summary,
             new CatalogGaps(
