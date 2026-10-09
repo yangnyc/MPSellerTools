@@ -22,6 +22,8 @@ export type SnackbarState = {
   unreadCount: number;
   markNotificationsRead: () => void;
   clearNotifications: () => void;
+  // Takes one out of the list for good.
+  dismissNotification: (id: number) => void;
   // The standing problems, shown above the list in red until each is resolved.
   alerts: StickyAlert[];
   // Asks again now, for a page that has just put one of them right.

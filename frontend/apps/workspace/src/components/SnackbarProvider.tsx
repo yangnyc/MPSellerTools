@@ -94,6 +94,12 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
 
   const markNotificationsRead = useCallback(() => setUnreadCount(0), []);
 
+  const dismissNotification = useCallback((id: number) => {
+    setNotifications((list) => list.filter((item) => item.id !== id));
+    // The unread ones are the newest; the count cannot outrun what is left.
+    setUnreadCount((count) => Math.max(0, count - 1));
+  }, []);
+
   const clearNotifications = useCallback(() => {
     setNotifications([]);
     setUnreadCount(0);
@@ -101,7 +107,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
 
   return (
     <SnackbarContext.Provider
-      value={{ notify, notifications, unreadCount, markNotificationsRead, clearNotifications, alerts, refreshAlerts }}
+      value={{ notify, notifications, unreadCount, markNotificationsRead, clearNotifications, dismissNotification, alerts, refreshAlerts }}
     >
       {children}
       <MDSnackbar

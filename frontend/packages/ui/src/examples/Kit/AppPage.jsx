@@ -42,7 +42,7 @@ function NotificationsButton({ notifications, sx }) {
   const { c } = kit;
   const [anchor, setAnchor] = useState(null);
   const [page, setPage] = useState(0);
-  const { items, unreadCount, onRead, onClear } = notifications;
+  const { items, unreadCount, onRead, onClear, onDismiss } = notifications;
   // Standing problems: above the list, in red, with no way to clear them but putting them right.
   const sticky = notifications.sticky ?? [];
   const navigate = useNavigate();
@@ -236,10 +236,21 @@ function NotificationsButton({ notifications, sx }) {
                 sx={{ display: "flex", alignItems: "flex-start", gap: 1.25, px: 1.5, py: 1.25, borderRadius: "8px" }}
               >
                 <IconTile icon={notificationIcons[item.severity] ?? "info"} tone={item.severity} size={32} />
-                <Box sx={{ minWidth: 0, lineHeight: 1.4 }}>
+                <Box sx={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
                   <Box sx={{ fontSize: "0.875rem", color: c.text, overflowWrap: "anywhere" }}>{item.message}</Box>
                   <Box sx={{ mt: 0.25, fontSize: "0.75rem", color: c.muted }}>{timeAgo(item.at)}</Box>
                 </Box>
+                {onDismiss && (
+                  <Tooltip title="Dismiss">
+                    <IconButton
+                      aria-label={`Dismiss: ${item.message}`}
+                      onClick={() => onDismiss(item.id)}
+                      sx={{ flexShrink: 0, width: 28, height: 28, color: c.muted, "&:hover": { color: c.text } }}
+                    >
+                      <Icon sx={{ fontSize: "1rem !important" }}>close</Icon>
+                    </IconButton>
+                  </Tooltip>
+                )}
               </Box>
             ))}
           </Box>
@@ -285,6 +296,7 @@ const notificationsPropType = PropTypes.shape({
   unreadCount: PropTypes.number.isRequired,
   onRead: PropTypes.func.isRequired,
   onClear: PropTypes.func.isRequired,
+  onDismiss: PropTypes.func,
 });
 
 NotificationsButton.propTypes = {

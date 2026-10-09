@@ -206,6 +206,8 @@ test("the notifications view beside display settings keeps what was shown", asyn
   await expect(panel.getByText("Acme queued to restart.")).toBeVisible();
   await expect(unread).toHaveCount(0);
 
-  await panel.getByRole("button", { name: "Clear all" }).click();
+  // One can be dismissed by itself.
+  await panel.getByRole("button", { name: "Dismiss: Acme queued to restart." }).click();
+  await expect(panel.getByText("Acme queued to restart.")).toHaveCount(0);
   await expect(panel.getByText("No notifications yet")).toBeVisible();
 });

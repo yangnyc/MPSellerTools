@@ -6,7 +6,7 @@ import { useSnackbar } from "./useSnackbar";
 // The frame around every signed-in page (top bar, content column, footer).
 export default function PageShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
-  const { notifications, unreadCount, markNotificationsRead, clearNotifications, alerts } = useSnackbar();
+  const { notifications, unreadCount, markNotificationsRead, clearNotifications, dismissNotification, alerts } = useSnackbar();
 
   return (
     <AppPage
@@ -19,6 +19,7 @@ export default function PageShell({ children }: { children: ReactNode }) {
         unreadCount,
         onRead: markNotificationsRead,
         onClear: clearNotifications,
+        onDismiss: dismissNotification,
       }}
     >
       {children}

@@ -18,6 +18,8 @@ export type SnackbarState = {
   unreadCount: number;
   markNotificationsRead: () => void;
   clearNotifications: () => void;
+  // Takes one out of the list for good.
+  dismissNotification: (id: number) => void;
 };
 
 export const SnackbarContext = createContext<SnackbarState | null>(null);
