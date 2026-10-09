@@ -139,6 +139,16 @@ export default function MagentoCategoriesPage() {
       notify(defaultChoice ? "Unmapped products now go to that category." : "Unmapped products now go to no category.", "success");
     }, "Could not save the default category.");
 
+  const repair = () =>
+    run("repair", async () => {
+      const result = await MagentoCategoriesApi.repair();
+      notify(
+        `${result.repointed} now go to the store category of the same name, ${result.removed} removed.`
+          + (result.unresolved.length > 0 ? ` No namesake in the store for: ${result.unresolved.join(", ")}. They are created there when their products are next sent.` : ""),
+        result.unresolved.length > 0 ? "warning" : "success"
+      );
+    }, "Could not repair the mappings.");
+
   const removeUnused = () =>
     run("unused", async () => {
       const result = await MagentoCategoriesApi.removeUnused();
@@ -290,7 +300,13 @@ export default function MagentoCategoriesPage() {
           )}
           {broken.length > 0 && (
             <InlineAlert tone="error" title="Mapped to categories the store no longer has">
-              {broken.map((r) => r.category).join(", ")}. Choose another store category for each, or products in them are refused when sent.
+              {broken.map((r) => r.category).join(", ")}. This happens when the store's categories are rebuilt and get new numbers. Repairing points each at the store
+              category of the same name and removes the ones with no namesake; nothing is changed in the store.
+              <Box sx={{ mt: 1.5 }}>
+                <MDButton variant="gradient" color="info" size="small" disabled={!!busy} onClick={repair} startIcon={<Icon>build</Icon>}>
+                  {busy === "repair" ? "Repairing…" : "Repair mappings"}
+                </MDButton>
+              </Box>
             </InlineAlert>
           )}
 

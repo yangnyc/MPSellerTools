@@ -338,6 +338,27 @@ public class MagentoIntegrationTests(MarketplaceFixture fixture) : IClassFixture
         Assert.Equal(HttpStatusCode.OK, (await PostAsync(admin, $"/api/channel-listings/{listingId}/validate")).StatusCode);
         await TenantApiHelpers.PutJsonWithAntiforgeryAsync(admin, "/api/magento/categories/default", new { categoryId = (string?)null });
 
+        // The store's categories rebuilt under new numbers: a mapping to one that is gone goes to its namesake, and one with no namesake is removed.
+        await fixture.WithDbAsync(async db =>
+        {
+            var pain = await db.CategoryMappings.SingleAsync(m => m.ChannelMarketId == marketId && m.InternalCategory == "Medicine / Pain");
+            pain.ExternalCategoryId = "7001";
+            db.CategoryMappings.Add(new CategoryMapping { Id = Guid.NewGuid(), ChannelMarketId = marketId, InternalCategory = "Old Range", ExternalCategoryId = "7002" });
+            return await db.SaveChangesAsync();
+        });
+        var before = (await admin.GetFromJsonAsync<JsonElement>("/api/magento/categories")).GetProperty("categories").EnumerateArray().ToList();
+        var gone = before.Where(c => c.GetProperty("storeCategoryMissing").GetBoolean()).Select(c => c.GetProperty("category").GetString()).ToList();
+        Assert.Contains("Medicine / Pain", gone);
+        Assert.Contains("Old Range", gone);
+        var repaired = await MarketplaceFixture.JsonAsync(await PostAsync(admin, "/api/magento/categories/repair"));
+        Assert.Equal(gone.Count, repaired.GetProperty("repointed").GetInt32() + repaired.GetProperty("removed").GetInt32());
+        // Only a category that still has products is named as left with nowhere to go.
+        Assert.DoesNotContain(repaired.GetProperty("unresolved").EnumerateArray(), c => c.GetString() is "Old Range" or "Medicine / Pain");
+        var after = (await admin.GetFromJsonAsync<JsonElement>("/api/magento/categories")).GetProperty("categories").EnumerateArray().ToList();
+        Assert.DoesNotContain(after, c => c.GetProperty("storeCategoryMissing").GetBoolean());
+        Assert.Equal("11", after.Single(c => c.GetProperty("category").GetString() == "Medicine / Pain").GetProperty("storeCategoryId").GetString());
+        Assert.DoesNotContain(after, c => c.GetProperty("category").GetString() == "Old Range");
+
         // The store unreachable: the company's own side of the page still comes.
         fixture.Magento.On("GET", "/rest/all/V1/categories", """{"message":"Service unavailable"}""", HttpStatusCode.ServiceUnavailable);
         var offline = await admin.GetFromJsonAsync<JsonElement>("/api/magento/categories");

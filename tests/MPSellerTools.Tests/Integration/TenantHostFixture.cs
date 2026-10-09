@@ -78,7 +78,9 @@ public class TenantHostFixture : WebApplicationFactory<Program>, IAsyncLifetime
     /// backfill are off for every test host: tests that want them run them
     /// by hand, so nothing happens behind a test's back.
     /// </summary>
-    protected virtual object MarketplaceSettings => new { WorkerEnabled = false, AutoBackfill = false, RequestsPerSecond = 0, LiveWritesEnabled = false };
+    // Stock accounting is said outright, so a machine whose own local settings switch it on tests the same thing.
+    protected virtual object MarketplaceSettings =>
+        new { WorkerEnabled = false, AutoBackfill = false, RequestsPerSecond = 0, LiveWritesEnabled = false, InventoryAccountingEnabled = false };
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

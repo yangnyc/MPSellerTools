@@ -24,6 +24,13 @@ public record MagentoStoreCategory(long Id, long ParentId, string Name, string P
 /// </summary>
 public record MagentoRemovalResult(bool DryRun, int Matched, int Removed, int Kept, int Remaining);
 
+/// <summary>
+/// What became of the mappings to store categories that are gone: <see cref="Repointed"/> now go to the store
+/// category of the same path or name, <see cref="Removed"/> had no product and no namesake, and
+/// <see cref="Unresolved"/> are the categories with products that still have nowhere to go.
+/// </summary>
+public record MagentoCategoryRepair(int Repointed, int Removed, IReadOnlyList<string> Unresolved);
+
 /// <summary><see cref="Listings"/> is how many products the store reported; <see cref="Created"/> how many of them were new to the catalog here.</summary>
 public record MagentoImportResult(int Created, int Listings);
 
@@ -203,6 +210,54 @@ public class MagentoSync(TenantDbContext db, ChannelHttp http, ChannelSecrets se
     }
 
     /// <summary>
+    /// Puts right the mappings a change in the store has broken: a store whose categories were rebuilt
+    /// gives them new numbers, and the old ones no longer exist. A mapping to a number the store does not
+    /// have is pointed at the store category of the same path, or failing that the one category of the same
+    /// name; with neither, it is removed when no product has the category, so the next send creates or
+    /// finds one, and otherwise left and named. Nothing is changed in the store.
+    /// </summary>
+    public async Task<MagentoCategoryRepair> RepairCategoryMappingsAsync(ChannelAccount account, Guid marketId, CancellationToken cancellationToken)
+    {
+        var store = (await GetCategoriesAsync(account, cancellationToken)).ToList();
+        var known = store.Select(c => c.Id.ToString(CultureInfo.InvariantCulture)).ToHashSet();
+        var broken = (await db.CategoryMappings.Where(m => m.ChannelMarketId == marketId).ToListAsync(cancellationToken))
+            .Where(m => !known.Contains(m.ExternalCategoryId)).ToList();
+        if (broken.Count == 0)
+        {
+            return new MagentoCategoryRepair(0, 0, []);
+        }
+
+        var below = store.Where(c => c.Level >= 2).ToList();
+        var (repointed, removed, unresolved) = (0, 0, new List<string>());
+        foreach (var mapping in broken)
+        {
+            var last = mapping.InternalCategory.Split(CategorySeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault() ?? mapping.InternalCategory;
+            var byPath = below.FirstOrDefault(c => string.Equals(c.Path, mapping.InternalCategory, StringComparison.OrdinalIgnoreCase));
+            var byName = below.Where(c => string.Equals(c.Name, last, StringComparison.OrdinalIgnoreCase)).ToList();
+            // A name the store has more than once is not guessed at.
+            if ((byPath ?? (byName.Count == 1 ? byName[0] : null)) is { } match)
+            {
+                mapping.ExternalCategoryId = match.Id.ToString(CultureInfo.InvariantCulture);
+                repointed++;
+            }
+            // Unmapped, a category is found or created in the store when one of its products is next sent.
+            else
+            {
+                db.CategoryMappings.Remove(mapping);
+                removed++;
+                if (await db.Products.AnyAsync(p => !p.IsArchived && p.Category == mapping.InternalCategory, cancellationToken))
+                {
+                    unresolved.Add(mapping.InternalCategory);
+                }
+            }
+        }
+
+        audit.Log("MagentoCategoryMappingsRepaired", $"repointed={repointed}; removed={removed}");
+        await db.SaveChangesAsync(cancellationToken);
+        return new MagentoCategoryRepair(repointed, removed, unresolved);
+    }
+
+    /// <summary>
     /// Records every product in the store's catalog as a listing, under the
     /// product with its SKU, or under a new one made for it; a product
     /// already here is the company's own record and is left as it is. A
@@ -218,7 +273,9 @@ public class MagentoSync(TenantDbContext db, ChannelHttp http, ChannelSecrets se
         {
             var response = await MagentoApi.SendAsync(
                 http, secrets, account, HttpMethod.Get,
-                $"{root}/rest/all/V1/products?searchCriteria[pageSize]={PageSize}&searchCriteria[currentPage]={page}", null, cancellationToken);
+                // Only what is recorded here: a whole product, with every attribute and picture, takes the store seconds a page.
+                $"{root}/rest/all/V1/products?searchCriteria[pageSize]={PageSize}&searchCriteria[currentPage]={page}&fields=items[id,sku,name,price,status],total_count",
+                null, cancellationToken);
             var items = response.Body.TryGetProperty("items", out var list) && list.ValueKind == JsonValueKind.Array ? list.EnumerateArray().ToList() : [];
             remote.AddRange(items);
 

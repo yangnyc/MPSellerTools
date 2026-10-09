@@ -75,6 +75,7 @@ public class BulkJobRunner(
             }
             else
             {
+                await RepairMagentoCategoriesAsync(job, account, cancellationToken);
                 await WorkThroughListingsAsync(job, cancellationToken);
             }
         }
@@ -93,6 +94,34 @@ public class BulkJobRunner(
             await FinishAsync(failed, BulkJobStatus.Failed, null, reason, CancellationToken.None);
         }
         return true;
+    }
+
+    /// <summary>
+    /// Before a job sends a Magento store its products, the mappings to store categories that are gone are
+    /// put right, so the products are not all refused over a category the store no longer has. A store
+    /// that cannot be read now is left to the sends themselves to report.
+    /// </summary>
+    private async Task RepairMagentoCategoriesAsync(BulkJob job, ChannelAccount account, CancellationToken cancellationToken)
+    {
+        if (account.Channel != SalesChannel.Magento
+            || job.Type is not (BulkJobType.PublishDrafts or BulkJobType.SendAgain or BulkJobType.SendEverythingAgain)
+            || !account.LiveWritesEnabled)
+        {
+            return;
+        }
+
+        try
+        {
+            var marketId = await db.ChannelMarkets.AsNoTracking().Where(m => m.ChannelAccountId == account.Id).Select(m => (Guid?)m.Id).FirstOrDefaultAsync(cancellationToken);
+            if (marketId is not null)
+            {
+                await magento.RepairCategoryMappingsAsync(account, marketId.Value, cancellationToken);
+            }
+        }
+        catch (ChannelException ex)
+        {
+            logger.LogWarning("Magento category mappings were not checked before bulk job {JobId}: {Reason}", job.Id, ex.Message);
+        }
     }
 
     /// <summary>The listings of the account a job of this type works on, in the order it takes them.</summary>

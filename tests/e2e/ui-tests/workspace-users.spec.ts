@@ -147,5 +147,5 @@ test("the sidebar is in three groups separated by visible lines", async ({ page 
   }
   await sidebar.getByRole("button", { name: /Inventory/ }).click();
   await expect(sidebar.locator('a[href="/products"]')).toHaveCount(0);
-  expect(entries).toEqual(["Dashboard", "Inventory", "eBay", "Amazon", "Walmart", "Magento", "Orders", "Sync queue", "Jobs", "---", "Tasks", "Audit", "---", "Settings", "Profile", "Users"]);
+  expect(entries).toEqual(["Dashboard", "Inventory", "Import", "eBay", "Amazon", "Walmart", "Magento", "Orders", "Sync queue", "Jobs", "---", "Tasks", "Audit", "---", "Settings", "Profile", "Users"]);
 });

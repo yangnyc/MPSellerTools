@@ -414,6 +414,9 @@ export const MagentoCategoriesApi = {
   match: () => apiFetch<MagentoCategoryBulk>("/api/magento/categories/match", { method: "POST" }),
   setDefault: (categoryId: string | null) => apiFetch<void>("/api/magento/categories/default", { method: "PUT", body: JSON.stringify({ categoryId }) }),
   removeUnused: () => apiFetch<{ removed: number }>("/api/magento/categories/remove-unused", { method: "POST" }),
+  // Mappings to store categories that are gone: each goes to its namesake in the store, or is removed.
+  // `unresolved` are the categories with products that were left with no store category.
+  repair: () => apiFetch<{ repointed: number; removed: number; unresolved: string[] }>("/api/magento/categories/repair", { method: "POST" }),
 };
 
 // Whether Amazon's catalog can be read, and through which account; `problem` says why not.

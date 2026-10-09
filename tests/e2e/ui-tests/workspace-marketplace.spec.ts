@@ -352,13 +352,22 @@ test("Magento has its own menu, led by the connection page, where the store's ad
     id: "a-magento", channel: 4, name: "Magento", sellerId: null, hasCredentials: true,
     markets: [{ id: "m-magento", marketplaceCode: "default", language: "en-US", currency: "USD" }],
   });
+  // Reading the store is a background job, followed until it is done.
+  const readJob = {
+    id: "j-read", type: 4, status: 0, channelAccountId: "a-magento", accountName: "Magento", channel: 4, total: 0, processed: 0, succeeded: 0, failed: 0,
+    cancelRequested: false, summary: null, lastError: null, errors: [], createdByEmail: "admin@example.com", createdAtUtc: "2026-10-09T10:00:00Z", startedAtUtc: null, finishedAtUtc: null,
+  };
   await mockApi(
     page,
-    { "/api/channels": [magento], "/api/listings": { listings: [], connected: true, lastSyncedAtUtc: null } },
+    {
+      "/api/channels": [magento],
+      "/api/listings": { listings: [], connected: true, lastSyncedAtUtc: null },
+      "/api/bulk-jobs/j-read": { ...readJob, status: 2, summary: "5 product(s) read from the store, 2 new to the catalog." },
+    },
     {
       "/api/channels/a-magento": { ...magento, settings: { baseUrl: "https://shop.example.test" } },
       "/api/magento/test": { storeAddress: "https://shop.example.test/", storeViews: ["default", "de"], currency: "USD" },
-      "/api/magento/import/listings": { created: 2, listings: 5 },
+      "/api/bulk-jobs": readJob,
     },
   );
   await page.goto("/magento/connection");
@@ -402,13 +411,13 @@ test("Magento has its own menu, led by the connection page, where the store's ad
   await sidebar.locator('a[href="/magento/listings"]').click();
   await expect(page.getByRole("heading", { name: "Magento listings" })).toBeVisible();
   await page.getByRole("button", { name: "Refresh from Magento" }).first().click();
-  await expect(page.getByText("Read from Magento: 5 in the store, 2 new to your catalog.")).toBeVisible();
+  await expect(page.getByText("Read from Magento: 5 product(s) read from the store, 2 new to the catalog.")).toBeVisible();
 
   expect(writes).toEqual([
     'PUT /api/channels/a-magento {"name":"Magento","environment":0,"sellerId":null,"settings":{"baseUrl":"https://shop.example.test"},"isEnabled":true,"liveWritesEnabled":false,"inventorySyncEnabled":false,"orderImportEnabled":false,"priceConflictPolicy":2,"channel":4}',
     'PUT /api/channels/a-magento/credentials {"credentials":{"accessToken":"token-from-magento"}}',
     "POST /api/magento/test",
-    "POST /api/magento/import/listings",
+    'POST /api/bulk-jobs {"type":4,"channelAccountId":"a-magento"}',
   ]);
 });
 

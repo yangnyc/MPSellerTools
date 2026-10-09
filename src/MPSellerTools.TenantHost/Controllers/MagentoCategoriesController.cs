@@ -243,6 +243,18 @@ public class MagentoCategoriesController(TenantDbContext db, MagentoSync sync, I
             return Ok(new MagentoCategoryBulkResponse(false, items.Count, 0, items));
         }, writes: false, cancellationToken);
 
+    /// <summary>
+    /// Puts right the mappings to store categories that are gone, as after the store's categories were
+    /// rebuilt: each goes to its namesake in the store, or is removed. Nothing is changed in the store.
+    /// </summary>
+    [HttpPost("repair")]
+    public Task<IActionResult> Repair(CancellationToken cancellationToken) =>
+        InStoreAsync(async account =>
+        {
+            var market = await db.ChannelMarkets.AsNoTracking().FirstAsync(m => m.ChannelAccountId == account.Id, cancellationToken);
+            return Ok(await sync.RepairCategoryMappingsAsync(account, market.Id, cancellationToken));
+        }, writes: false, cancellationToken);
+
     /// <summary>Sets where a product goes whose own category is not mapped; null for nowhere.</summary>
     [HttpPut("default")]
     public async Task<IActionResult> SetDefault([FromBody] SetMagentoDefaultCategoryRequest request, CancellationToken cancellationToken)

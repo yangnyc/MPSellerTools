@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Icon from "@mui/material/Icon";
@@ -30,7 +30,7 @@ import {
   type ListingStatus,
   type Listings,
 } from "../api/types";
-import { AMAZON, EBAY, MAGENTO, MagentoApi, type Marketplace } from "../api/channels";
+import { AMAZON, BulkJobsApi, ChannelsApi, EBAY, MAGENTO, type BulkJob, type Marketplace } from "../api/channels";
 import { LISTING_STATUS_TONE } from "../lib/status";
 
 type StatusFilter = "all" | ListingStatus;
@@ -82,13 +82,46 @@ export default function ListingsPage({ marketplace }: { marketplace?: Marketplac
 
   useEffect(fetchData, [fetchData]);
 
+  const onPage = useRef(true);
+  useEffect(() => {
+    onPage.current = true;
+    return () => {
+      onPage.current = false;
+    };
+  }, []);
+
+  // A store's whole catalog takes longer to read than a page can wait for an answer, so it is read by a
+  // background job, which is followed here until it is done. One already under way is followed instead.
+  const readMagento = async (): Promise<BulkJob | null> => {
+    const account = (await ChannelsApi.list()).find((a) => a.channel === MAGENTO.kind);
+    if (!account) throw new ApiError(400, "Add Magento as a sales channel first.");
+    const waiting = (job: BulkJob) => job.status === 0 || job.status === 1;
+    let job: BulkJob;
+    try {
+      job = await BulkJobsApi.start(4, account.id);
+    } catch (err) {
+      const running = err instanceof ApiError && err.status === 409 ? (await BulkJobsApi.list()).find((j) => j.type === 4 && j.channelAccountId === account.id && waiting(j)) : undefined;
+      if (!running) throw err;
+      job = running;
+    }
+    while (waiting(job)) {
+      await new Promise((resolve) => window.setTimeout(resolve, 2000));
+      // Left the page: the job carries on, and is on the Jobs page.
+      if (!onPage.current) return null;
+      job = await BulkJobsApi.get(job.id);
+    }
+    return job;
+  };
+
   // Listings come from the site itself, so refreshing them is the eBay product import, or a read of the Magento store's catalog.
   const refresh = async () => {
     setRefreshing(true);
     try {
       if (reader === "Magento") {
-        const store = await MagentoApi.importListings();
-        notify(`Read from Magento: ${store.listings} in the store, ${store.created} new to your catalog.`, "success");
+        const job = await readMagento();
+        if (!job) return;
+        if (job.status === 2) notify(`Read from Magento: ${job.summary}`, "success");
+        else notify(job.lastError ?? job.summary ?? "Could not read from Magento.", "error");
       } else {
         const result = await EbayApi.importProducts();
         // The rest was read; the reason the site's own listings were not is eBay's.
