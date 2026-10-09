@@ -35,6 +35,11 @@ const sidenav = {
       width: pxToRem(250),
       backgroundColor: background.sidenav,
       height: `calc(100vh - ${pxToRem(32)})`,
+      // On a phone 100vh reaches behind the browser's own bar, which hid the last entries of the menu;
+      // the dynamic height is what can actually be seen.
+      "@supports (height: 100dvh)": {
+        height: `calc(100dvh - ${pxToRem(32)})`,
+      },
       margin: pxToRem(16),
       borderRadius: borderRadius.xl,
       border: "none",

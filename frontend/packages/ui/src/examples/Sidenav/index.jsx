@@ -285,7 +285,8 @@ function Sidenav({ color: _color = "info", brand = "", brandName, routes, pinned
         </MDBox>
       </MDBox>
       <Divider className={lightDivider ? "MuiDivider-light" : undefined} />
-      <List>{renderRoutes}</List>
+      {/* Room under the last entry, so it clears the rounded corner and a phone's home bar. */}
+      <List sx={{ pb: "calc(16px + env(safe-area-inset-bottom, 0px))" }}>{renderRoutes}</List>
     </SidenavRoot>
   );
 }
