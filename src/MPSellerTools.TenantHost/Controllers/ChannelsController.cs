@@ -92,7 +92,9 @@ public class ChannelsController(
             if (!options.Value.InventoryAccountingEnabled)
             {
                 return Problem(
-                    "Stock can be sent to channels only once inventory accounting is switched on for this host (Marketplace:InventoryAccountingEnabled).",
+                    "Send stock cannot be switched on yet: stock accounting is off on this server, so orders do not reduce stock and the quantities sent could be wrong. "
+                    + "Ask whoever runs the server to switch it on (the setting Marketplace:InventoryAccountingEnabled) and restart it, then save again. "
+                    + "To save your other changes now, switch Send stock off.",
                     statusCode: StatusCodes.Status409Conflict);
             }
 
@@ -102,8 +104,10 @@ public class ChannelsController(
             if (!request.OrderImportEnabled || notImporting.Count > 0)
             {
                 return Problem(
-                    "Stock can be sent to channels only when orders are imported from every active channel"
-                    + (notImporting.Count > 0 ? $" (not yet: {string.Join(", ", notImporting)})." : "."),
+                    "Send stock cannot be switched on yet: orders have to be imported from every active sales channel first, so what sells elsewhere is taken off the stock sent here. "
+                    + (!request.OrderImportEnabled ? "Switch on Import orders on this page. " : "")
+                    + (notImporting.Count > 0 ? $"Switch on Import orders in the settings of: {string.Join(", ", notImporting)}. " : "")
+                    + "Then save again.",
                     statusCode: StatusCodes.Status409Conflict);
             }
         }

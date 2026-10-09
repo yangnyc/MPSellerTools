@@ -46,6 +46,16 @@ export const subscribeToPendingRequests = (listener: () => void) => {
   };
 };
 
+// What to say, and what to do next, when the server gives a status with no explanation of its own.
+const unexplained = (status: number) =>
+  status === 403 ? "Your account is not allowed to do this. Ask an administrator of your company if you need it."
+  : status === 404 ? "This no longer exists; it may have been removed. Reload the page to see what is there now."
+  : status === 413 ? "That is too much to send at once. Send it in smaller parts."
+  : status === 429 ? "Too many requests in a short time. Wait a minute and try again."
+  : status === 502 || status === 503 || status === 504 ? "The server is not answering right now; it may be restarting. Try again in a minute."
+  : status >= 500 ? "Something went wrong on the server, and nothing was changed. Try again; if it keeps happening, tell whoever runs the server what you were doing."
+  : null;
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   changePending(1);
   try {
@@ -66,7 +76,18 @@ async function send<T>(path: string, init: RequestInit): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(path, { ...init, method, headers, credentials: "include" });
+  let response: Response;
+  try {
+    response = await fetch(path, { ...init, method, headers, credentials: "include" });
+  } catch {
+    // No answer at all: the connection dropped, or the server is restarting.
+    throw new ApiError(
+      0,
+      SAFE_METHODS.has(method)
+        ? "The server could not be reached. Check your connection and try again in a moment."
+        : "The server could not be reached, so it is not known whether this was saved. Reload the page to see, then try again if it was not."
+    );
+  }
 
   if (response.status === 401) {
     throw new ApiError(401, "Not authenticated");
@@ -75,7 +96,7 @@ async function send<T>(path: string, init: RequestInit): Promise<T> {
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
     // The detail is the server's own explanation; the title is only the status name ("Bad Request").
-    throw new ApiError(response.status, problem?.detail ?? problem?.title ?? "Request failed");
+    throw new ApiError(response.status, problem?.detail ?? unexplained(response.status) ?? problem?.title ?? "Request failed");
   }
 
   // 204 No Content, and 202 Accepted from the endpoints that only queue work,
