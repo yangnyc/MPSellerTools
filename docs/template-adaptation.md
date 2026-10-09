@@ -88,8 +88,9 @@ signed-in page of both apps is composed from, and it carries the login pages'
 navy / sky / indigo look into the rest of the product:
 
 - `AppPage` — the page frame: `DashboardLayout`, a top bar (breadcrumb trail,
-  light/dark toggle, display settings, account menu) and `Footer`. Each app
-  wraps it in `src/components/PageShell.tsx` to pass in its own auth state.
+  light/dark toggle, display settings, notifications, account menu) and
+  `Footer`. Each app wraps it in `src/components/PageShell.tsx` to pass in its
+  own auth state and the notifications its `SnackbarProvider` has shown.
 - `PageHeader`, `Hero`, `Section`, `Surface`, `StatCard`, `StatusPill`,
   `FilterTabs`, `StateBlock` (loading / empty / error), `InlineAlert`,
   `Identity`, `DetailList`, `KitDialog`.

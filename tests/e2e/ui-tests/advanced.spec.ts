@@ -182,3 +182,30 @@ test("a notification disappears by itself after five seconds", async ({ page }) 
   await expect(notification).toBeVisible();
   await expect(notification).toBeHidden({ timeout: 4000 });
 });
+
+test("the notifications view beside display settings keeps what was shown", async ({ page }) => {
+  await page.goto("/tenants/controls");
+  const bell = page.getByRole("button", { name: "Notifications" });
+  const unread = page.getByTestId("notifications-unread");
+
+  // Nothing yet.
+  await expect(unread).toHaveCount(0);
+  await bell.click();
+  const panel = page.getByRole("dialog", { name: "Notifications" });
+  await expect(panel.getByText("No notifications yet")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Restart" }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Restart" }).click();
+  await expect(unread).toHaveText("1");
+
+  // Still listed after moving to another page; opening it clears the count.
+  await page.getByRole("link", { name: "Jobs" }).first().click();
+  await expect(page.getByRole("heading", { name: "Provisioning jobs" })).toBeVisible();
+  await bell.click();
+  await expect(panel.getByText("Acme queued to restart.")).toBeVisible();
+  await expect(unread).toHaveCount(0);
+
+  await panel.getByRole("button", { name: "Clear all" }).click();
+  await expect(panel.getByText("No notifications yet")).toBeVisible();
+});

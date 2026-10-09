@@ -1,5 +1,5 @@
 // MP Seller Tools page kit — the frame around every signed-in page: the top
-// bar (breadcrumb trail, appearance controls, account menu), the content
+// bar (breadcrumb trail, appearance controls, notifications, account menu), the content
 // column, and the footer. Auth state stays in each app (see context/index.jsx),
 // so the signed-in user and the logout handler come in as props.
 
@@ -15,12 +15,13 @@ import Icon from "@mui/material/Icon";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
+import Popover from "@mui/material/Popover";
 import Tooltip from "@mui/material/Tooltip";
 
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import Footer from "examples/Footer";
-import { InitialsAvatar } from "examples/Kit/primitives";
-import { roleLabel } from "examples/Kit/format";
+import { IconTile, InitialsAvatar } from "examples/Kit/primitives";
+import { roleLabel, timeAgo } from "examples/Kit/format";
 import { useKit } from "examples/Kit/tokens";
 
 import { useMaterialUIController, setMiniSidenav, setOpenConfigurator } from "context";
@@ -28,7 +29,164 @@ import { useMaterialUIController, setMiniSidenav, setOpenConfigurator } from "co
 // Record ids in a path (/tenants/<guid>) read as "Details" in the trail.
 const crumbLabel = (segment) => (/^[0-9a-f-]{16,}$/i.test(segment) ? "Details" : segment.replace(/-/g, " "));
 
-function AppNavbar({ user, onLogout, consoleName, profileHref }) {
+const notificationIcons = { success: "check_circle", error: "error_outline", warning: "warning_amber", info: "info" };
+
+// The bell beside Display settings, and the panel it opens: the messages the
+// app has shown this session, newest first. Opening or closing the panel
+// marks them read, which clears the count on the bell.
+function NotificationsButton({ notifications, sx }) {
+  const kit = useKit();
+  const { c } = kit;
+  const [anchor, setAnchor] = useState(null);
+  const { items, unreadCount, onRead, onClear } = notifications;
+
+  const open = (event) => {
+    setAnchor(event.currentTarget);
+    onRead();
+  };
+  const close = () => {
+    setAnchor(null);
+    onRead();
+  };
+
+  return (
+    <>
+      <Tooltip title="Notifications">
+        <IconButton
+          aria-label="Notifications"
+          aria-haspopup="dialog"
+          aria-expanded={Boolean(anchor)}
+          onClick={open}
+          sx={{ ...sx, position: "relative" }}
+        >
+          <Icon fontSize="small">notifications</Icon>
+          {unreadCount > 0 && (
+            <Box
+              component="span"
+              data-testid="notifications-unread"
+              sx={{
+                position: "absolute",
+                top: -6,
+                right: -6,
+                minWidth: 18,
+                height: 18,
+                px: 0.5,
+                display: "grid",
+                placeItems: "center",
+                borderRadius: "999px",
+                fontSize: "0.6875rem",
+                fontWeight: 700,
+                lineHeight: 1,
+                color: "#fff",
+                backgroundColor: kit.tone("error").solid,
+              }}
+            >
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </Box>
+          )}
+        </IconButton>
+      </Tooltip>
+      <Popover
+        anchorEl={anchor}
+        open={Boolean(anchor)}
+        onClose={close}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        slotProps={{
+          paper: {
+            role: "dialog",
+            "aria-label": "Notifications",
+            sx: {
+              mt: 1,
+              width: 360,
+              maxWidth: "calc(100vw - 32px)",
+              borderRadius: "14px",
+              backgroundColor: c.surface,
+              backgroundImage: "none",
+              border: `1px solid ${c.border}`,
+              boxShadow: c.shadow,
+            },
+          },
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 2,
+            px: 2,
+            py: 1.5,
+            borderBottom: `1px solid ${c.border}`,
+          }}
+        >
+          <Box component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 700, color: c.text }}>
+            Notifications
+          </Box>
+          {items.length > 0 && (
+            <Box
+              component="button"
+              type="button"
+              onClick={onClear}
+              sx={{
+                p: 0,
+                border: "none",
+                background: "none",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                fontSize: "0.8125rem",
+                fontWeight: 500,
+                color: c.accent,
+                "&:hover": { textDecoration: "underline" },
+                "&:focus-visible": { outline: `2px solid ${c.accent}`, outlineOffset: 2 },
+              }}
+            >
+              Clear all
+            </Box>
+          )}
+        </Box>
+        {items.length === 0 ? (
+          <Box sx={{ px: 2, py: 4, textAlign: "center" }}>
+            <Box sx={{ fontSize: "0.875rem", fontWeight: 700, color: c.text }}>No notifications yet</Box>
+            <Box sx={{ mt: 0.5, fontSize: "0.8125rem", color: c.muted }}>
+              Messages from this session appear here.
+            </Box>
+          </Box>
+        ) : (
+          <Box component="ul" sx={{ m: 0, p: 0.5, listStyle: "none", maxHeight: 380, overflowY: "auto" }}>
+            {items.map((item) => (
+              <Box
+                component="li"
+                key={item.id}
+                sx={{ display: "flex", alignItems: "flex-start", gap: 1.25, px: 1.5, py: 1.25, borderRadius: "8px" }}
+              >
+                <IconTile icon={notificationIcons[item.severity] ?? "info"} tone={item.severity} size={32} />
+                <Box sx={{ minWidth: 0, lineHeight: 1.4 }}>
+                  <Box sx={{ fontSize: "0.875rem", color: c.text, overflowWrap: "anywhere" }}>{item.message}</Box>
+                  <Box sx={{ mt: 0.25, fontSize: "0.75rem", color: c.muted }}>{timeAgo(item.at)}</Box>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        )}
+      </Popover>
+    </>
+  );
+}
+
+const notificationsPropType = PropTypes.shape({
+  items: PropTypes.arrayOf(PropTypes.object).isRequired,
+  unreadCount: PropTypes.number.isRequired,
+  onRead: PropTypes.func.isRequired,
+  onClear: PropTypes.func.isRequired,
+});
+
+NotificationsButton.propTypes = {
+  notifications: notificationsPropType.isRequired,
+  sx: PropTypes.object,
+};
+
+function AppNavbar({ user, onLogout, consoleName, profileHref, notifications }) {
   const { c } = useKit();
   const [controller, dispatch] = useMaterialUIController();
   const { miniSidenav, openConfigurator, fixedNavbar } = controller;
@@ -133,6 +291,8 @@ function AppNavbar({ user, onLogout, consoleName, profileHref }) {
           </IconButton>
         </Tooltip>
 
+        {notifications && <NotificationsButton notifications={notifications} sx={barButtonSx} />}
+
         <Box
           component="button"
           type="button"
@@ -227,12 +387,19 @@ AppNavbar.propTypes = {
   onLogout: PropTypes.func.isRequired,
   consoleName: PropTypes.string.isRequired,
   profileHref: PropTypes.string.isRequired,
+  notifications: notificationsPropType,
 };
 
-export function AppPage({ user, onLogout, consoleName, profileHref = "/profile", children }) {
+export function AppPage({ user, onLogout, consoleName, profileHref = "/profile", notifications, children }) {
   return (
     <DashboardLayout>
-      <AppNavbar user={user} onLogout={onLogout} consoleName={consoleName} profileHref={profileHref} />
+      <AppNavbar
+        user={user}
+        onLogout={onLogout}
+        consoleName={consoleName}
+        profileHref={profileHref}
+        notifications={notifications}
+      />
       <Box component="main" sx={{ minHeight: "calc(100vh - 220px)", pb: 3 }}>
         {children}
       </Box>
@@ -246,5 +413,6 @@ AppPage.propTypes = {
   onLogout: PropTypes.func.isRequired,
   consoleName: PropTypes.string.isRequired,
   profileHref: PropTypes.string,
+  notifications: notificationsPropType,
   children: PropTypes.node,
 };
