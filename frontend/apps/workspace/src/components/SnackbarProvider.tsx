@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import MDSnackbar from "components/MDSnackbar";
 
 import { useAuth } from "../auth/useAuth";
-import { SnackbarContext, type NotificationEntry, type Severity } from "./snackbarState";
+import { apiFetch } from "../lib/api";
+import { JOB_FINISHED } from "./jobWatch";
+import { SnackbarContext, type NotificationEntry, type Severity, type StickyAlert } from "./snackbarState";
 
 // The notifications view keeps this many; older ones drop off the end.
 const maxNotifications = 500;
@@ -56,6 +58,29 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
     }
   }, [ownerId, notifications, unreadCount]);
 
+  // The standing problems are the server's to say: asked for on signing in, every minute after, when a
+  // background job finishes, and whenever a page says it has just put one right.
+  // Kept with whose they are, so one user's are never shown to the next.
+  const [found, setFound] = useState<{ owner: string | null; items: StickyAlert[] }>({ owner: null, items: [] });
+  const alerts = found.owner === ownerId ? found.items : [];
+  const refreshAlerts = useCallback(() => {
+    if (!ownerId) return;
+    apiFetch<StickyAlert[]>("/api/alerts")
+      .then((items) => setFound({ owner: ownerId, items: Array.isArray(items) ? items : [] }))
+      // Not known this time; what was last known stays shown.
+      .catch(() => undefined);
+  }, [ownerId]);
+  useEffect(() => {
+    if (!ownerId) return undefined;
+    refreshAlerts();
+    const timer = window.setInterval(refreshAlerts, 60000);
+    window.addEventListener(JOB_FINISHED, refreshAlerts);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(JOB_FINISHED, refreshAlerts);
+    };
+  }, [ownerId, refreshAlerts]);
+
   const notify = useCallback((msg: string, sev: Severity = "info") => {
     const at = new Date().toISOString();
     setMessage(msg);
@@ -76,7 +101,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
 
   return (
     <SnackbarContext.Provider
-      value={{ notify, notifications, unreadCount, markNotificationsRead, clearNotifications }}
+      value={{ notify, notifications, unreadCount, markNotificationsRead, clearNotifications, alerts, refreshAlerts }}
     >
       {children}
       <MDSnackbar

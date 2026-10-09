@@ -43,7 +43,7 @@ const option = (category: MagentoStoreCategory) => `${"  ".repeat(Math.max(0, 
 // The company's product categories beside the Magento store's own: which goes where, and making the store match.
 export default function MagentoCategoriesPage() {
   const { c } = useKit();
-  const { notify } = useSnackbar();
+  const { notify, refreshAlerts } = useSnackbar();
   const navigate = useNavigate();
 
   const [data, setData] = useState<MagentoCategories | null>(null);
@@ -82,6 +82,8 @@ export default function MagentoCategoriesPage() {
     try {
       await action();
       await load();
+      // A change here may be what puts a standing alert right.
+      refreshAlerts();
     } catch (err) {
       notify(message(err, fallback), "error");
     } finally {

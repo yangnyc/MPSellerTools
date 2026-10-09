@@ -350,7 +350,13 @@ public class MagentoIntegrationTests(MarketplaceFixture fixture) : IClassFixture
         var gone = before.Where(c => c.GetProperty("storeCategoryMissing").GetBoolean()).Select(c => c.GetProperty("category").GetString()).ToList();
         Assert.Contains("Medicine / Pain", gone);
         Assert.Contains("Old Range", gone);
+        // While they are broken it is a standing alert, which names them and where to put them right.
+        var alert = Assert.Single((await admin.GetFromJsonAsync<JsonElement>("/api/alerts")).EnumerateArray(), a => a.GetProperty("key").GetString() == "magento-categories");
+        Assert.Contains("Old Range", alert.GetProperty("message").GetString());
+        Assert.Equal("/magento/categories", alert.GetProperty("link").GetString());
         var repaired = await MarketplaceFixture.JsonAsync(await PostAsync(admin, "/api/magento/categories/repair"));
+        // Resolved, it is gone by itself.
+        Assert.DoesNotContain((await admin.GetFromJsonAsync<JsonElement>("/api/alerts")).EnumerateArray(), a => a.GetProperty("key").GetString() == "magento-categories");
         Assert.Equal(gone.Count, repaired.GetProperty("repointed").GetInt32() + repaired.GetProperty("removed").GetInt32());
         // Only a category that still has products is named as left with nowhere to go.
         Assert.DoesNotContain(repaired.GetProperty("unresolved").EnumerateArray(), c => c.GetString() is "Old Range" or "Medicine / Pain");

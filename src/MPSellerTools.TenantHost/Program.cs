@@ -196,6 +196,8 @@ builder.Services.AddScoped<IChannelAdapter, WebsiteChannelAdapter>();
 builder.Services.AddScoped<IChannelAdapter, MagentoChannelAdapter>();
 builder.Services.AddScoped<MagentoSync>();
 builder.Services.AddScoped<AmazonImport>();
+// For what is asked of a store only to report on it (the alerts), so it is not asked on every page.
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<ListingService>();
 builder.Services.AddScoped<OrderIngestionService>();

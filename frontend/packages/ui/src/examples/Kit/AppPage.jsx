@@ -7,7 +7,7 @@ import { useState } from "react";
 
 import PropTypes from "prop-types";
 
-import { Link as RouterLink, useLocation } from "react-router-dom";
+import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 
 import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
@@ -43,6 +43,9 @@ function NotificationsButton({ notifications, sx }) {
   const [anchor, setAnchor] = useState(null);
   const [page, setPage] = useState(0);
   const { items, unreadCount, onRead, onClear } = notifications;
+  // Standing problems: above the list, in red, with no way to clear them but putting them right.
+  const sticky = notifications.sticky ?? [];
+  const navigate = useNavigate();
 
   // A list that got shorter (cleared, say) leaves no page past its end.
   const pages = Math.max(1, Math.ceil(items.length / notificationsPerPage));
@@ -80,7 +83,7 @@ function NotificationsButton({ notifications, sx }) {
           sx={{ ...sx, position: "relative" }}
         >
           <Icon fontSize="small">notifications</Icon>
-          {unreadCount > 0 && (
+          {unreadCount + sticky.length > 0 && (
             <Box
               component="span"
               data-testid="notifications-unread"
@@ -101,7 +104,7 @@ function NotificationsButton({ notifications, sx }) {
                 backgroundColor: kit.tone("error").solid,
               }}
             >
-              {unreadCount > 9 ? "9+" : unreadCount}
+              {unreadCount + sticky.length > 9 ? "9+" : unreadCount + sticky.length}
             </Box>
           )}
         </IconButton>
@@ -165,7 +168,59 @@ function NotificationsButton({ notifications, sx }) {
             </Box>
           )}
         </Box>
-        {items.length === 0 ? (
+        {sticky.length > 0 && (
+          <Box component="ul" aria-label="Problems to resolve" sx={{ m: 0, p: 0.5, listStyle: "none", borderBottom: `1px solid ${c.border}` }}>
+            {sticky.map((alert) => (
+              <Box
+                component="li"
+                key={alert.key}
+                data-testid="sticky-alert"
+                sx={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 1.25,
+                  m: 0.5,
+                  px: 1.5,
+                  py: 1.25,
+                  borderRadius: "8px",
+                  border: `1px solid ${kit.tone("error").solid}`,
+                  backgroundColor: kit.tone("error").bg,
+                }}
+              >
+                <IconTile icon="error_outline" tone="error" size={32} />
+                <Box sx={{ minWidth: 0, lineHeight: 1.4 }}>
+                  <Box sx={{ fontSize: "0.875rem", fontWeight: 700, color: kit.tone("error").fg, overflowWrap: "anywhere" }}>{alert.title}</Box>
+                  <Box sx={{ mt: 0.25, fontSize: "0.8125rem", color: c.text, overflowWrap: "anywhere" }}>{alert.message}</Box>
+                  <Box
+                    component="button"
+                    type="button"
+                    onClick={() => {
+                      close();
+                      navigate(alert.link);
+                    }}
+                    sx={{
+                      mt: 0.75,
+                      p: 0,
+                      border: "none",
+                      background: "none",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      fontSize: "0.8125rem",
+                      fontWeight: 700,
+                      color: c.accent,
+                      "&:hover": { textDecoration: "underline" },
+                      "&:focus-visible": { outline: `2px solid ${c.accent}`, outlineOffset: 2 },
+                    }}
+                  >
+                    {alert.action}
+                  </Box>
+                  <Box sx={{ mt: 0.5, fontSize: "0.75rem", color: c.muted }}>Stays here until it is resolved.</Box>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        )}
+        {items.length === 0 && sticky.length > 0 ? null : items.length === 0 ? (
           <Box sx={{ px: 2, py: 4, textAlign: "center" }}>
             <Box sx={{ fontSize: "0.875rem", fontWeight: 700, color: c.text }}>No notifications yet</Box>
             <Box sx={{ mt: 0.5, fontSize: "0.8125rem", color: c.muted }}>
@@ -226,6 +281,7 @@ function NotificationsButton({ notifications, sx }) {
 
 const notificationsPropType = PropTypes.shape({
   items: PropTypes.arrayOf(PropTypes.object).isRequired,
+  sticky: PropTypes.arrayOf(PropTypes.object),
   unreadCount: PropTypes.number.isRequired,
   onRead: PropTypes.func.isRequired,
   onClear: PropTypes.func.isRequired,
