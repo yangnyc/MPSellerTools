@@ -34,11 +34,11 @@ async function mockApi(page: Page, me: Record<string, unknown>, gets: Mocks) {
   });
 }
 
-async function shoot(page: Page, name: string) {
+async function shoot(page: Page, name: string, fullPage = false) {
   await page.evaluate(() => document.fonts.ready);
   // Lets entrance transitions and the loading bar finish.
   await page.waitForTimeout(600);
-  await page.screenshot({ path: path.join(outDir, `${name}.png`), animations: "disabled" });
+  await page.screenshot({ path: path.join(outDir, `${name}.png`), animations: "disabled", fullPage });
 }
 
 // ---------------------------------------------------------------- platform
@@ -187,6 +187,22 @@ const dashboard = {
   openTaskCount: 6,
   totalOrderCount: 1284,
   totalTaskCount: 93,
+  // channel: 0 eBay, 1 Amazon, 2 Walmart, 4 Magento
+  workspace: {
+    channels: [
+      { id: "a-amazon", name: "Amazon", channel: 1, isEnabled: true, liveWrites: true, orderImport: true, stockSync: true, listings: 240, live: 231, drafts: 6, rejected: 3 },
+      { id: "a-ebay", name: "eBay", channel: 0, isEnabled: true, liveWrites: true, orderImport: true, stockSync: true, listings: 187, live: 179, drafts: 8, rejected: 0 },
+      { id: "a-walmart", name: "Walmart", channel: 2, isEnabled: true, liveWrites: true, orderImport: true, stockSync: false, listings: 142, live: 124, drafts: 18, rejected: 0 },
+      { id: "a-magento", name: "Magento", channel: 4, isEnabled: true, liveWrites: false, orderImport: false, stockSync: false, listings: 119, live: 77, drafts: 42, rejected: 0 },
+    ],
+    jobsRunning: 1,
+    jobsWaiting: 1,
+    jobsNeedingALook: 1,
+    jobDays: 7,
+    lastJobSummary: "187 listings checked; all can be published.",
+    catalog: { noPrice: 2, noStock: 9, noCategory: 14, noPictures: 5 },
+    productsAddedThisWeek: 23,
+  },
   sales: {
     days: 14,
     revenue: dailyRevenue.reduce((sum, value) => sum + value, 0),
@@ -356,6 +372,7 @@ test.describe("workspace", () => {
     await expect(page.getByText("Welcome back, Dana")).toBeVisible();
     await expect(page.getByText("ORD-10482")).toBeVisible();
     await shoot(page, "workspace-dashboard");
+    await shoot(page, "workspace-dashboard-full", true);
 
     await page.getByRole("button", { name: "Display settings" }).click();
     const settings = page.locator(".MuiDrawer-paper").filter({ hasText: "Display Settings" });

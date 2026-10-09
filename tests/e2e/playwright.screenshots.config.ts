@@ -8,6 +8,8 @@ const workspace = "http://localhost:5201";
 export default defineConfig({
   testDir: "./screenshots",
   workers: 1,
+  // A page's first load from a cold dev server can take longer than the default.
+  expect: { timeout: 20_000 },
   use: {
     viewport: { width: 1440, height: 900 },
     channel: process.env.PLAYWRIGHT_CHANNEL,

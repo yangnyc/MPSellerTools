@@ -14,7 +14,14 @@ own application process against its own SQL Server database.
 ![SQL Server](https://img.shields.io/badge/SQL%20Server-2025-CC2927)
 ![Playwright](https://img.shields.io/badge/tested%20with-Playwright-2EAD33)
 
-![The company workspace dashboard: revenue by day and by channel, open orders and tasks, low stock](docs/screenshots/workspace-dashboard.png)
+![The company workspace dashboard: revenue, catalog, listings on sale, open orders and tasks, and what needs attention](docs/screenshots/workspace-dashboard.png)
+
+<details>
+<summary>The whole dashboard</summary>
+
+![The full dashboard: what needs attention, revenue by day and channel, low stock, sales channels, background jobs, catalog readiness, recent orders and open tasks](docs/screenshots/workspace-dashboard-full.png)
+
+</details>
 
 ## Features
 
@@ -40,8 +47,9 @@ For a company's administrators and employees.
   background with progress.
 - **Magento** — connection test, the store's categories mapped to yours, and
   removal of a store's products by SKU prefix.
-- **Dashboard** — revenue by day and by channel, listing states, low stock and
-  anything that needs attention.
+- **Dashboard** — what needs doing first, then revenue by day and by channel,
+  each sales channel's listings, background jobs, catalog readiness and low
+  stock.
 - **Users** — invitations, roles, blocking, password resets, bulk actions,
   activity and an audit log.
 
@@ -58,7 +66,8 @@ For the platform administrator.
 ### Both
 
 - Named themes with light and dark mode, saved to each user's profile.
-- A notification history in the top bar.
+- A notification history in the top bar, where a standing problem stays in red
+  until it is resolved and a finished background job is announced.
 - HTTPS only, HttpOnly + Secure + SameSite=Strict cookies, antiforgery tokens,
   account lockout, and marketplace credentials encrypted at rest.
 
