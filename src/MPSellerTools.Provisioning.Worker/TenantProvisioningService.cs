@@ -52,7 +52,12 @@ public class TenantProvisioningService(
         await EnsureRolesAsync(tenantDb, cancellationToken);
         await EnsureCompanySettingsAsync(tenantDb, tenant, cancellationToken);
         var applicationInstanceId = tenant.ApplicationInstanceId ?? Guid.NewGuid();
-        await EnsureInitialInvitationAsync(tenantDb, tenant, cancellationToken);
+        // Someone who already signs in to another company here signs in to this one the same way at once;
+        // anyone else is invited, and sets a password from the link.
+        if (!await EnsureInitialAdminAsync(tenantDb, tenant, cancellationToken))
+        {
+            await EnsureInitialInvitationAsync(tenantDb, tenant, cancellationToken);
+        }
 
         var url = PublicUrl(tenant);
         var instanceConfigPath = WriteInstanceConfig(tenant, applicationInstanceId, url, connectionString);
@@ -103,6 +108,13 @@ public class TenantProvisioningService(
         // not report ready until none are pending. Applying them is this worker's job, as at
         // creation; migrations are additive, and this is the local database the worker itself made.
         await tenantDb.Database.MigrateAsync(cancellationToken);
+
+        // A company still without anyone who can sign in (made before its first administrator was given an
+        // account straight away) is given one now, when that person has an account in another company.
+        if (!await tenantDb.Users.AnyAsync(cancellationToken))
+        {
+            await EnsureInitialAdminAsync(tenantDb, tenant, cancellationToken);
+        }
 
         // Recomputed rather than reused, so the address follows the public host
         // setting when it is turned on or off after the tenant was created.
@@ -229,6 +241,92 @@ public class TenantProvisioningService(
             });
             await db.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Gives the company's first administrator an account in it, when the same email already has an
+    /// account in another company on this platform: one person may be in several companies, and then
+    /// signs in to each with the password they already have. Each company keeps its own copy of the
+    /// account, so a password changed later in one is changed there only. Returns whether the
+    /// administrator can sign in; false means nobody with this email was found, and an invitation is needed.
+    /// </summary>
+    private async Task<bool> EnsureInitialAdminAsync(TenantDbContext db, Tenant tenant, CancellationToken cancellationToken)
+    {
+        var normalizedEmail = tenant.InitialAdminEmail.Trim().ToUpperInvariant();
+        if (await db.Users.AnyAsync(u => u.NormalizedEmail == normalizedEmail, cancellationToken))
+        {
+            return true;
+        }
+
+        TenantUser? known = null;
+        foreach (var database in await OtherTenantDatabasesAsync(tenant, cancellationToken))
+        {
+            try
+            {
+                await using var other = CreateTenantDbContext(TenantConnectionString(database));
+                known = await other.Users.AsNoTracking()
+                    .Where(u => u.NormalizedEmail == normalizedEmail && u.PasswordHash != null && !u.IsBlocked)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+            catch (Exception ex) when (ex is SqlException or InvalidOperationException)
+            {
+                // A company whose database cannot be read now is passed over; the invitation still gets the administrator in.
+                logger.LogWarning("Could not look for {Email} in {Database}: {Reason}", tenant.InitialAdminEmail, database, ex.Message);
+            }
+            if (known is not null)
+            {
+                break;
+            }
+        }
+        if (known is null)
+        {
+            return false;
+        }
+
+        var adminRole = await db.Roles.FirstAsync(r => r.NormalizedName == Roles.TenantAdmin.ToUpperInvariant(), cancellationToken);
+        var user = new TenantUser
+        {
+            Id = Guid.NewGuid(),
+            UserName = known.UserName,
+            NormalizedUserName = known.NormalizedUserName,
+            Email = known.Email,
+            NormalizedEmail = known.NormalizedEmail,
+            EmailConfirmed = true,
+            PasswordHash = known.PasswordHash,
+            SecurityStamp = Guid.NewGuid().ToString(),
+            ConcurrencyStamp = Guid.NewGuid().ToString(),
+            DisplayName = known.DisplayName,
+            LockoutEnabled = true,
+        };
+        db.Users.Add(user);
+        db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = user.Id, RoleId = adminRole.Id });
+        // An invitation still open for them has nothing left to do.
+        db.Invitations.RemoveRange(await db.Invitations.Where(i => i.Email == tenant.InitialAdminEmail && i.AcceptedAtUtc == null).ToListAsync(cancellationToken));
+        await db.SaveChangesAsync(cancellationToken);
+        logger.LogInformation("Gave {Email} an administrator's account in {Slug}, as they have one in another company", tenant.InitialAdminEmail, tenant.Slug);
+        return true;
+    }
+
+    /// <summary>The databases of the platform's other companies, oldest first, by the registry's own record.</summary>
+    private async Task<List<string>> OtherTenantDatabasesAsync(Tenant tenant, CancellationToken cancellationToken)
+    {
+        var names = new List<string>();
+        await using var connection = new SqlConnection(configuration.GetConnectionString("PlatformDatabase"));
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT DatabaseName FROM Tenants WHERE Id <> @id AND DatabaseName IS NOT NULL ORDER BY CreatedAtUtc";
+        command.Parameters.AddWithValue("@id", tenant.Id);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var name = reader.GetString(0);
+            // Only a name this worker itself would have given a company's database is opened.
+            if (name.StartsWith("MPSellerTools_Tenant_", StringComparison.Ordinal) && name.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '_'))
+            {
+                names.Add(name);
+            }
+        }
+        return names;
     }
 
     private async Task EnsureInitialInvitationAsync(TenantDbContext db, Tenant tenant, CancellationToken cancellationToken)
