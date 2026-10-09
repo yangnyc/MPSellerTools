@@ -12,8 +12,8 @@ export type NotificationEntry = {
 
 export type SnackbarState = {
   notify: (message: string, severity?: Severity) => void;
-  // What `notify` has shown to the signed-in user since the page loaded,
-  // newest first — the top bar's notifications view.
+  // Everything `notify` has shown to the signed-in user in this browser,
+  // newest first — the top bar's notifications view, which pages through it.
   notifications: NotificationEntry[];
   unreadCount: number;
   markNotificationsRead: () => void;

@@ -31,17 +31,37 @@ const crumbLabel = (segment) => (/^[0-9a-f-]{16,}$/i.test(segment) ? "Details" :
 
 const notificationIcons = { success: "check_circle", error: "error_outline", warning: "warning_amber", info: "info" };
 
-// The bell beside Display settings, and the panel it opens: the messages the
-// app has shown this session, newest first. Opening or closing the panel
-// marks them read, which clears the count on the bell.
+// How many notifications the panel shows at a time.
+const notificationsPerPage = 10;
+
+// The bell beside Display settings, and the panel it opens: every message the
+// app has shown this user, newest first, a page at a time. Opening or closing
+// the panel marks them read, which clears the count on the bell.
 function NotificationsButton({ notifications, sx }) {
   const kit = useKit();
   const { c } = kit;
   const [anchor, setAnchor] = useState(null);
+  const [page, setPage] = useState(0);
   const { items, unreadCount, onRead, onClear } = notifications;
+
+  // A list that got shorter (cleared, say) leaves no page past its end.
+  const pages = Math.max(1, Math.ceil(items.length / notificationsPerPage));
+  const shownPage = Math.min(page, pages - 1);
+  const first = shownPage * notificationsPerPage;
+  const shown = items.slice(first, first + notificationsPerPage);
+  const pagerButtonSx = {
+    width: 30,
+    height: 30,
+    color: c.text,
+    border: `1px solid ${c.border}`,
+    borderRadius: "8px",
+    "&.Mui-disabled": { color: c.muted, opacity: 0.5 },
+  };
 
   const open = (event) => {
     setAnchor(event.currentTarget);
+    // Opened on the newest.
+    setPage(0);
     onRead();
   };
   const close = () => {
@@ -149,12 +169,12 @@ function NotificationsButton({ notifications, sx }) {
           <Box sx={{ px: 2, py: 4, textAlign: "center" }}>
             <Box sx={{ fontSize: "0.875rem", fontWeight: 700, color: c.text }}>No notifications yet</Box>
             <Box sx={{ mt: 0.5, fontSize: "0.8125rem", color: c.muted }}>
-              Messages from this session appear here.
+              Messages the app shows you are kept here.
             </Box>
           </Box>
         ) : (
           <Box component="ul" sx={{ m: 0, p: 0.5, listStyle: "none", maxHeight: 380, overflowY: "auto" }}>
-            {items.map((item) => (
+            {shown.map((item) => (
               <Box
                 component="li"
                 key={item.id}
@@ -167,6 +187,36 @@ function NotificationsButton({ notifications, sx }) {
                 </Box>
               </Box>
             ))}
+          </Box>
+        )}
+        {items.length > notificationsPerPage && (
+          <Box
+            component="nav"
+            aria-label="Pages of notifications"
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 2,
+              px: 2,
+              py: 1.25,
+              borderTop: `1px solid ${c.border}`,
+            }}
+          >
+            <Box data-testid="notifications-range" sx={{ fontSize: "0.8125rem", color: c.muted }}>
+              {first + 1}–{first + shown.length} of {items.length}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <IconButton aria-label="Newer notifications" disabled={shownPage === 0} onClick={() => setPage(shownPage - 1)} sx={pagerButtonSx}>
+                <Icon fontSize="small">chevron_left</Icon>
+              </IconButton>
+              <Box sx={{ fontSize: "0.8125rem", color: c.text }}>
+                Page {shownPage + 1} of {pages}
+              </Box>
+              <IconButton aria-label="Older notifications" disabled={shownPage >= pages - 1} onClick={() => setPage(shownPage + 1)} sx={pagerButtonSx}>
+                <Icon fontSize="small">chevron_right</Icon>
+              </IconButton>
+            </Box>
           </Box>
         )}
       </Popover>
