@@ -103,6 +103,34 @@ export type TenantDashboard = {
   totalTaskCount: number;
   // The company-wide picture; only there for a TenantAdmin.
   sales: SalesDashboard | null;
+  workspace?: WorkspaceOverview | null;
+};
+
+// The company's sales channels, its background jobs and the state of its catalog.
+export type WorkspaceOverview = {
+  channels: {
+    id: string;
+    name: string;
+    channel: SalesChannel;
+    isEnabled: boolean;
+    // Whether anything is really sent to it; off, everything is a dry run.
+    liveWrites: boolean;
+    orderImport: boolean;
+    stockSync: boolean;
+    listings: number;
+    live: number;
+    drafts: number;
+    rejected: number;
+  }[];
+  jobsRunning: number;
+  jobsWaiting: number;
+  // Jobs of the last `jobDays` days that failed or held items back.
+  jobsNeedingALook: number;
+  jobDays: number;
+  lastJobSummary: string | null;
+  // Products not ready to sell as they are.
+  catalog: { noPrice: number; noStock: number; noCategory: number; noPictures: number };
+  productsAddedThisWeek: number;
 };
 
 // Orders and revenue cover the last `days` days and leave cancelled orders out.

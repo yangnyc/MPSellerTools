@@ -19,6 +19,9 @@ public class DashboardController(TenantDbContext db, SyncHealthReader health, IO
 {
     private const int SalesDays = 30;
 
+    /// <summary>How far back a job that failed or held items back is still called out.</summary>
+    private const int JobDays = 7;
+
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
@@ -41,9 +44,55 @@ public class DashboardController(TenantDbContext db, SyncHealthReader health, IO
             OpenTaskCount: await tasks.CountAsync(t => t.Status == WorkItemStatus.Open || t.Status == WorkItemStatus.InProgress, cancellationToken),
             TotalOrderCount: await orders.CountAsync(cancellationToken),
             TotalTaskCount: await tasks.CountAsync(cancellationToken),
-            Sales: isTenantAdmin ? await SalesAsync(cancellationToken) : null);
+            Sales: isTenantAdmin ? await SalesAsync(cancellationToken) : null,
+            Workspace: isTenantAdmin ? await WorkspaceAsync(cancellationToken) : null);
 
         return Ok(response);
+    }
+
+    private async Task<WorkspaceOverview> WorkspaceAsync(CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        var accounts = await db.ChannelAccounts.AsNoTracking().OrderBy(a => a.CreatedAtUtc).ToListAsync(cancellationToken);
+        var listed = await (
+            from listing in db.ChannelListings.AsNoTracking()
+            join market in db.ChannelMarkets.AsNoTracking() on listing.ChannelMarketId equals market.Id
+            group listing by new { market.ChannelAccountId, listing.DesiredState, listing.ObservedStatus } into g
+            select new { g.Key.ChannelAccountId, g.Key.DesiredState, g.Key.ObservedStatus, Count = g.Count() }).ToListAsync(cancellationToken);
+        var channels = accounts.Select(account =>
+        {
+            var own = listed.Where(l => l.ChannelAccountId == account.Id).ToList();
+            return new ChannelOverview(
+                account.Id, account.Name, account.Channel, account.IsEnabled,
+                // The company's own website is not written to through a marketplace's switch.
+                account.Channel == SalesChannel.Website || (account.LiveWritesEnabled && options.Value.LiveWritesEnabled),
+                account.OrderImportEnabled, account.InventorySyncEnabled,
+                own.Sum(l => l.Count),
+                own.Where(l => l.DesiredState != ListingDesiredState.Draft && l.ObservedStatus == ListingObservedStatus.Live).Sum(l => l.Count),
+                own.Where(l => l.DesiredState == ListingDesiredState.Draft).Sum(l => l.Count),
+                own.Where(l => l.DesiredState != ListingDesiredState.Draft && l.ObservedStatus == ListingObservedStatus.Rejected).Sum(l => l.Count));
+        }).ToList();
+
+        var jobsSince = now.AddDays(-JobDays);
+        var jobs = await db.BulkJobs.AsNoTracking().Where(j => j.CreatedAtUtc >= jobsSince || j.Status == BulkJobStatus.Queued || j.Status == BulkJobStatus.Running)
+            .Select(j => new { j.Status, j.Summary, j.LastError, j.FinishedAtUtc }).ToListAsync(cancellationToken);
+        var last = jobs.Where(j => j.FinishedAtUtc != null).OrderByDescending(j => j.FinishedAtUtc).FirstOrDefault();
+
+        var products = db.Products.AsNoTracking().Where(p => !p.IsArchived);
+        var weekAgo = now.AddDays(-7);
+        return new WorkspaceOverview(
+            channels,
+            jobs.Count(j => j.Status == BulkJobStatus.Running),
+            jobs.Count(j => j.Status == BulkJobStatus.Queued),
+            jobs.Count(j => j.Status is BulkJobStatus.Failed or BulkJobStatus.CompletedWithErrors),
+            JobDays,
+            last?.LastError ?? last?.Summary,
+            new CatalogGaps(
+                await products.CountAsync(p => p.Price == 0, cancellationToken),
+                await products.CountAsync(p => p.StockQuantity <= 0, cancellationToken),
+                await products.CountAsync(p => p.Category == null || p.Category == "", cancellationToken),
+                await products.CountAsync(p => !db.ProductMedia.Any(m => m.ProductId == p.Id), cancellationToken)),
+            await products.CountAsync(p => p.CreatedAtUtc >= weekAgo, cancellationToken));
     }
 
     private async Task<SalesDashboard> SalesAsync(CancellationToken cancellationToken)

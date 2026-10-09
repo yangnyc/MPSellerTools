@@ -1,13 +1,37 @@
+using MPSellerTools.Core.Business;
+
 namespace MPSellerTools.TenantHost.Contracts;
 
-/// <summary><see cref="Sales"/> is the company-wide picture and is only there for a TenantAdmin.</summary>
+/// <summary><see cref="Sales"/> and <see cref="Workspace"/> are the company-wide picture and are only there for a TenantAdmin.</summary>
 public record TenantDashboardResponse(
     int ProductCount,
     int OpenOrderCount,
     int OpenTaskCount,
     int TotalOrderCount,
     int TotalTaskCount,
-    SalesDashboard? Sales = null);
+    SalesDashboard? Sales = null,
+    WorkspaceOverview? Workspace = null);
+
+/// <summary>One sales channel account and how its listings stand. <see cref="LiveWrites"/> is whether anything is really sent to it.</summary>
+public record ChannelOverview(
+    Guid Id, string Name, SalesChannel Channel, bool IsEnabled, bool LiveWrites, bool OrderImport, bool StockSync, int Listings, int Live, int Drafts, int Rejected);
+
+/// <summary>Products that are not ready to sell as they are: with no price, nothing in stock, no category or no picture.</summary>
+public record CatalogGaps(int NoPrice, int NoStock, int NoCategory, int NoPictures);
+
+/// <summary>
+/// The company's sales channels, its background jobs and the state of its catalog.
+/// <see cref="JobsNeedingALook"/> counts the jobs of the last <see cref="JobDays"/> days that failed or held items back.
+/// </summary>
+public record WorkspaceOverview(
+    IReadOnlyList<ChannelOverview> Channels,
+    int JobsRunning,
+    int JobsWaiting,
+    int JobsNeedingALook,
+    int JobDays,
+    string? LastJobSummary,
+    CatalogGaps Catalog,
+    int ProductsAddedThisWeek);
 
 public record ChannelSales(string Channel, int Orders, decimal Revenue);
 

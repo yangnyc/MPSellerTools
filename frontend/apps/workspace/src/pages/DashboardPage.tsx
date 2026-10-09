@@ -27,6 +27,10 @@ import {
   type WorkItem,
 } from "../api/types";
 import { ORDER_STATUS_TONE, TASK_STATUS_TONE } from "../lib/status";
+import { marketplaces, settingsPath } from "../api/channels";
+
+// Something that wants doing, said with what to do about it and where.
+type Attention = { key: string; tone: "error" | "warning" | "info"; icon: string; what: string; why: string; action: string; to: string };
 
 const LIST_LIMIT = 5;
 
@@ -59,6 +63,74 @@ export default function DashboardPage() {
   }, []);
 
   const sales = data?.sales ?? null;
+  const workspace = data?.workspace ?? null;
+  const count = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+  // A channel's own pages, for the ones that have them (the company's website has none).
+  const pageOf = (kind: number) => marketplaces().find((m) => m.kind === kind);
+
+  // Everything that wants doing, the most pressing first, each with what to do about it.
+  const attention: Attention[] = [];
+  if (sales && workspace) {
+    if (sales.failedSyncJobs > 0) {
+      attention.push({
+        key: "sync", tone: "error", icon: "sync_problem",
+        what: `${count(sales.failedSyncJobs, "listing was", "listings were")} not accepted by a marketplace`,
+        why: "Open each one in the sync queue to read the marketplace's reason, correct the listing, and send it again.",
+        action: "Open sync queue", to: "/sync",
+      });
+    }
+    if (sales.openOrderIssues > 0) {
+      attention.push({
+        key: "orders", tone: "error", icon: "report",
+        what: `${count(sales.openOrderIssues, "order line", "order lines")} could not be matched to a product`,
+        why: "The SKU on the order is not in your catalog, or there was not enough stock. Add the product or correct the stock, then clear the line in the sync queue.",
+        action: "Open sync queue", to: "/sync",
+      });
+    }
+    if (workspace.jobsNeedingALook > 0) {
+      attention.push({
+        key: "jobs", tone: "warning", icon: "playlist_remove",
+        what: `${count(workspace.jobsNeedingALook, "background job", "background jobs")} failed or held items back in the last ${workspace.jobDays} days`,
+        why: "Open the job to see which items were held back and why. Once that is put right, Run again picks up what is left.",
+        action: "Open jobs", to: "/jobs",
+      });
+    }
+    sales.staleChannels.forEach((name) => {
+      const account = workspace.channels.find((ch) => ch.name === name);
+      const page = account && pageOf(account.channel);
+      attention.push({
+        key: `stale-${name}`, tone: "warning", icon: "schedule",
+        what: `Orders have not been read from ${name} recently`,
+        why: "Until they are, stock is not sent to it. Check that Import orders is on and the connection still works.",
+        action: `Open ${name} settings`, to: page ? settingsPath(page) : "/sync",
+      });
+    });
+    workspace.channels.filter((ch) => ch.isEnabled && !ch.liveWrites && ch.listings > 0).forEach((ch) => {
+      const page = pageOf(ch.channel);
+      attention.push({
+        key: `dry-${ch.id}`, tone: "info", icon: "science",
+        what: `${ch.name} is in dry-run mode`,
+        why: `Its ${count(ch.listings, "listing is", "listings are")} prepared and checked, but nothing is sent. Switch on Live writes in its settings when you are ready to sell there.`,
+        action: `Open ${ch.name} settings`, to: page ? settingsPath(page) : "/sync",
+      });
+    });
+    if (workspace.catalog.noPrice > 0) {
+      attention.push({
+        key: "price", tone: "warning", icon: "sell",
+        what: `${count(workspace.catalog.noPrice, "product has", "products have")} no price`,
+        why: "A product imported from Amazon starts at 0 when Amazon has no list price. Set its price before publishing it.",
+        action: "Open products", to: "/products",
+      });
+    }
+    if (sales.lowStockCount > 0) {
+      attention.push({
+        key: "stock", tone: "warning", icon: "production_quantity_limits",
+        what: `${count(sales.lowStockCount, "item has", "items have")} ${sales.lowStockThreshold} or fewer left to sell`,
+        why: "Count what is on the shelf and enter it under Stock, or reorder.",
+        action: "Open stock", to: "/inventory",
+      });
+    }
+  }
   // The tallest bar: every other day is drawn against the best one.
   const peak = Math.max(1, ...(sales?.daily.map((day) => day.revenue) ?? []));
 
@@ -92,7 +164,7 @@ export default function DashboardPage() {
         title={firstName ? `Welcome back, ${firstName}` : "Welcome back"}
         subtitle={
           isTenantAdmin
-            ? "Live numbers from your company's products, orders, and tasks."
+            ? "What needs you today, how sales are going, and how your channels, jobs and catalog stand."
             : "The orders and tasks currently assigned to you."
         }
         actions={
@@ -103,6 +175,11 @@ export default function DashboardPage() {
             <MDButton component={RouterLink} to="/tasks" variant="outlined" color="white" startIcon={<Icon>checklist</Icon>}>
               Tasks
             </MDButton>
+            {isTenantAdmin && (
+              <MDButton component={RouterLink} to="/import/amazon" variant="outlined" color="white" startIcon={<Icon>download</Icon>}>
+                Import
+              </MDButton>
+            )}
           </>
         }
       />
@@ -121,12 +198,32 @@ export default function DashboardPage() {
       >
         {isTenantAdmin && (
           <StatCard
+            icon="payments"
+            tone="success"
+            label={`Revenue, ${sales?.days ?? 30} days`}
+            value={sales ? formatMoney(sales.revenue) : undefined}
+            hint={sales ? count(sales.orders, "order", "orders") : undefined}
+            to="/orders"
+          />
+        )}
+        {isTenantAdmin && (
+          <StatCard
             icon="inventory_2"
             tone="primary"
             label="Catalog"
             value={data?.productCount}
-            hint="Active products"
+            hint={workspace ? `${workspace.productsAddedThisWeek.toLocaleString()} added this week` : "Active products"}
             to="/products"
+          />
+        )}
+        {isTenantAdmin && (
+          <StatCard
+            icon="storefront"
+            tone="info"
+            label="On sale"
+            value={sales?.listings.live}
+            hint={sales ? `${count(sales.listings.draft, "draft", "drafts")} waiting to be published` : undefined}
+            to="/listings"
           />
         )}
         <StatCard
@@ -151,26 +248,32 @@ export default function DashboardPage() {
 
       {sales && (
         <>
-          {(sales.failedSyncJobs > 0 || sales.openOrderIssues > 0 || sales.staleChannels.length > 0) && (
-            <InlineAlert
-              tone="warning"
-              title="Your marketplaces need a look"
-              sx={{ mb: 3 }}
-              action={
-                <MDButton component={RouterLink} to="/sync" variant="text" color="info" size="small">
-                  Open sync queue
-                </MDButton>
-              }
-            >
-              {[
-                sales.failedSyncJobs > 0 && `${sales.failedSyncJobs} sync ${sales.failedSyncJobs === 1 ? "job" : "jobs"} failed or need a correction`,
-                sales.openOrderIssues > 0 && `${sales.openOrderIssues} order ${sales.openOrderIssues === 1 ? "line" : "lines"} could not be placed`,
-                sales.staleChannels.length > 0 && `orders have not been read recently from ${sales.staleChannels.join(", ")}`,
-              ]
-                .filter(Boolean)
-                .join("; ")}
-              .
-            </InlineAlert>
+          {workspace && (
+            <Box sx={{ mb: 3 }}>
+              <Section
+                icon={attention.length > 0 ? "notification_important" : "task_alt"}
+                tone={attention.some((a) => a.tone === "error") ? "error" : attention.length > 0 ? "warning" : "success"}
+                title="Needs your attention"
+                subtitle={attention.length > 0 ? "What wants doing, the most pressing first, and what to do about each." : "Nothing is waiting on you."}
+                flush
+              >
+                {attention.length === 0 && <StateBlock icon="task_alt" title="All clear" message="Your sales channels, jobs, orders and stock have nothing that needs you right now." />}
+                {attention.map((item) => (
+                  <Box key={item.key} sx={{ ...rowSx, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flex: 1, minWidth: 240 }}>
+                      <Icon fontSize="small" sx={{ mt: 0.25, color: tone(item.tone).solid }}>{item.icon}</Icon>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Box sx={{ fontSize: "0.875rem", fontWeight: 500, color: c.text }}>{item.what}</Box>
+                        <Box sx={{ mt: 0.25, fontSize: "0.8125rem", lineHeight: 1.5, color: c.muted }}>{item.why}</Box>
+                      </Box>
+                    </Box>
+                    <MDButton component={RouterLink} to={item.to} variant="outlined" color="info" size="small">
+                      {item.action}
+                    </MDButton>
+                  </Box>
+                ))}
+              </Section>
+            </Box>
           )}
 
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "3fr 2fr" }, gap: 3, mb: 3 }}>
@@ -260,8 +363,42 @@ export default function DashboardPage() {
                 ))}
               </Section>
 
-              <Section icon="sell" title="Marketplace listings" subtitle="As the marketplaces last reported them" actions={viewAll("/sync")}>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              <Section icon="storefront" title="Sales channels" subtitle="Where you sell, and how the listings there stand" actions={viewAll("/listings")} flush>
+                {workspace?.channels.length === 0 && (
+                  <StateBlock icon="storefront" title="No sales channels yet" message="Add eBay, Amazon, Walmart or your Magento store from its menu to start listing products." />
+                )}
+                {workspace?.channels.map((channel) => {
+                  const page = pageOf(channel.channel);
+                  return (
+                    <Box key={channel.id} sx={rowSx}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Box
+                          component={page ? RouterLink : "div"}
+                          {...(page ? { to: page.path } : {})}
+                          sx={{ fontSize: "0.875rem", fontWeight: 500, color: c.text, "&:hover": page ? { color: c.accent } : undefined }}
+                        >
+                          {channel.name}
+                        </Box>
+                        <Box sx={{ fontSize: "0.75rem", color: c.muted }}>
+                          {[
+                            `${channel.live.toLocaleString()} live`,
+                            channel.drafts > 0 && count(channel.drafts, "draft", "drafts"),
+                            channel.rejected > 0 && `${channel.rejected.toLocaleString()} rejected`,
+                            channel.orderImport && "orders imported",
+                            channel.stockSync && "stock sent",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </Box>
+                      </Box>
+                      <StatusPill
+                        tone={!channel.isEnabled ? "neutral" : channel.liveWrites ? "success" : "warning"}
+                        label={!channel.isEnabled ? "Switched off" : channel.liveWrites ? "Live" : "Dry run"}
+                      />
+                    </Box>
+                  );
+                })}
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, px: 3, py: 1.75, borderTop: workspace && workspace.channels.length > 0 ? `1px solid ${c.border}` : undefined }}>
                   <StatusPill tone="success" label={`${sales.listings.live} live`} />
                   <StatusPill tone="info" label={`${sales.listings.processing} processing`} />
                   <StatusPill tone="error" label={`${sales.listings.rejected} rejected`} />
@@ -272,6 +409,49 @@ export default function DashboardPage() {
             </Box>
           </Box>
         </>
+      )}
+
+      {workspace && (
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 3, mb: 3 }}>
+          <Section icon="playlist_play" title="Background jobs" subtitle="Large pieces of work carried out for you: publishing, reading a store, importing" actions={viewAll("/jobs")}>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              <StatusPill tone="info" pulse={workspace.jobsRunning > 0} label={`${workspace.jobsRunning} running`} />
+              <StatusPill tone="neutral" label={`${workspace.jobsWaiting} waiting`} />
+              <StatusPill tone={workspace.jobsNeedingALook > 0 ? "warning" : "success"} label={`${workspace.jobsNeedingALook} need a look`} />
+            </Box>
+            <Box sx={{ mt: 1.5, fontSize: "0.8125rem", lineHeight: 1.5, color: c.muted }}>
+              {workspace.lastJobSummary ? `Last finished: ${workspace.lastJobSummary}` : `No job has finished in the last ${workspace.jobDays} days.`}
+            </Box>
+          </Section>
+
+          <Section
+            icon="fact_check"
+            title="Catalog readiness"
+            subtitle="What your products still lack before they sell well"
+            actions={
+              <MDButton component={RouterLink} to="/import/amazon/bulk" variant="text" color="info" size="small">
+                Import from Amazon
+              </MDButton>
+            }
+          >
+            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 2 }}>
+              {[
+                { label: "No price", value: workspace.catalog.noPrice },
+                { label: "Nothing in stock", value: workspace.catalog.noStock },
+                { label: "No category", value: workspace.catalog.noCategory },
+                { label: "No picture", value: workspace.catalog.noPictures },
+              ].map((gap) => (
+                <Box key={gap.label} component={RouterLink} to="/products" sx={{ display: "block", color: "inherit" }}>
+                  <Box sx={{ fontSize: "1.5rem", fontWeight: 700, lineHeight: 1.2, color: gap.value > 0 ? tone("warning").solid : c.text }}>{gap.value.toLocaleString()}</Box>
+                  <Box sx={{ fontSize: "0.8125rem", color: c.muted }}>{gap.label}</Box>
+                </Box>
+              ))}
+            </Box>
+            <Box sx={{ mt: 1.5, fontSize: "0.8125rem", lineHeight: 1.5, color: c.muted }}>
+              Of {(data?.productCount ?? 0).toLocaleString()} active products. A product with no category goes to the store's default one; one with no picture is refused by most marketplaces.
+            </Box>
+          </Section>
+        </Box>
       )}
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 3 }}>
