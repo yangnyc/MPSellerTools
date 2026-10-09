@@ -88,13 +88,42 @@ public class AmazonImportController(TenantDbContext db, AmazonImport import, Aud
                 return Problem($"Amazon's catalog has no item for {wanted.Value} in this marketplace.", statusCode: StatusCodes.Status404NotFound);
             }
 
-            var sku = AmazonImport.SkuFor(item, null);
-            var existing = await db.Products.AsNoTracking().Where(p => p.Sku == sku).Select(p => (Guid?)p.Id).FirstOrDefaultAsync(cancellationToken);
-            return Ok(new AmazonItemResponse(
-                item.Asin, item.Title, item.Brand, AmazonImport.DescriptionOf(item), item.Category, item.ProductType, item.ListPrice, item.Currency, item.ImageUrls,
-                item.Identifiers.OrderBy(i => i.Key).Select(i => new AmazonIdentifierResponse(i.Key, i.Value)).ToList(),
-                item.WeightValue, item.WeightUnit, item.Length, item.Width, item.Height, item.DimensionUnit, sku, existing));
+            return Ok((await ToResponsesAsync([item], cancellationToken))[0]);
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds items in Amazon's catalog by whatever was typed: an ASIN, a page's address or a barcode finds
+    /// that one item, anything else is taken as words of a name and finds the ten Amazon puts first.
+    /// Nothing is saved.
+    /// </summary>
+    [HttpPost("find")]
+    public async Task<IActionResult> Find([FromBody] AmazonLookupRequest request, CancellationToken cancellationToken)
+    {
+        var query = request.Query?.Trim() ?? "";
+        if (query.Length is < 2 or > 200)
+        {
+            return Problem("Enter an ASIN, an Amazon address, a barcode, or a name of 2 to 200 characters.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        return await WithAmazonAsync(async context =>
+        {
+            IReadOnlyList<AmazonCatalogItem> items = AmazonImport.ParseIdentifier(query) is { } wanted
+                ? (await import.LookupAsync(context, [new AmazonImportEntry(wanted.Type, wanted.Value, null)], cancellationToken)).Select(f => f.Item).OfType<AmazonCatalogItem>().ToList()
+                : await import.FindAsync(context, query, cancellationToken);
+            return Ok(await ToResponsesAsync(items, cancellationToken));
+        }, cancellationToken);
+    }
+
+    private async Task<List<AmazonItemResponse>> ToResponsesAsync(IReadOnlyList<AmazonCatalogItem> items, CancellationToken cancellationToken)
+    {
+        var skus = items.Select(item => AmazonImport.SkuFor(item, null)).ToList();
+        var existing = await db.Products.AsNoTracking().Where(p => skus.Contains(p.Sku)).ToDictionaryAsync(p => p.Sku, p => p.Id, StringComparer.OrdinalIgnoreCase, cancellationToken);
+        return items.Select((item, index) => new AmazonItemResponse(
+            item.Asin, item.Title, item.Brand, AmazonImport.DescriptionOf(item), item.Category, item.ProductType, item.ListPrice, item.Currency, item.ImageUrls,
+            item.Identifiers.OrderBy(i => i.Key).Select(i => new AmazonIdentifierResponse(i.Key, i.Value)).ToList(),
+            item.WeightValue, item.WeightUnit, item.Length, item.Width, item.Height, item.DimensionUnit, skus[index],
+            existing.TryGetValue(skus[index], out var id) ? id : null)).ToList();
     }
 
     /// <summary>Imports one item as a product, read from Amazon again so what is saved is what Amazon has now.</summary>

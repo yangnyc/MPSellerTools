@@ -458,6 +458,8 @@ export const AmazonImportApi = {
   status: () => apiFetch<AmazonImportStatus>("/api/amazon/import/status"),
   // By ASIN, the address of the item's page on Amazon, or a barcode. Nothing is saved.
   lookup: (query: string) => apiFetch<AmazonItem>("/api/amazon/import/lookup", { method: "POST", body: JSON.stringify({ query }) }),
+  // By any of those, or by words of the item's name: the one item, or the ten Amazon puts first.
+  find: (query: string) => apiFetch<AmazonItem[]>("/api/amazon/import/find", { method: "POST", body: JSON.stringify({ query }) }),
   importItem: (data: { asin: string; sku: string; price: number | null; stockQuantity: number; updateExisting: boolean }) =>
     apiFetch<AmazonImported>("/api/amazon/import/item", { method: "POST", body: JSON.stringify(data) }),
   // One item to a line, optionally followed by a comma and the SKU to give it. Answers with the background job.

@@ -25,6 +25,8 @@ export default function AmazonImportItemPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [item, setItem] = useState<AmazonItem | null>(null);
+  // What a search by name found, to choose from; null when nothing was searched for by name.
+  const [matches, setMatches] = useState<AmazonItem[] | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"lookup" | "import" | null>(null);
   const [imported, setImported] = useState<(AmazonImported & { title: string }) | null>(null);
@@ -40,19 +42,28 @@ export default function AmazonImportItemPage() {
       .catch((err) => setLoadError(message(err, "Failed to load the import page.")));
   }, []);
 
+  const choose = (found: AmazonItem) => {
+    setItem(found);
+    setSku(found.suggestedSku);
+    setPrice(found.listPrice === null ? "" : String(found.listPrice));
+    setStock("0");
+    setUpdateExisting(false);
+  };
+
   const lookup = async () => {
     setBusy("lookup");
     setLookupError(null);
     setImported(null);
     try {
-      const found = await AmazonImportApi.lookup(query.trim());
-      setItem(found);
-      setSku(found.suggestedSku);
-      setPrice(found.listPrice === null ? "" : String(found.listPrice));
-      setStock("0");
-      setUpdateExisting(false);
+      const found = await AmazonImportApi.find(query.trim());
+      // One answer is the item asked for; several are a search by name to choose from.
+      setMatches(found.length > 1 ? found : null);
+      if (found.length === 1) choose(found[0]);
+      else setItem(null);
+      if (found.length === 0) setLookupError("Amazon's catalog has nothing for that in this marketplace.");
     } catch (err) {
       setItem(null);
+      setMatches(null);
       setLookupError(message(err, "Could not look the item up on Amazon."));
     } finally {
       setBusy(null);
@@ -74,7 +85,9 @@ export default function AmazonImportItemPage() {
       setImported({ ...result, title: item.title ?? item.asin });
       notify(result.outcome === 0 ? "The product was imported." : "The product was brought up to date.", "success");
       setItem(null);
-      setQuery("");
+      // What was searched for by name stays, with this one marked as here now, so the next can be chosen.
+      setMatches((current) => current?.map((m) => (m.asin === item.asin && sku.trim() === m.suggestedSku ? { ...m, existingProductId: result.productId } : m)) ?? null);
+      if (!matches) setQuery("");
     } catch (err) {
       notify(message(err, "Could not import the item."), "error");
     } finally {
@@ -90,7 +103,7 @@ export default function AmazonImportItemPage() {
       <PageHeader
         icon="download"
         title="Import from Amazon: one item"
-        subtitle="Look an item up in Amazon's catalog and make it a product here, with its name, description, pictures, barcodes, weight and size."
+        subtitle="Find an item in Amazon's catalog by its name, ASIN or barcode and make it a product here, with its name, description, pictures, barcodes, weight and size."
         actions={
           <MDButton component={RouterLink} to="/import/amazon/bulk" variant="outlined" color="info" size="small">
             Import in bulk
@@ -129,14 +142,14 @@ export default function AmazonImportItemPage() {
               sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}
             >
               <MDInput
-                label="ASIN, Amazon address or barcode"
+                label="Name, ASIN, Amazon address or barcode"
                 fullWidth
                 value={query}
                 onChange={(e: Change) => setQuery(e.target.value)}
-                helperText="An ASIN such as B08N5WRWNW, the address of the item's page on Amazon, or a UPC or EAN."
+                helperText="Words of the item's name, an ASIN such as B08N5WRWNW, the address of its page on Amazon, or a UPC or EAN."
               />
               <MDButton type="submit" variant="gradient" color="info" disabled={query.trim().length === 0 || !!busy} startIcon={<Icon>search</Icon>}>
-                {busy === "lookup" ? "Looking…" : "Look up"}
+                {busy === "lookup" ? "Searching…" : "Search"}
               </MDButton>
             </Box>
             {lookupError && (
@@ -153,6 +166,32 @@ export default function AmazonImportItemPage() {
               </InlineAlert>
             )}
           </Section>
+
+          {matches && (
+            <Section icon="list" title="Found on Amazon" subtitle={`The ${matches.length} items Amazon puts first for that name. Choose the one to import.`} flush>
+              {matches.map((match) => (
+                <Box
+                  key={match.asin}
+                  sx={{ display: "flex", alignItems: "center", gap: 2, px: 3, py: 1.5, borderTop: `1px solid ${c.border}`, backgroundColor: item?.asin === match.asin ? c.hover : undefined }}
+                >
+                  {match.imageUrls[0] ? (
+                    <Box component="img" src={match.imageUrls[0]} alt="" sx={{ width: 56, height: 56, flexShrink: 0, objectFit: "contain", borderRadius: 1, border: `1px solid ${c.border}`, backgroundColor: "#fff" }} />
+                  ) : (
+                    <Box sx={{ width: 56, height: 56, flexShrink: 0, borderRadius: 1, border: `1px solid ${c.border}` }} />
+                  )}
+                  <Box sx={{ flex: 1, minWidth: 0, lineHeight: 1.35 }}>
+                    <Box sx={{ fontSize: "0.875rem", fontWeight: 500, color: c.text, overflowWrap: "anywhere" }}>{match.title ?? match.asin}</Box>
+                    <Box sx={{ fontSize: "0.75rem", color: c.muted }}>
+                      {[match.brand, match.asin, match.category, match.existingProductId ? "already in your catalog" : null].filter(Boolean).join(" · ")}
+                    </Box>
+                  </Box>
+                  <MDButton variant={item?.asin === match.asin ? "gradient" : "outlined"} color="info" size="small" onClick={() => choose(match)} aria-label={`Choose ${match.asin}`}>
+                    {item?.asin === match.asin ? "Chosen" : "Choose"}
+                  </MDButton>
+                </Box>
+              ))}
+            </Section>
+          )}
 
           {item && (
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "3fr 2fr" }, alignItems: "start", gap: 3 }}>

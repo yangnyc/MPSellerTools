@@ -58,7 +58,9 @@ public class AmazonImportTests(MarketplaceFixture fixture) : IClassFixture<Marke
         fixture.Amazon.On("GET", "/catalog/2022-04-01/items", (uri, _) =>
         {
             var asked = Uri.UnescapeDataString(uri.Query);
-            var items = new[] { ("B0TESTAAA1", "Blue mug"), ("B0TESTAAA3", "Red mug") }.Where(i => asked.Contains(i.Item1, StringComparison.Ordinal)).Select(i => Item(i.Item1, i.Item2));
+            // Asked by name, both are found; asked by ASIN, the ones asked for.
+            var items = new[] { ("B0TESTAAA1", "Blue mug"), ("B0TESTAAA3", "Red mug") }
+                .Where(i => asked.Contains("keywords=", StringComparison.Ordinal) || asked.Contains(i.Item1, StringComparison.Ordinal)).Select(i => Item(i.Item1, i.Item2));
             return ChannelRouter.Json($$"""{"numberOfResults":1,"items":[{{string.Join(",", items)}}]}""");
         });
         return admin;
@@ -85,9 +87,18 @@ public class AmazonImportTests(MarketplaceFixture fixture) : IClassFixture<Marke
         Assert.Equal("AMZ-B0TESTAAA1", found.GetProperty("suggestedSku").GetString());
         Assert.Equal(14.99m, found.GetProperty("listPrice").GetDecimal());
         Assert.Equal(JsonValueKind.Null, found.GetProperty("existingProductId").ValueKind);
-        var asked = Assert.Single(fixture.Amazon.Requests, r => r.Contains("/catalog/2022-04-01/items", StringComparison.Ordinal));
+        var asked = fixture.Amazon.Requests.Last(r => r.Contains("/catalog/2022-04-01/items", StringComparison.Ordinal));
         Assert.Contains("identifiers=B0TESTAAA1&identifiersType=ASIN", asked);
         Assert.Contains("includedData=attributes,dimensions,identifiers,images,productTypes,summaries", asked);
+
+        // By name, Amazon's own search answers, each item with everything needed to import it.
+        var byName = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, "/api/amazon/import/find", new { query = "ceramic mug" }));
+        Assert.Equal(["B0TESTAAA1", "B0TESTAAA3"], byName.EnumerateArray().Select(i => i.GetProperty("asin").GetString()));
+        Assert.Equal("https://m.media-amazon.example/main.jpg", byName[1].GetProperty("imageUrls")[0].GetString());
+        Assert.Contains(fixture.Amazon.Requests, r => r.Contains("keywords=ceramic mug", StringComparison.Ordinal));
+        // An ASIN typed into the same box finds that one item.
+        var byAsin = await MarketplaceFixture.JsonAsync(await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, "/api/amazon/import/find", new { query = "b0testaaa3" }));
+        Assert.Equal("B0TESTAAA3", Assert.Single(byAsin.EnumerateArray()).GetProperty("asin").GetString());
 
         // One Amazon does not know.
         Assert.Equal(HttpStatusCode.NotFound, (await TenantApiHelpers.PostJsonWithAntiforgeryAsync(admin, "/api/amazon/import/lookup", new { query = "B0TESTAAA2" })).StatusCode);

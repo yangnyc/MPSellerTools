@@ -439,6 +439,22 @@ public class AmazonChannelAdapter(ChannelHttp http, ChannelSecrets secrets, Chan
             : [];
     }
 
+    /// <summary>
+    /// Finds items in Amazon's catalog by words of their name, the ten Amazon puts first, each with
+    /// everything <see cref="GetCatalogItemsAsync"/> reads. A read: it changes nothing on Amazon.
+    /// </summary>
+    public async Task<IReadOnlyList<AmazonCatalogItem>> FindCatalogItemsAsync(ChannelContext context, string keywords, CancellationToken cancellationToken)
+    {
+        var market = context.Market.MarketplaceCode;
+        var url = $"{BaseUrl(context)}/catalog/2022-04-01/items?marketplaceIds={Uri.EscapeDataString(market)}"
+            + $"&keywords={Uri.EscapeDataString(keywords)}"
+            + "&includedData=attributes,dimensions,identifiers,images,productTypes,summaries&pageSize=10";
+        var response = await SendAsync(context, HttpMethod.Get, url, null, cancellationToken);
+        return response.Body.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array
+            ? items.EnumerateArray().Select(item => ToCatalogItem(item, market)).OfType<AmazonCatalogItem>().ToList()
+            : [];
+    }
+
     private static AmazonCatalogItem? ToCatalogItem(JsonElement item, string market)
     {
         if (Text(item, "asin") is not { } asin)

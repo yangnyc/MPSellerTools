@@ -114,6 +114,10 @@ public partial class AmazonImport(TenantDbContext db, ListingService listings)
             .ToList();
     }
 
+    /// <summary>The items Amazon puts first for words of a name.</summary>
+    public Task<IReadOnlyList<AmazonCatalogItem>> FindAsync(ChannelContext context, string keywords, CancellationToken cancellationToken) =>
+        ((AmazonChannelAdapter)listings.AdapterFor(context.Account)).FindCatalogItemsAsync(context, keywords, cancellationToken);
+
     /// <summary>The SKU an item's product gets when none was chosen: the prefix and its ASIN.</summary>
     public static string SkuFor(AmazonCatalogItem item, string? prefix) => $"{prefix ?? DefaultSkuPrefix}{item.Asin}";
 
