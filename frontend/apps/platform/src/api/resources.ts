@@ -17,7 +17,8 @@ export const DashboardApi = {
 export const TenantsApi = {
   list: () => apiFetch<TenantSummary[]>("/api/tenants"),
   get: (id: string) => apiFetch<TenantDetail>(`/api/tenants/${id}`),
-  create: (data: { name: string; slug: string; initialAdminEmail: string }) =>
+  // The password may be left out when the email already signs in to another company, whose password is then kept.
+  create: (data: { name: string; slug: string; initialAdminEmail: string; initialAdminPassword?: string }) =>
     apiFetch<{ tenantId: string; jobId: string }>("/api/tenants", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: { name: string }) =>
     apiFetch<TenantDetail>(`/api/tenants/${id}`, { method: "PUT", body: JSON.stringify(data) }),

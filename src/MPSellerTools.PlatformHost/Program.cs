@@ -114,6 +114,8 @@ builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 
+builder.Services.Configure<MPSellerTools.Core.Tenancy.FeatureOptions>(builder.Configuration.GetSection(MPSellerTools.Core.Tenancy.FeatureOptions.SectionName));
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())

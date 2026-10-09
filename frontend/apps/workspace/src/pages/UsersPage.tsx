@@ -43,6 +43,10 @@ export default function UsersPage() {
   const [inviteRole, setInviteRole] = useState("Employee");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  // With invitations off, a user is added with a password that is passed on to them.
+  const invitations = !!currentUser?.invitationsEnabled;
+  const [addPassword, setAddPassword] = useState("");
+  const [addedAs, setAddedAs] = useState<string | null>(null);
 
   const [blockTarget, setBlockTarget] = useState<UserSummary | null>(null);
 
@@ -66,7 +70,29 @@ export default function UsersPage() {
     setInviteRole("Employee");
     setInviteError(null);
     setInviteLink(null);
+    setAddPassword("");
+    setAddedAs(null);
     setInviteOpen(true);
+  };
+
+  const submitAdd = async () => {
+    if (!inviteEmail.trim() || !addPassword) {
+      setInviteError("Email and password are required.");
+      return;
+    }
+    try {
+      await UsersApi.createUser({ email: inviteEmail.trim(), role: inviteRole, password: addPassword });
+      setInviteError(null);
+      setAddedAs(inviteEmail.trim());
+      notify("User added.", "success");
+      load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        await logout();
+        return;
+      }
+      setInviteError(err instanceof ApiError ? err.message : "Could not add the user.");
+    }
   };
 
   const submitInvite = async () => {
@@ -219,10 +245,10 @@ export default function UsersPage() {
       <PageHeader
         icon="group"
         title="Users"
-        subtitle="Invite teammates, set their role, and block access when someone leaves."
+        subtitle={`${invitations ? "Invite" : "Add"} teammates, set their role, and block access when someone leaves.`}
         actions={
           <MDButton variant="gradient" color="info" onClick={openInvite} startIcon={<Icon>person_add</Icon>}>
-            Invite user
+            {invitations ? "Invite user" : "Add user"}
           </MDButton>
         }
       />
@@ -263,34 +289,42 @@ export default function UsersPage() {
       <KitDialog
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
-        onSubmit={inviteLink ? undefined : submitInvite}
-        icon={inviteLink ? "mark_email_read" : "person_add"}
-        tone={inviteLink ? "success" : "info"}
-        title={inviteLink ? "Invitation sent" : "Invite user"}
+        onSubmit={inviteLink || addedAs ? undefined : invitations ? submitInvite : submitAdd}
+        icon={addedAs ? "check_circle" : inviteLink ? "mark_email_read" : "person_add"}
+        tone={inviteLink || addedAs ? "success" : "info"}
+        title={addedAs ? "User added" : inviteLink ? "Invitation sent" : invitations ? "Invite user" : "Add user"}
         subtitle={
-          inviteLink
-            ? "Share this link with the new user so they can set a password."
-            : "They receive a single-use link to set their own password."
+          addedAs
+            ? "Pass the sign-in details on now. The password cannot be shown again."
+            : inviteLink
+              ? "Share this link with the new user so they can set a password."
+              : invitations
+                ? "They receive a single-use link to set their own password."
+                : "They can sign in at once, with the password you choose here and pass on to them."
         }
         actions={
           <>
             <MDButton variant="text" color="secondary" onClick={() => setInviteOpen(false)}>
-              {inviteLink ? "Close" : "Cancel"}
+              {inviteLink || addedAs ? "Close" : "Cancel"}
             </MDButton>
-            {inviteLink ? (
+            {addedAs ? null : inviteLink ? (
               <MDButton variant="gradient" color="info" onClick={copyInviteLink} startIcon={<Icon>content_copy</Icon>}>
                 Copy link
               </MDButton>
             ) : (
               <MDButton type="submit" variant="gradient" color="info">
-                Send invite
+                {invitations ? "Send invite" : "Add user"}
               </MDButton>
             )}
           </>
         }
       >
         {inviteError && <InlineAlert sx={{ mb: 2.5 }}>{inviteError}</InlineAlert>}
-        {inviteLink ? (
+        {addedAs ? (
+          <InlineAlert tone="success">
+            {addedAs} can now sign in with the password you chose. They can change it under Profile once they are in.
+          </InlineAlert>
+        ) : inviteLink ? (
           <>
             <InlineAlert tone="info" sx={{ mb: 2 }}>
               Email delivery is not configured in this environment, so the accept link is shown here instead.
@@ -330,6 +364,17 @@ export default function UsersPage() {
               <option value="Employee">{roleLabel("Employee")}</option>
               <option value="TenantAdmin">{roleLabel("TenantAdmin")}</option>
             </MDInput>
+            {!invitations && (
+              <MDInput
+                label="Password"
+                type="password"
+                fullWidth
+                autoComplete="new-password"
+                value={addPassword}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAddPassword(e.target.value)}
+                helperText="At least 12 characters, with an upper-case letter, a lower-case letter and a digit."
+              />
+            )}
           </Box>
         )}
       </KitDialog>

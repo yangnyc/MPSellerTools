@@ -195,7 +195,7 @@ try {
         $token = (Invoke-RestMethod -Uri "https://localhost:7100/api/antiforgery/token" -SkipCertificateCheck -WebSession $session).token
         $result = Invoke-RestMethod -Uri "https://localhost:7100/api/tenants" -Method Post -SkipCertificateCheck -WebSession $session `
             -Headers @{ "X-CSRF-TOKEN" = $token } -ContentType "application/json" `
-            -Body (@{ name = $name; slug = $slug; initialAdminEmail = $email } | ConvertTo-Json)
+            -Body (@{ name = $name; slug = $slug; initialAdminEmail = $email; initialAdminPassword = $demoAdminPassword } | ConvertTo-Json)
         $newId = [string]$result.tenantId
         [void][guid]::Parse($newId)
         return $newId
@@ -212,16 +212,8 @@ try {
         throw "Tenant $tenantId did not become Active within 60 seconds."
     }
 
-    function Get-LatestOutboxLink($slug, $emailFilter) {
-        $outboxDir = Join-Path $repoRoot ".local/tenants/$slug/outbox"
-        $file = Get-ChildItem $outboxDir -Filter "*.json" -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime -Descending |
-            Where-Object { (Get-Content $_.FullName -Raw | ConvertFrom-Json).To -eq $emailFilter } |
-            Select-Object -First 1
-        if (-not $file) { throw "No outbox message found for $emailFilter in $outboxDir" }
-        $body = (Get-Content $file.FullName -Raw | ConvertFrom-Json).Body
-        return ([regex]::Match($body, "token=([^\s]+)")).Groups[1].Value
-    }
+    # The password every demo company's administrator is given when the company is made.
+    $demoAdminPassword = "DemoAdmin-Pass1!"
 
     function Set-DemoTenant($name, $slug, $adminEmail, $employeeEmail) {
         $tenantId = New-DemoCompany -name $name -slug $slug -email $adminEmail
@@ -235,54 +227,24 @@ try {
         $tSession = $null
         Invoke-RestMethod -Uri "$tenantUrl/api/antiforgery/token" -SkipCertificateCheck -SessionVariable tSession | Out-Null
 
-        # --- TenantAdmin: accept the initial invitation if not already done ---
-        $existingUsers = $null
-        try {
-            $probeToken = (Invoke-RestMethod -Uri "$tenantUrl/api/antiforgery/token" -SkipCertificateCheck -WebSession $tSession).token
-            Invoke-RestMethod -Uri "$tenantUrl/api/auth/login" -Method Post -SkipCertificateCheck -WebSession $tSession `
-                -Headers @{ "X-CSRF-TOKEN" = $probeToken } -ContentType "application/json" `
-                -Body (@{ email = $adminEmail; password = "placeholder-only-used-to-detect-existing-account" } | ConvertTo-Json) -ErrorAction Stop | Out-Null
-        } catch {
-            # 401 here just means the account doesn't exist yet (expected on
-            # first run) or the placeholder password is wrong (expected on
-            # every subsequent run) — either way we fall through below.
-        }
-
-        $adminPassword2 = "DemoAdmin-Pass1!"
+        # The TenantAdmin's account was made with the company, with this password.
+        $adminPassword2 = $demoAdminPassword
         $employeePassword = "DemoEmployee-Pass1!"
 
         $alreadySeeded = Test-Path $demoCredsPath
-        if (-not $alreadySeeded) {
-            $adminToken = Get-LatestOutboxLink -slug $slug -emailFilter $adminEmail
-            $acceptToken = (Invoke-RestMethod -Uri "$tenantUrl/api/antiforgery/token" -SkipCertificateCheck -WebSession $tSession).token
-            Invoke-RestMethod -Uri "$tenantUrl/api/invitations/accept" -Method Post -SkipCertificateCheck -WebSession $tSession `
-                -Headers @{ "X-CSRF-TOKEN" = $acceptToken } -ContentType "application/json" `
-                -Body (@{ token = $adminToken; displayName = "$name Admin"; password = $adminPassword2 } | ConvertTo-Json) | Out-Null
-            Write-Note "TenantAdmin invitation accepted for $slug."
-        } else {
-            Write-Note "$slug TenantAdmin already onboarded — skipping."
-        }
 
         $loginToken = (Invoke-RestMethod -Uri "$tenantUrl/api/antiforgery/token" -SkipCertificateCheck -WebSession $tSession).token
         Invoke-RestMethod -Uri "$tenantUrl/api/auth/login" -Method Post -SkipCertificateCheck -WebSession $tSession `
             -Headers @{ "X-CSRF-TOKEN" = $loginToken } -ContentType "application/json" `
             -Body (@{ email = $adminEmail; password = $adminPassword2 } | ConvertTo-Json) | Out-Null
 
-        # --- Employee: invite once, accept once ---
+        # --- Employee: added once, with a password ---
         if (-not $alreadySeeded) {
-            $inviteToken = (Invoke-RestMethod -Uri "$tenantUrl/api/antiforgery/token" -SkipCertificateCheck -WebSession $tSession).token
-            Invoke-RestMethod -Uri "$tenantUrl/api/invitations" -Method Post -SkipCertificateCheck -WebSession $tSession `
-                -Headers @{ "X-CSRF-TOKEN" = $inviteToken } -ContentType "application/json" `
-                -Body (@{ email = $employeeEmail; role = "Employee" } | ConvertTo-Json) | Out-Null
-
-            $empSession = $null
-            Invoke-RestMethod -Uri "$tenantUrl/api/antiforgery/token" -SkipCertificateCheck -SessionVariable empSession | Out-Null
-            $empToken = Get-LatestOutboxLink -slug $slug -emailFilter $employeeEmail
-            $empAcceptToken = (Invoke-RestMethod -Uri "$tenantUrl/api/antiforgery/token" -SkipCertificateCheck -WebSession $empSession).token
-            Invoke-RestMethod -Uri "$tenantUrl/api/invitations/accept" -Method Post -SkipCertificateCheck -WebSession $empSession `
-                -Headers @{ "X-CSRF-TOKEN" = $empAcceptToken } -ContentType "application/json" `
-                -Body (@{ token = $empToken; displayName = "$name Employee"; password = $employeePassword } | ConvertTo-Json) | Out-Null
-            Write-Note "Employee invitation accepted for $slug."
+            $createToken = (Invoke-RestMethod -Uri "$tenantUrl/api/antiforgery/token" -SkipCertificateCheck -WebSession $tSession).token
+            Invoke-RestMethod -Uri "$tenantUrl/api/users" -Method Post -SkipCertificateCheck -WebSession $tSession `
+                -Headers @{ "X-CSRF-TOKEN" = $createToken } -ContentType "application/json" `
+                -Body (@{ email = $employeeEmail; role = "Employee"; displayName = "$name Employee"; password = $employeePassword } | ConvertTo-Json) | Out-Null
+            Write-Note "Employee added to $slug."
 
             # --- Small, distinguishable seed dataset ---
             $productToken = (Invoke-RestMethod -Uri "$tenantUrl/api/antiforgery/token" -SkipCertificateCheck -WebSession $tSession).token

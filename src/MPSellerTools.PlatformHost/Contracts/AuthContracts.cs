@@ -8,7 +8,9 @@ public record CurrentUserResponse(
     string DisplayName,
     IReadOnlyList<string> Roles,
     ThemeSettings? Theme,
-    IReadOnlyList<string> PinnedMenus);
+    IReadOnlyList<string> PinnedMenus,
+    // Whether users are added by invitation; off, they are added with a password.
+    bool InvitationsEnabled = false);
 
 /// <summary>The sidebar menu groups the user keeps pinned open, by the UI's own group keys (e.g. "tenants").</summary>
 public record PinnedMenusRequest(IReadOnlyList<string>? Menus)

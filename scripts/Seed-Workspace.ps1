@@ -178,14 +178,19 @@ Write-Host "  tasks: $added added, $($tasks.Count - $added) already there"
 
 # --- Invitations --------------------------------------------------------------
 
-$known = @($users | ForEach-Object { $_.email }) + @(Invoke-Api GET "/api/invitations" | ForEach-Object { $_.email })
-$added = 0
-foreach ($invitation in $invitations) {
-    if ($known -contains $invitation.email) { continue }
-    Invoke-Api POST "/api/invitations" @{ email = $invitation.email; role = $invitation.role } | Out-Null
-    $added++
+# Only where the host has invitations switched on (Features:InvitationsEnabled); they are off unless it does.
+if ((Invoke-Api GET "/api/auth/me").invitationsEnabled) {
+    $known = @($users | ForEach-Object { $_.email }) + @(Invoke-Api GET "/api/invitations" | ForEach-Object { $_.email })
+    $added = 0
+    foreach ($invitation in $invitations) {
+        if ($known -contains $invitation.email) { continue }
+        Invoke-Api POST "/api/invitations" @{ email = $invitation.email; role = $invitation.role } | Out-Null
+        $added++
+    }
+    Write-Host "  invitations: $added sent, $($invitations.Count - $added) already there"
+} else {
+    Write-Host "  invitations: switched off on this host, none sent"
 }
-Write-Host "  invitations: $added sent, $($invitations.Count - $added) already there"
 
 Write-Host ""
-Write-Host "Done. See $base/orders, $base/tasks, $base/inventory and $base/users/invitations." -ForegroundColor Green
+Write-Host "Done. See $base/orders, $base/tasks, $base/inventory and $base/users." -ForegroundColor Green

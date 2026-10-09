@@ -16,12 +16,18 @@ public class InvitationsController(
     UserManager<TenantUser> userManager,
     InvitationIssuer invitations,
     IWebHostEnvironment environment,
+    Microsoft.Extensions.Options.IOptions<FeatureOptions> features,
     AuditLogger audit) : ControllerBase
 {
     [HttpPost]
     [Authorize(Policy = Roles.TenantAdmin)]
     public async Task<IActionResult> Create([FromBody] CreateInvitationRequest request)
     {
+        if (!features.Value.InvitationsEnabled)
+        {
+            return Problem("Invitations are switched off. Add the user with a password instead.", statusCode: StatusCodes.Status409Conflict);
+        }
+
         if (request.Role is not (Roles.TenantAdmin or Roles.Employee))
         {
             return Problem("Role must be TenantAdmin or Employee.", statusCode: StatusCodes.Status400BadRequest);
@@ -78,6 +84,11 @@ public class InvitationsController(
     [AllowAnonymous]
     public async Task<IActionResult> Accept([FromBody] AcceptInvitationRequest request)
     {
+        if (!features.Value.InvitationsEnabled)
+        {
+            return Problem("Invitations are switched off, so this link no longer works. Ask your administrator for a password to sign in with.", statusCode: StatusCodes.Status409Conflict);
+        }
+
         var tokenHash = InvitationIssuer.HashToken(request.Token);
         var invitation = await db.Invitations.FirstOrDefaultAsync(i => i.TokenHash == tokenHash);
 

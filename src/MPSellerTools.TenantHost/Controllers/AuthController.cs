@@ -12,7 +12,8 @@ namespace MPSellerTools.TenantHost.Controllers;
 public class AuthController(
     SignInManager<TenantUser> signInManager,
     UserManager<TenantUser> userManager,
-    IDevOutbox outbox) : ControllerBase
+    IDevOutbox outbox,
+    Microsoft.Extensions.Options.IOptions<MPSellerTools.Core.Tenancy.FeatureOptions> features) : ControllerBase
 {
     private const string GenericLoginError = "Invalid email or password.";
 
@@ -66,7 +67,7 @@ public class AuthController(
 
         var roles = await userManager.GetRolesAsync(user);
         var profile = ThemeProfile.FromJson(user.ThemeSettingsJson);
-        return Ok(new CurrentUserResponse(user.Id, user.Email!, user.DisplayName, roles.ToList(), profile.Active, profile.PinnedMenus ?? []));
+        return Ok(new CurrentUserResponse(user.Id, user.Email!, user.DisplayName, roles.ToList(), profile.Active, profile.PinnedMenus ?? [], features.Value.InvitationsEnabled));
     }
 
     [HttpPut("me")]

@@ -21,6 +21,7 @@ public class UsersController(
     IDevOutbox outbox,
     InvitationIssuer invitations,
     IWebHostEnvironment environment,
+    Microsoft.Extensions.Options.IOptions<FeatureOptions> features,
     AuditLogger audit) : ControllerBase
 {
     [HttpGet]
@@ -43,6 +44,11 @@ public class UsersController(
     [HttpPost("invite")]
     public async Task<IActionResult> Invite([FromBody] CreateInvitationRequest request)
     {
+        if (!features.Value.InvitationsEnabled)
+        {
+            return Problem("Invitations are switched off. Add the user with a password instead.", statusCode: StatusCodes.Status409Conflict);
+        }
+
         if (request.Role is not (Roles.TenantAdmin or Roles.Employee))
         {
             return Problem("Role must be TenantAdmin or Employee.", statusCode: StatusCodes.Status400BadRequest);
@@ -64,14 +70,15 @@ public class UsersController(
     }
 
     /// <summary>
-    /// Adds a user straight away, with a password the platform administrator
-    /// chose and passes on, instead of an invitation. Platform console only:
-    /// a TenantAdmin invites instead. The password is never logged.
+    /// Adds a user straight away, with a password that is chosen for them and
+    /// passed on, instead of an invitation. While invitations are on this is
+    /// the platform console's alone, and a TenantAdmin invites; with them off
+    /// it is how a TenantAdmin adds users too. The password is never logged.
     /// </summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
     {
-        if (!User.IsInRole(Roles.PlatformOperator))
+        if (features.Value.InvitationsEnabled && !User.IsInRole(Roles.PlatformOperator))
         {
             return Problem("Only the platform console can create a user with a password.", statusCode: StatusCodes.Status403Forbidden);
         }

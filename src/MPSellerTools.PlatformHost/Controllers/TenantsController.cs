@@ -11,8 +11,39 @@ namespace MPSellerTools.PlatformHost.Controllers;
 [ApiController]
 [Route("api/tenants")]
 [Authorize(Policy = Core.Tenancy.Roles.PlatformAdmin)]
-public class TenantsController(PlatformDbContext db, UserManager<PlatformUser> userManager) : ControllerBase
+public class TenantsController(PlatformDbContext db, UserManager<PlatformUser> userManager, IConfiguration configuration) : ControllerBase
 {
+    /// <summary>
+    /// Whether the email already signs in to one of the platform's companies. Its password is then the one
+    /// kept for a new company made without one. A company whose database cannot be read is passed over.
+    /// </summary>
+    private async Task<bool> HasAccountInAnotherCompanyAsync(string email)
+    {
+        var databases = await db.Tenants.AsNoTracking().Where(t => t.DatabaseName != null).Select(t => t.DatabaseName!).ToListAsync();
+        foreach (var database in databases.Where(name =>
+                     name.StartsWith("MPSellerTools_Tenant_", StringComparison.Ordinal) && name.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '_')))
+        {
+            try
+            {
+                var connectionString = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(configuration.GetConnectionString("PlatformDatabase")) { InitialCatalog = database }.ConnectionString;
+                await using var connection = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
+                await connection.OpenAsync();
+                await using var command = connection.CreateCommand();
+                command.CommandText = "SELECT TOP (1) 1 FROM AspNetUsers WHERE NormalizedEmail = @email AND PasswordHash IS NOT NULL AND IsBlocked = 0";
+                command.Parameters.AddWithValue("@email", email.ToUpperInvariant());
+                if (await command.ExecuteScalarAsync() is not null)
+                {
+                    return true;
+                }
+            }
+            catch (Microsoft.Data.SqlClient.SqlException)
+            {
+                // Not readable now; another company may still have the account.
+            }
+        }
+        return false;
+    }
+
     private const int MaxPortAllocationAttempts = 5;
 
     [HttpGet]
@@ -118,6 +149,31 @@ public class TenantsController(PlatformDbContext db, UserManager<PlatformUser> u
             return Problem("A company with this slug already exists.", statusCode: StatusCodes.Status409Conflict);
         }
 
+        // The first administrator is given an account when the company is made: with the password chosen
+        // here, or, when none is, the one they already have in another company.
+        var adminEmail = request.InitialAdminEmail.Trim();
+        string? adminPasswordHash = null;
+        if (!string.IsNullOrEmpty(request.InitialAdminPassword))
+        {
+            var probe = new PlatformUser { UserName = adminEmail, Email = adminEmail, DisplayName = adminEmail };
+            foreach (var validator in userManager.PasswordValidators)
+            {
+                var checkedPassword = await validator.ValidateAsync(userManager, probe, request.InitialAdminPassword);
+                if (!checkedPassword.Succeeded)
+                {
+                    return Problem(string.Join(" ", checkedPassword.Errors.Select(e => e.Description)), statusCode: StatusCodes.Status400BadRequest);
+                }
+            }
+            // Only the hash is kept, and only until the account is made.
+            adminPasswordHash = userManager.PasswordHasher.HashPassword(probe, request.InitialAdminPassword);
+        }
+        else if (!await HasAccountInAnotherCompanyAsync(adminEmail))
+        {
+            return Problem(
+                $"Enter a password for the administrator. {adminEmail} has no account in another company to keep a password from.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
         var actorId = userManager.GetUserId(User) is { } id ? Guid.Parse(id) : Guid.Empty;
 
         for (var attempt = 0; attempt < MaxPortAllocationAttempts; attempt++)
@@ -135,7 +191,8 @@ public class TenantsController(PlatformDbContext db, UserManager<PlatformUser> u
                 Id = Guid.NewGuid(),
                 Name = request.Name.Trim(),
                 Slug = slug,
-                InitialAdminEmail = request.InitialAdminEmail.Trim(),
+                InitialAdminEmail = adminEmail,
+                InitialAdminPasswordHash = adminPasswordHash,
                 Status = TenantStatus.Provisioning,
                 Port = candidatePort,
                 CreatedAtUtc = now,

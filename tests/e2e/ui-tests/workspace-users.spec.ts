@@ -19,9 +19,12 @@ const audit = [
 
 // Requests the page makes that change something, as "METHOD path body".
 let writes: string[];
+// Whether the host has invitations switched on. They are off unless a host turns them on; most of these tests cover them.
+let invitationsEnabled: boolean;
 
 test.beforeEach(async ({ page }) => {
   writes = [];
+  invitationsEnabled = true;
   page.on("pageerror", (error) => { throw error; });
   await page.route(/\/\/[^/]+\/api\//, async (route) => {
     const request = route.request();
@@ -35,7 +38,7 @@ test.beforeEach(async ({ page }) => {
         await route.fulfill({ status: 204 });
       }
     } else if (path === "/api/auth/me") {
-      await route.fulfill({ json: { ...users[0], pinnedMenus: [] } });
+      await route.fulfill({ json: { ...users[0], pinnedMenus: [], invitationsEnabled } });
     } else if (path === "/api/antiforgery/token") {
       await route.fulfill({ json: { token: "test" } });
     } else if (path === "/api/users") {
@@ -126,6 +129,29 @@ test("user activity narrows to what one user did and what was done to them", asy
 
   await page.getByRole("button", { name: "Clear filters" }).click();
   await expect(page.getByText("3 of 3 events")).toBeVisible();
+});
+
+test("with invitations off, a user is added with a password and nothing about invitations is offered", async ({ page }) => {
+  invitationsEnabled = false;
+  await page.goto("/users");
+  const sidebar = page.locator(".MuiDrawer-paper").filter({ has: page.getByText("MP Seller Tools", { exact: true }) });
+  await expect(sidebar.locator('a[href="/users/roles"]')).toBeVisible();
+  await expect(sidebar.locator('a[href="/users/invitations"]')).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Invite user" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Add user" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Email").fill("new@acme.test");
+  await dialog.getByLabel("Role").selectOption("TenantAdmin");
+  await dialog.getByLabel("Password").fill("Chosen-Password-123");
+  await dialog.getByRole("button", { name: "Add user" }).click();
+  await expect(dialog.getByText("new@acme.test can now sign in with the password you chose.", { exact: false })).toBeVisible();
+  expect(writes).toEqual(['POST /api/users {"email":"new@acme.test","role":"TenantAdmin","password":"Chosen-Password-123"}']);
+
+  // The account controls have no invitations to manage.
+  await page.goto("/users/controls");
+  await expect(page.getByRole("heading", { name: "Account controls" })).toBeVisible();
+  await expect(page.getByText("Pending invitations")).toHaveCount(0);
 });
 
 test("the sidebar is in three groups separated by visible lines", async ({ page }) => {

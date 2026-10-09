@@ -78,6 +78,9 @@ public class TenantHostFixture : WebApplicationFactory<Program>, IAsyncLifetime
     /// backfill are off for every test host: tests that want them run them
     /// by hand, so nothing happens behind a test's back.
     /// </summary>
+    /// <summary>Invitations are off unless a host switches them on; these tests cover them, so they are on here.</summary>
+    protected virtual bool InvitationsEnabled => true;
+
     // Stock accounting is said outright, so a machine whose own local settings switch it on tests the same thing.
     protected virtual object MarketplaceSettings =>
         new { WorkerEnabled = false, AutoBackfill = false, RequestsPerSecond = 0, LiveWritesEnabled = false, InventoryAccountingEnabled = false };
@@ -113,6 +116,7 @@ public class TenantHostFixture : WebApplicationFactory<Program>, IAsyncLifetime
             },
             Hosting = new { LocalDataDirectory },
             Marketplace = MarketplaceSettings,
+            Features = new { InvitationsEnabled },
         });
         await File.WriteAllTextAsync(_instanceConfigPath, json);
         Environment.SetEnvironmentVariable("MPST_INSTANCE_CONFIG_FILE", _instanceConfigPath);

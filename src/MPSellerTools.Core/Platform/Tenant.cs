@@ -14,8 +14,16 @@ public class Tenant
 
     public required string Name { get; set; }
 
-    /// <summary>Email address invited as the initial TenantAdmin during provisioning.</summary>
+    /// <summary>Email address of the company's first TenantAdmin, whose account is made during provisioning.</summary>
     public required string InitialAdminEmail { get; set; }
+
+    /// <summary>
+    /// The hash of the password chosen for the first administrator when the company was asked for, kept
+    /// only until provisioning has made the account and then cleared. Null when none was chosen: the
+    /// administrator then keeps the password they have in another company. Never the password itself.
+    /// </summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(500)]
+    public string? InitialAdminPasswordHash { get; set; }
 
     public TenantStatus Status { get; set; } = TenantStatus.Provisioning;
 

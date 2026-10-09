@@ -8,6 +8,7 @@ import { FilterTabs, Identity, InlineAlert, KitDialog, PageHeader, Section, Stat
 import PageShell from "../../components/PageShell";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import { useSnackbar } from "../../components/useSnackbar";
+import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/api";
 import { TenantUsersApi, TenantsApi } from "../../api/resources";
 import type { TenantSummary, TenantUser } from "../../api/types";
@@ -45,6 +46,8 @@ function generatePassword(): string {
 
 export default function TenantUsersListPage() {
   const { notify } = useSnackbar();
+  // With invitations off, a user is only ever added with a password.
+  const invitations = !!useAuth().user?.invitationsEnabled;
   const { users, unavailable, error, loading, reload } = useTenantUsers();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
@@ -388,7 +391,7 @@ export default function TenantUsersListPage() {
       <KitDialog
         open={addOpen}
         onClose={closeAdd}
-        onSubmit={addLink || addCreated ? undefined : submitAdd}
+        onSubmit={addLink || addCreated ? undefined : invitations ? submitAdd : submitCreate}
         icon={addCreated ? "check_circle" : addLink ? "mark_email_read" : "person_add"}
         tone={addLink || addCreated ? "success" : "info"}
         title={addCreated ? "User created" : addLink ? "Invitation sent" : "Add user"}
@@ -397,7 +400,9 @@ export default function TenantUsersListPage() {
             ? "Pass these sign-in details on now. The password is not stored anywhere readable and cannot be shown again."
             : addLink
               ? "Share this link with the new user so they can set a password. They appear in the list once they accept."
-              : "Send invite emails a single-use link to set their own password. Create adds them now, with a password you pass on."
+              : invitations
+                ? "Send invite emails a single-use link to set their own password. Create adds them now, with a password you pass on."
+                : "They are added now and can sign in at once, with a password you choose here and pass on."
         }
         actions={
           <>
@@ -414,10 +419,12 @@ export default function TenantUsersListPage() {
               </MDButton>
             ) : (
               <>
-                <MDButton type="submit" variant="gradient" color="info" disabled={saving}>
-                  Send invite
-                </MDButton>
-                <MDButton variant="gradient" color="success" disabled={saving} onClick={submitCreate}>
+                {invitations && (
+                  <MDButton type="submit" variant="gradient" color="info" disabled={saving}>
+                    Send invite
+                  </MDButton>
+                )}
+                <MDButton type={invitations ? "button" : "submit"} variant="gradient" color="success" disabled={saving} onClick={invitations ? submitCreate : undefined}>
                   Create
                 </MDButton>
               </>

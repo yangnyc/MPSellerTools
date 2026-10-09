@@ -13,7 +13,11 @@ const unavailable = [{ tenantId: "t3", tenantName: "Cedar", reason: "Suspended" 
 // Requests the page makes that change something, as "METHOD path body".
 let writes: string[];
 
+// Whether the platform has invitations switched on; off unless a host turns them on.
+let invitationsEnabled: boolean;
+
 test.beforeEach(async ({ page }) => {
+  invitationsEnabled = true;
   writes = [];
   page.on("pageerror", (error) => { throw error; });
   await page.route(/\/\/[^/]+\/api\//, async (route) => {
@@ -33,7 +37,7 @@ test.beforeEach(async ({ page }) => {
         await route.fulfill({ status: 204 });
       }
     } else if (path === "/api/auth/me") {
-      await route.fulfill({ json: { id: "admin", email: "admin@example.test", displayName: "Admin", roles: ["PlatformAdmin"], pinnedMenus: [] } });
+      await route.fulfill({ json: { id: "admin", email: "admin@example.test", displayName: "Admin", roles: ["PlatformAdmin"], pinnedMenus: [], invitationsEnabled } });
     } else if (path === "/api/antiforgery/token") {
       await route.fulfill({ json: { token: "test" } });
     } else if (path === "/api/tenant-users") {
@@ -66,6 +70,19 @@ test("the Tenant users sidebar group opens its pages and names companies it coul
   await expect(page.getByRole("heading", { name: "Filters & export" })).toBeVisible();
   await sidebar.locator('a[href="/tenant-users/controls"]').click();
   await expect(page.getByRole("heading", { name: "Account controls" })).toBeVisible();
+});
+
+test("with invitations off, a user can only be created with a password", async ({ page }) => {
+  invitationsEnabled = false;
+  await page.goto("/tenant-users");
+  await page.getByRole("button", { name: "Add user" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("button", { name: "Send invite" })).toHaveCount(0);
+  await dialog.getByLabel("Email").fill("new@acme.test");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(dialog.getByText("Username: new@acme.test")).toBeVisible();
+  expect(writes).toHaveLength(1);
+  expect(writes[0]).toContain("POST /api/tenant-users/t1/create ");
 });
 
 test("adding a user invites them into the chosen running company and shows the accept link", async ({ page }) => {

@@ -84,6 +84,9 @@ export const UsersApi = {
   signOut: (id: string) => apiFetch<void>(`/api/users/${id}/sign-out`, { method: "POST" }),
   forcePasswordReset: (id: string) =>
     apiFetch<ForcePasswordResetResponse>(`/api/users/${id}/force-password-reset`, { method: "POST" }),
+  // Adds a user straight away, with a password that is passed on to them.
+  createUser: (data: { email: string; role: string; password: string }) =>
+    apiFetch<void>("/api/users", { method: "POST", body: JSON.stringify(data) }),
   pendingInvitations: () => apiFetch<PendingInvitation[]>("/api/invitations"),
   revokeInvitation: (id: string) => apiFetch<void>(`/api/invitations/${id}`, { method: "DELETE" }),
 };

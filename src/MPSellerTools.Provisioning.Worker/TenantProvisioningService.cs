@@ -52,11 +52,13 @@ public class TenantProvisioningService(
         await EnsureRolesAsync(tenantDb, cancellationToken);
         await EnsureCompanySettingsAsync(tenantDb, tenant, cancellationToken);
         var applicationInstanceId = tenant.ApplicationInstanceId ?? Guid.NewGuid();
-        // Someone who already signs in to another company here signs in to this one the same way at once;
-        // anyone else is invited, and sets a password from the link.
+        // The first administrator can sign in as soon as the company is up: with the password chosen when
+        // it was asked for, or the one they already have in another company. Nobody is invited.
         if (!await EnsureInitialAdminAsync(tenantDb, tenant, cancellationToken))
         {
-            await EnsureInitialInvitationAsync(tenantDb, tenant, cancellationToken);
+            throw new InvalidOperationException(
+                $"No password was chosen for the administrator, and {tenant.InitialAdminEmail} has no account in another company to keep one from. "
+                + "Delete this company and create it again with a password for the administrator.");
         }
 
         var url = PublicUrl(tenant);
@@ -244,17 +246,44 @@ public class TenantProvisioningService(
     }
 
     /// <summary>
-    /// Gives the company's first administrator an account in it, when the same email already has an
-    /// account in another company on this platform: one person may be in several companies, and then
-    /// signs in to each with the password they already have. Each company keeps its own copy of the
-    /// account, so a password changed later in one is changed there only. Returns whether the
-    /// administrator can sign in; false means nobody with this email was found, and an invitation is needed.
+    /// Gives the company's first administrator an account in it: with the password chosen when the company
+    /// was asked for, or, when none was, the one the same email already has in another company on this
+    /// platform. One person may be in several companies; each keeps its own copy of the account, so a
+    /// password changed later in one is changed there only. Returns whether the administrator can sign
+    /// in; false means no password was chosen and nobody with this email was found.
     /// </summary>
     private async Task<bool> EnsureInitialAdminAsync(TenantDbContext db, Tenant tenant, CancellationToken cancellationToken)
     {
         var normalizedEmail = tenant.InitialAdminEmail.Trim().ToUpperInvariant();
         if (await db.Users.AnyAsync(u => u.NormalizedEmail == normalizedEmail, cancellationToken))
         {
+            return true;
+        }
+
+        var adminRole = await db.Roles.FirstAsync(r => r.NormalizedName == Roles.TenantAdmin.ToUpperInvariant(), cancellationToken);
+        if (!string.IsNullOrEmpty(tenant.InitialAdminPasswordHash))
+        {
+            var email = tenant.InitialAdminEmail.Trim();
+            var chosen = new TenantUser
+            {
+                Id = Guid.NewGuid(),
+                UserName = email,
+                NormalizedUserName = normalizedEmail,
+                Email = email,
+                NormalizedEmail = normalizedEmail,
+                EmailConfirmed = true,
+                PasswordHash = tenant.InitialAdminPasswordHash,
+                SecurityStamp = Guid.NewGuid().ToString(),
+                ConcurrencyStamp = Guid.NewGuid().ToString(),
+                DisplayName = email[..email.IndexOf('@')],
+                LockoutEnabled = true,
+            };
+            db.Users.Add(chosen);
+            db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = chosen.Id, RoleId = adminRole.Id });
+            await db.SaveChangesAsync(cancellationToken);
+            // The account has it now; the registry has no further use for it.
+            tenant.InitialAdminPasswordHash = null;
+            logger.LogInformation("Gave {Email} an administrator's account in {Slug}, with the password chosen for it", tenant.InitialAdminEmail, tenant.Slug);
             return true;
         }
 
@@ -283,7 +312,6 @@ public class TenantProvisioningService(
             return false;
         }
 
-        var adminRole = await db.Roles.FirstAsync(r => r.NormalizedName == Roles.TenantAdmin.ToUpperInvariant(), cancellationToken);
         var user = new TenantUser
         {
             Id = Guid.NewGuid(),
@@ -327,41 +355,6 @@ public class TenantProvisioningService(
             }
         }
         return names;
-    }
-
-    private async Task EnsureInitialInvitationAsync(TenantDbContext db, Tenant tenant, CancellationToken cancellationToken)
-    {
-        var alreadyInvited = await db.Invitations.AnyAsync(
-            i => i.Email == tenant.InitialAdminEmail && i.AcceptedAtUtc == null, cancellationToken);
-        if (alreadyInvited)
-        {
-            return;
-        }
-
-        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
-            .Replace('+', '-').Replace('/', '_').TrimEnd('=');
-        var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
-
-        db.Invitations.Add(new Invitation
-        {
-            Id = Guid.NewGuid(),
-            Email = tenant.InitialAdminEmail,
-            Role = Roles.TenantAdmin,
-            TokenHash = tokenHash,
-            ExpiresAtUtc = DateTime.UtcNow.AddDays(7),
-            CreatedByUserId = Guid.Empty,
-            CreatedAtUtc = DateTime.UtcNow,
-        });
-        await db.SaveChangesAsync(cancellationToken);
-
-        var outboxDirectory = Path.Combine(localDataDirectory, "tenants", tenant.Slug, "outbox");
-        var outbox = new FileDevOutbox(outboxDirectory);
-        var acceptLink = $"{PublicUrl(tenant)}/accept-invitation?token={Uri.EscapeDataString(rawToken)}";
-        await outbox.WriteAsync(
-            tenant.InitialAdminEmail,
-            "You've been invited to MPSellerTools",
-            $"Accept your invitation as the initial administrator of {tenant.Name}: {acceptLink}",
-            cancellationToken);
     }
 
     private string WriteInstanceConfig(Tenant tenant, Guid applicationInstanceId, string url, string connectionString)

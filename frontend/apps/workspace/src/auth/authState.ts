@@ -19,6 +19,8 @@ export type CurrentUser = {
   theme: ThemeSettings | null;
   // The sidebar menu groups kept pinned open, by group key (see routes.tsx).
   pinnedMenus?: string[];
+  // Whether users are added by invitation. Off (or not said), they are added with a password instead.
+  invitationsEnabled?: boolean;
 };
 
 export type AuthState = {

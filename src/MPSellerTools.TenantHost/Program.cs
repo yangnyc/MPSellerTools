@@ -210,6 +210,8 @@ builder.Services.AddHostedService<ChannelSyncWorker>();
 builder.Services.AddScoped<BulkJobRunner>();
 builder.Services.AddHostedService<BulkJobWorker>();
 
+builder.Services.Configure<MPSellerTools.Core.Tenancy.FeatureOptions>(builder.Configuration.GetSection(MPSellerTools.Core.Tenancy.FeatureOptions.SectionName));
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())

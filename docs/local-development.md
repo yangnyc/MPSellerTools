@@ -121,16 +121,21 @@ Where the accounts come from:
   `.local/platform/dev-admin-credentials.txt` (git-ignored, never logged,
   never a hardcoded default). It is not regenerated on later runs.
 - **Demo Company A / Company B**: `Setup-Dev.ps1` creates both through the
-  real provisioning pipeline (not by inserting database rows), accepts their
-  TenantAdmin and Employee invitations itself, and writes the resulting
+  real provisioning pipeline (not by inserting database rows), each with its
+  TenantAdmin's password, adds an Employee with a password, and writes the
   credentials to `.local/tenants/<slug>/demo-credentials.txt`. These demo
   passwords are fixed values written in the script — see
   [Security notes](#security-notes).
-- **A company you create yourself** in the platform console: the initial
-  administrator's invitation link is written to that company's local dev
-  outbox at `.local/tenants/<slug>/outbox/*.json` (there is no real email).
-  Open the newest file there and follow the link to set a password. A
-  PlatformAdmin can also add users directly from the console's user pages.
+- **A company you create yourself** in the platform console: its first
+  administrator's account is made with the company, with the password
+  entered on the Create company page. The password may be left empty when
+  that email already signs in to another company here; the new company then
+  keeps the same password. Nobody is sent an invitation.
+- **More users**: a TenantAdmin adds them under Users, and a PlatformAdmin
+  from the console's user pages, each with a password that is passed on.
+  Invitations (a single-use link to set one's own password, written to the
+  company's dev outbox) exist but are switched off; `Features:InvitationsEnabled`
+  set to `true` for the PlatformHost and the TenantHost brings them back.
 
 Password rules everywhere: at least 12 characters; five failed sign-ins lock
 the account for 15 minutes; sessions last 8 hours, sliding.

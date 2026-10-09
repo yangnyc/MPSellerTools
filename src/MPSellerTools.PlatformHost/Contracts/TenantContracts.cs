@@ -2,7 +2,11 @@ using MPSellerTools.Core.Platform;
 
 namespace MPSellerTools.PlatformHost.Contracts;
 
-public record CreateTenantRequest(string Name, string Slug, string InitialAdminEmail);
+/// <summary>
+/// <see cref="InitialAdminPassword"/> is the password the company's first administrator signs in with. It may
+/// be left out when the email already has an account in another company, whose password is then kept.
+/// </summary>
+public record CreateTenantRequest(string Name, string Slug, string InitialAdminEmail, string? InitialAdminPassword = null);
 
 public record UpdateTenantRequest(string Name);
 

@@ -36,19 +36,20 @@ export default function TenantNewPage() {
   // Until the slug field is edited by hand, it follows the company name.
   const [slugEdited, setSlugEdited] = useState(false);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
     setError(null);
     if (!name.trim() || !slug.trim() || !email.trim()) {
-      setError("All fields are required.");
+      setError("Company name, slug and administrator email are required.");
       return;
     }
     setSubmitting(true);
     try {
-      const result = await TenantsApi.create({ name, slug, initialAdminEmail: email });
-      notify("Company creation started. Provisioning is in progress.", "success");
+      const result = await TenantsApi.create({ name, slug, initialAdminEmail: email, initialAdminPassword: password || undefined });
+      notify(`Company creation started. ${email.trim()} can sign in to it as its administrator once it is Active.`, "success");
       navigate(`/tenants/${result.tenantId}`);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -72,7 +73,7 @@ export default function TenantNewPage() {
       />
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "3fr 2fr" }, alignItems: "start", gap: 3 }}>
-        <Section icon="apartment" title="Company details" subtitle="All three fields are required.">
+        <Section icon="apartment" title="Company details" subtitle="The administrator's account is made with the company; nobody is sent an invitation.">
           <Box
             component="form"
             noValidate
@@ -109,6 +110,16 @@ export default function TenantNewPage() {
                 fullWidth
                 value={email}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+              />
+              <MDInput
+                label="Administrator password"
+                type="password"
+                fullWidth
+                autoComplete="new-password"
+                value={password}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                helperText="What the administrator signs in to this company with: at least 12 characters, with upper case, lower case and a digit. Pass it on to them; it cannot be shown again. Leave it empty only when this email already signs in to another company here: it then keeps that password."
+                FormHelperTextProps={{ sx: { color: c.muted } }}
               />
             </Box>
             <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, mt: 3 }}>

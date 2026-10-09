@@ -50,7 +50,8 @@ For a company's administrators and employees.
 - **Dashboard** — what needs doing first, then revenue by day and by channel,
   each sales channel's listings, background jobs, catalog readiness and low
   stock.
-- **Users** — invitations, roles, blocking, password resets, bulk actions,
+- **Users** — added with a password (or by invitation, where a host switches
+  `Features:InvitationsEnabled` on), roles, blocking, password resets, bulk actions,
   activity and an audit log.
 
 ### Platform console

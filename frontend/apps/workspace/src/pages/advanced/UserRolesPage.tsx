@@ -53,7 +53,7 @@ const AREAS: Area[] = [
     TenantAdmin: { level: "full", text: "Create, edit and assign" },
     Employee: { level: "limited", text: "Change the status of their own tasks" },
   },
-  { area: "Users and invitations", TenantAdmin: { level: "full", text: "Invite, change roles, block" }, Employee: none },
+  { area: "Users", TenantAdmin: { level: "full", text: "Add, change roles, block" }, Employee: none },
   { area: "Company settings", TenantAdmin: { level: "full", text: "Edit" }, Employee: none },
   { area: "Audit log", TenantAdmin: { level: "full", text: "View" }, Employee: none },
   {

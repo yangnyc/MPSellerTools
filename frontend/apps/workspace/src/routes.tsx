@@ -40,6 +40,8 @@ export type AppRoute = {
   route?: string;
   component?: React.ReactNode;
   roles?: string[];
+  // Shown only while this part of the product is switched on.
+  feature?: "invitations";
   // Sub-items: makes this an expandable sidenav group with no page of its own.
   collapse?: AppRoute[];
 };
@@ -312,6 +314,7 @@ const routes: AppRoute[] = [
         type: "collapse",
         name: "Invitations",
         key: "users-invitations",
+        feature: "invitations",
         icon: <Icon fontSize="small">mail</Icon>,
         route: "/users/invitations",
         component: <UserInvitationsPage />,

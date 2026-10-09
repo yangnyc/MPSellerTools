@@ -32,6 +32,7 @@ type Pending =
 export default function UserControlsPage() {
   const { c } = useKit();
   const { user: currentUser } = useAuth();
+  const invitationsOn = !!currentUser?.invitationsEnabled;
   const { notify } = useSnackbar();
   const [users, setUsers] = useState<UserSummary[] | null>(null);
   const [invitations, setInvitations] = useState<PendingInvitation[] | null>(null);
@@ -41,14 +42,15 @@ export default function UserControlsPage() {
   const [resetLink, setResetLink] = useState<string | null>(null);
 
   const fetchData = useCallback(() => {
-    Promise.all([UsersApi.list(), UsersApi.pendingInvitations()])
+    // With invitations off there are none to wait for, and none are asked for.
+    Promise.all([UsersApi.list(), invitationsOn ? UsersApi.pendingInvitations() : Promise.resolve([])])
       .then(([userList, invitationList]) => {
         setUsers(userList);
         setInvitations(invitationList);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load users."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [invitationsOn]);
 
   useEffect(fetchData, [fetchData]);
 
@@ -102,7 +104,7 @@ export default function UserControlsPage() {
       <PageHeader
         icon="manage_accounts"
         title="Account controls"
-        subtitle="Sign users out, force a password reset, and manage invitations that have not been accepted."
+        subtitle={`Sign users out and force a password reset${invitationsOn ? ", and manage invitations that have not been accepted" : ""}.`}
         actions={
           <MDButton variant="outlined" color="info" onClick={fetchData} startIcon={<Icon>refresh</Icon>}>
             Refresh
@@ -177,6 +179,7 @@ export default function UserControlsPage() {
             />
           </Section>
 
+          {invitationsOn && (
           <Section flush icon="mail" title="Pending invitations" subtitle="Sent, but not accepted yet.">
             <SimpleTable
               rows={invitations ?? []}
@@ -219,6 +222,7 @@ export default function UserControlsPage() {
               ]}
             />
           </Section>
+          )}
         </Box>
       )}
 

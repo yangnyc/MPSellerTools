@@ -24,7 +24,8 @@ namespace MPSellerTools.PlatformHost.Controllers;
 public class TenantUsersController(
     PlatformDbContext db,
     UserManager<PlatformUser> userManager,
-    TenantUsersClient tenantUsers) : ControllerBase
+    TenantUsersClient tenantUsers,
+    Microsoft.Extensions.Options.IOptions<MPSellerTools.Core.Tenancy.FeatureOptions> features) : ControllerBase
 {
     private string ActorEmail => User.Identity?.Name ?? "unknown";
 
@@ -42,7 +43,9 @@ public class TenantUsersController(
     /// <summary>Adds a user to a company by invitation; they set their own password from the link.</summary>
     [HttpPost("{tenantId:guid}/invite")]
     public Task<IActionResult> Invite(Guid tenantId, [FromBody] InviteTenantUserRequest request, CancellationToken cancellationToken) =>
-        ForwardAsync(tenantId, HttpMethod.Post, "/api/users/invite", new { request.Email, request.Role },
+        !features.Value.InvitationsEnabled
+            ? Task.FromResult<IActionResult>(Problem("Invitations are switched off. Add the user with a password instead.", statusCode: StatusCodes.Status409Conflict))
+            : ForwardAsync(tenantId, HttpMethod.Post, "/api/users/invite", new { request.Email, request.Role },
             "TenantUserInvited", $"email={request.Email}; role={request.Role}", cancellationToken);
 
     /// <summary>Adds a user to a company straight away, with a password the administrator passes on. It is not recorded anywhere.</summary>
