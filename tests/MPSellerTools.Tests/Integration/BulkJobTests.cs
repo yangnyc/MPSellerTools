@@ -92,8 +92,15 @@ public class BulkJobTests(MarketplaceFixture fixture) : IClassFixture<Marketplac
 
         // The sync queue then carries them to the store, exactly as a single Publish would.
         fixture.Magento.On("POST", "/rest/all/V1/products", """{"id":1,"status":1,"price":20}""");
+        // Their category is not mapped, so the store is asked for its own, which has one of that name.
+        fixture.Magento.On("GET", "/rest/all/V1/categories", """
+            {"id":1,"parent_id":0,"name":"Root Catalog","level":0,"children_data":[
+              {"id":2,"parent_id":1,"name":"Default Category","level":1,"children_data":[
+                {"id":12,"parent_id":2,"name":"Mugs","level":2,"children_data":[]}]}]}
+            """);
         await fixture.SyncAsync();
         Assert.Equal(2, fixture.Magento.Count("POST", $"{Store}/rest/all/V1/products"));
+        Assert.Equal(0, fixture.Magento.Count("POST", $"{Store}/rest/all/V1/categories"));
 
         // It is in the audit trail under whoever asked for it.
         Assert.Contains(await fixture.WithDbAsync(db => db.AuditEntries.Where(a => a.Action == "BulkJobFinished").Select(a => a.ActorEmail).ToListAsync()), email => email == "jobs-publish@example.com");

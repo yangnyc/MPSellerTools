@@ -346,6 +346,41 @@ public class MagentoIntegrationTests(MarketplaceFixture fixture) : IClassFixture
     }
 
     [Fact]
+    public async Task Publishing_a_product_whose_category_is_not_mapped_finds_or_creates_it_in_the_store()
+    {
+        using var admin = await fixture.AdminAsync("magento-publish-category@example.com");
+        var (_, marketId) = await MagentoAsync(admin);
+        var (_, firstVariant) = await fixture.CreateProductAsync(admin, "MAG-VIT-1", category: "Medicine / Vitamins");
+        var (_, secondVariant) = await fixture.CreateProductAsync(admin, "MAG-VIT-2", category: "Medicine / Vitamins");
+        var first = await fixture.SaveListingAsync(admin, marketId, firstVariant);
+        var second = await fixture.SaveListingAsync(admin, marketId, secondVariant);
+
+        fixture.Magento.On("GET", "/rest/all/V1/categories", Tree);
+        fixture.Magento.On("POST", "/rest/all/V1/categories", """{"id":120}""");
+        fixture.Magento.On("POST", "/rest/all/V1/products", body => ChannelRouter.Json(
+            $$"""{"id":{{(body.Contains("MAG-VIT-2", StringComparison.Ordinal) ? 92 : 91)}},"price":20,"status":1,"extension_attributes":{"stock_item":{"qty":10,"is_in_stock":true} } }"""));
+
+        await MarketplaceFixture.JsonAsync(await PostAsync(admin, $"/api/channel-listings/{first}/publish"));
+        await fixture.SyncAsync();
+
+        // "Vitamins" is created under the "Medicine" the store already has, and the product is sent into it.
+        var made = Assert.Single(fixture.Magento.Requests, r => r.StartsWith($"POST {Store}/rest/all/V1/categories ", StringComparison.Ordinal));
+        Assert.Contains("\"parent_id\":10,\"name\":\"Vitamins\",\"is_active\":true,\"include_in_menu\":true", made);
+        Assert.Contains("\"category_links\":[{\"category_id\":\"120\",\"position\":0}]",
+            Assert.Single(fixture.Magento.Requests, r => r.StartsWith($"POST {Store}/rest/all/V1/products ", StringComparison.Ordinal)));
+        Assert.Equal(ListingObservedStatus.Live, (await fixture.ListingAsync(first)).ObservedStatus);
+        Assert.Equal("120", await fixture.WithDbAsync(db => db.CategoryMappings
+            .Where(m => m.ChannelMarketId == marketId && m.InternalCategory == "Medicine / Vitamins").Select(m => m.ExternalCategoryId).SingleAsync()));
+
+        // The next product of that category follows the mapping: the store is not asked or added to again.
+        await MarketplaceFixture.JsonAsync(await PostAsync(admin, $"/api/channel-listings/{second}/publish"));
+        await fixture.SyncAsync();
+        Assert.Equal(1, fixture.Magento.Count("GET", "/rest/all/V1/categories"));
+        Assert.Equal(1, fixture.Magento.Count("POST", "/rest/all/V1/categories"));
+        Assert.Contains(fixture.Magento.Requests, r => r.Contains("\"sku\":\"MAG-VIT-2\"") && r.Contains("\"category_id\":\"120\""));
+    }
+
+    [Fact]
     public async Task Store_products_are_removed_by_sku_prefix_except_the_ones_still_listed_here()
     {
         using var admin = await fixture.AdminAsync("magento-remove@example.com");

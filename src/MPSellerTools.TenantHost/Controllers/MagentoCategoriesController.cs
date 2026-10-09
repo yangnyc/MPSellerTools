@@ -58,8 +58,7 @@ public record SetMagentoDefaultCategoryRequest(string? CategoryId);
 [Authorize(Policy = Roles.TenantAdmin)]
 public class MagentoCategoriesController(TenantDbContext db, MagentoSync sync, IOptions<MarketplaceOptions> options, AuditLogger audit) : ControllerBase
 {
-    /// <summary>How a category inside another is written here and in the store's paths.</summary>
-    private const string Separator = " / ";
+    private const string Separator = MagentoSync.CategorySeparator;
 
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)

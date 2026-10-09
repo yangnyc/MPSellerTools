@@ -19,6 +19,9 @@ public record ListingBundle(ChannelListing Listing, ChannelContext Context, List
     public IReadOnlyList<Guid>? ImageSelection { get; init; }
 
     public Guid ProductId { get; init; }
+
+    /// <summary>The product's own category, as the company names it; null when it has none.</summary>
+    public string? ProductCategory { get; init; }
 }
 
 /// <summary>
@@ -130,7 +133,7 @@ public class ListingService(TenantDbContext db, IEnumerable<IChannelAdapter> ada
                 ownReferences.GetValueOrDefault(ExternalResourceType.CatalogItem));
             var work = new ListingWork(
                 snapshot, listing.DesiredState, listing.ContentVersion, listing.PriceVersion, listing.InventoryVersion, ownReferences, groupReady);
-            bundles.Add(new ListingBundle(listing, ContextFor(account, market), work) { AvailableImages = available, ImageSelection = selection, ProductId = product.Id });
+            bundles.Add(new ListingBundle(listing, ContextFor(account, market), work) { AvailableImages = available, ImageSelection = selection, ProductId = product.Id, ProductCategory = product.Category });
         }
         return bundles;
     }

@@ -5,6 +5,7 @@ using MPSellerTools.Core.Business;
 using MPSellerTools.Core.Marketplace;
 using MPSellerTools.Infrastructure.Tenants;
 using MPSellerTools.TenantHost.Marketplace.Channels;
+using MPSellerTools.TenantHost.Services;
 
 namespace MPSellerTools.TenantHost.Marketplace;
 
@@ -31,6 +32,7 @@ public class SyncEngine(
     ListingService listings,
     OrderIngestionService orderIngestion,
     InventoryService inventory,
+    MagentoSync magento,
     IOptions<MarketplaceOptions> options,
     ILogger<SyncEngine> logger)
 {
@@ -351,6 +353,21 @@ public class SyncEngine(
             }
             else
             {
+                // A Magento product goes into its own category: one that is not mapped yet is found in the
+                // store, or created there, before the product is sent.
+                if (account.Channel == SalesChannel.Magento && jobs[0].Operation == SyncOperation.Content)
+                {
+                    for (var i = 0; i < ready.Count; i++)
+                    {
+                        var (job, bundle) = ready[i];
+                        if (!string.IsNullOrWhiteSpace(bundle.ProductCategory) && string.IsNullOrWhiteSpace(bundle.Work.Snapshot.ExternalCategoryId))
+                        {
+                            await magento.MapCategoryAsync(account, bundle.Listing.ChannelMarketId, bundle.ProductCategory, cancellationToken);
+                            ready[i] = (job, await listings.LoadAsync(bundle.Listing.Id, cancellationToken) ?? bundle);
+                        }
+                    }
+                }
+
                 foreach (var (job, _) in ready)
                 {
                     job.Attempts++;

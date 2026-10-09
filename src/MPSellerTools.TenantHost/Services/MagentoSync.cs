@@ -165,6 +165,43 @@ public class MagentoSync(TenantDbContext db, ChannelHttp http, ChannelSecrets se
             : throw new ChannelException(SyncErrorClass.Transient, "Magento created a category but did not say which.", ambiguous: true);
     }
 
+    /// <summary>How a category inside another is written here and in the store's paths.</summary>
+    public const string CategorySeparator = " / ";
+
+    /// <summary>
+    /// Gives a product category that is not mapped yet its place in the store, for a product on its way
+    /// there: the category the store has under the same path, or one created for it, a category inside
+    /// another ("A / B") as a category inside a category. The mapping is saved, so the store is asked once
+    /// for each category. Returns the store category's number.
+    /// </summary>
+    public async Task<string> MapCategoryAsync(ChannelAccount account, Guid marketId, string category, CancellationToken cancellationToken)
+    {
+        var store = await GetCategoriesAsync(account, cancellationToken);
+        var root = store.FirstOrDefault(c => c.Level == 1)
+            ?? throw new ChannelException(SyncErrorClass.DataCorrection, "The store has no root category to create under.");
+        // Everything below the root, by its path. A path the store has twice goes to the first.
+        var byPath = store.Where(c => c.Level >= 2).GroupBy(c => c.Path, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
+        var (parentId, path, created) = (root.Id, "", 0);
+        foreach (var segment in category.Split(CategorySeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            path = path.Length == 0 ? segment : $"{path}{CategorySeparator}{segment}";
+            if (!byPath.TryGetValue(path, out var id))
+            {
+                id = await CreateCategoryAsync(account, segment.Length > 255 ? segment[..255] : segment, parentId, isActive: true, includeInMenu: true, cancellationToken);
+                created++;
+            }
+            parentId = id;
+        }
+
+        var storeId = parentId.ToString(CultureInfo.InvariantCulture);
+        db.CategoryMappings.Add(new CategoryMapping { Id = Guid.NewGuid(), ChannelMarketId = marketId, InternalCategory = category, ExternalCategoryId = storeId });
+        audit.Log("MagentoCategoryMapped", $"category={category}; id={storeId}; created={created}");
+        await db.SaveChangesAsync(cancellationToken);
+        return storeId;
+    }
+
     /// <summary>
     /// Records every product in the store's catalog as a listing, under the
     /// product with its SKU, or under a new one made for it; a product
