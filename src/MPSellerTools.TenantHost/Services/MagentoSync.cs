@@ -271,11 +271,11 @@ public class MagentoSync(TenantDbContext db, ChannelHttp http, ChannelSecrets se
         var remote = new List<JsonElement>();
         for (var page = 1; page <= MaxPages; page++)
         {
-            var response = await MagentoApi.SendAsync(
-                http, secrets, account, HttpMethod.Get,
+            var response = await ReadAsync(
+                account,
                 // Only what is recorded here: a whole product, with every attribute and picture, takes the store seconds a page.
                 $"{root}/rest/all/V1/products?searchCriteria[pageSize]={PageSize}&searchCriteria[currentPage]={page}&fields=items[id,sku,name,price,status],total_count",
-                null, cancellationToken);
+                cancellationToken);
             var items = response.Body.TryGetProperty("items", out var list) && list.ValueKind == JsonValueKind.Array ? list.EnumerateArray().ToList() : [];
             remote.AddRange(items);
 
@@ -355,6 +355,32 @@ public class MagentoSync(TenantDbContext db, ChannelHttp http, ChannelSecrets se
         audit.Log("MagentoListingsImported", $"created={created}; listings={seen.Count}");
         await db.SaveChangesAsync(cancellationToken);
         return new MagentoImportResult(created, seen.Count);
+    }
+
+    /// <summary>How long is waited before a read the store did not answer is tried again; each further try waits that much longer.</summary>
+    public static TimeSpan ReadRetryDelay { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>How many times a read is tried in all.</summary>
+    private const int ReadAttempts = 5;
+
+    /// <summary>
+    /// Asks the store for something, and asks again when it does not answer or is busy: a store being
+    /// restarted or redeployed is back within a minute or two, and a read can be repeated without harm. A
+    /// refusal that trying again will not change (a wrong token, a wrong address) is passed on at once.
+    /// </summary>
+    private async Task<ChannelResponse> ReadAsync(ChannelAccount account, string url, CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await MagentoApi.SendAsync(http, secrets, account, HttpMethod.Get, url, null, cancellationToken);
+            }
+            catch (ChannelException ex) when (ex.ErrorClass == SyncErrorClass.Transient && attempt < ReadAttempts)
+            {
+                await Task.Delay(ReadRetryDelay * attempt, cancellationToken);
+            }
+        }
     }
 
     /// <summary>

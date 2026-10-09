@@ -408,6 +408,40 @@ public class MagentoIntegrationTests(MarketplaceFixture fixture) : IClassFixture
     }
 
     [Fact]
+    public async Task Reading_the_store_waits_out_a_store_that_is_restarting()
+    {
+        using var admin = await fixture.AdminAsync("magento-restarting@example.com");
+        await MagentoAsync(admin);
+        TenantHost.Services.MagentoSync.ReadRetryDelay = TimeSpan.Zero;
+        try
+        {
+            // Down for the first two tries, as while it is being redeployed; then it answers.
+            var asked = 0;
+            fixture.Magento.On("GET", "/rest/all/V1/products?", _ => ++asked <= 2
+                ? ChannelRouter.Json("""{"message":"Service unavailable"}""", HttpStatusCode.ServiceUnavailable)
+                : ChannelRouter.Json("""{"total_count":1,"items":[{"id":501,"sku":"MAG-RESTART","name":"Came back","price":5,"status":1}]}"""));
+            var read = await MarketplaceFixture.JsonAsync(await PostAsync(admin, "/api/magento/import/listings"));
+            Assert.Equal(3, asked);
+            Assert.True(read.GetProperty("listings").GetInt32() >= 1);
+            Assert.True(await fixture.WithDbAsync(db => db.Products.AnyAsync(p => p.Sku == "MAG-RESTART")));
+
+            // A refusal that waiting will not change is not tried again.
+            asked = 0;
+            fixture.Magento.On("GET", "/rest/all/V1/products?", _ =>
+            {
+                asked++;
+                return ChannelRouter.Json("""{"message":"The consumer isn't authorized to access %resources."}""", HttpStatusCode.Unauthorized);
+            });
+            Assert.Equal(HttpStatusCode.BadGateway, (await PostAsync(admin, "/api/magento/import/listings")).StatusCode);
+            Assert.Equal(1, asked);
+        }
+        finally
+        {
+            TenantHost.Services.MagentoSync.ReadRetryDelay = TimeSpan.FromSeconds(10);
+        }
+    }
+
+    [Fact]
     public async Task Store_products_are_removed_by_sku_prefix_except_the_ones_still_listed_here()
     {
         using var admin = await fixture.AdminAsync("magento-remove@example.com");
