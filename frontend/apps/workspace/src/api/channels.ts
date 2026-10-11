@@ -321,7 +321,7 @@ export const ChannelsApi = {
     apiFetch<CatalogSearchResult[]>(`/api/channels/${accountId}/catalog-search?q=${encodeURIComponent(query)}`),
 };
 
-export type BulkJobType = 0 | 1 | 2 | 3 | 4 | 5 | 6; // PublishDrafts, TakeOffSale, SendAgain, CheckListings, ReadStore, SendEverythingAgain, ImportFromAmazon
+export type BulkJobType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7; // PublishDrafts, TakeOffSale, SendAgain, CheckListings, ReadStore, SendEverythingAgain, ImportFromAmazon, ImportFromWebsite
 export type BulkJobStatus = 0 | 1 | 2 | 3 | 4 | 5; // Queued, Running, Succeeded, CompletedWithErrors, Failed, Cancelled
 
 // What each kind of job is called, and what it does, in the order they are offered.
@@ -333,18 +333,20 @@ export const BULK_JOB_TYPES: Record<BulkJobType, { label: string; help: string }
   4: { label: "Read the store's listings", help: "Reads what eBay or the Magento store itself has, into Listings. Products new to your catalog are added to it." },
   5: { label: "Send every published listing again", help: "Sends everything that is on sale again, whether or not it arrived before: for a change the listings do not show by themselves, such as a category now going elsewhere." },
   6: { label: "Import from Amazon", help: "Makes products out of a list of items in Amazon's catalog. It is started from Import, where the list is pasted." },
+  7: { label: "Import from a website", help: "Brings another store's catalog into your products, cleaned up on the way. It is started from Import & management, where the store and the options are chosen." },
 };
 
 // A job that needs more than a sales channel to start (a list of items) is started from its own page.
-export const STARTED_ELSEWHERE: BulkJobType[] = [6];
+export const STARTED_ELSEWHERE: BulkJobType[] = [6, 7];
 
 // A large piece of work on one sales channel's listings, carried out in the background.
 export type BulkJob = {
   id: string;
   type: BulkJobType;
   status: BulkJobStatus;
-  channelAccountId: string;
-  // Null when the sales channel has since been removed.
+  // Null for work on the catalog itself, which belongs to no sales channel.
+  channelAccountId: string | null;
+  // Null when the sales channel has since been removed, or there never was one.
   accountName: string | null;
   channel: ChannelKind | null;
   // 0 for work that is not counted in items (reading a store).
@@ -357,6 +359,8 @@ export type BulkJob = {
   lastError: string | null;
   // The first items held back, and why.
   errors: { item: string; message: string }[];
+  // What the job found, for one that reports more than counts (a dry run of an import, say).
+  report: { label: string; value: string }[];
   createdByEmail: string;
   createdAtUtc: string;
   startedAtUtc: string | null;

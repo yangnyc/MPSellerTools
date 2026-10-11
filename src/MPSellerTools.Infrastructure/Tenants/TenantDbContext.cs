@@ -77,6 +77,8 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options)
     /// <summary>Large pieces of work carried out in the background, item by item.</summary>
     public DbSet<BulkJob> BulkJobs => Set<BulkJob>();
 
+    public DbSet<CatalogCleanRecord> CatalogCleanRecords => Set<CatalogCleanRecord>();
+
     // Added here rather than where the context is registered, so the host,
     // the provisioning worker and the tests all get it.
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
@@ -93,6 +95,12 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options)
             entity.Property(p => p.RowVersion).IsRowVersion();
             entity.Property(p => p.Brand).HasMaxLength(200);
             entity.Property(p => p.Category).HasMaxLength(100);
+        });
+
+        builder.Entity<CatalogCleanRecord>(entity =>
+        {
+            entity.HasIndex(r => new { r.Kind, r.GroupKey });
+            entity.HasIndex(r => r.RunId);
         });
 
         builder.Entity<BulkJob>(entity =>

@@ -12,6 +12,9 @@ namespace MPSellerTools.TenantHost.Marketplace;
 /// <summary>An item a bulk job could not do, and why.</summary>
 public record BulkJobError(string Item, string Message);
 
+/// <summary>One line of what a job found: what was counted, and the figure.</summary>
+public record BulkJobReportLine(string Label, string Value);
+
 /// <summary>
 /// Carries out bulk jobs: one at a time, oldest first, a batch of items at a
 /// go, writing its progress after each batch so the page can show it and a
@@ -19,7 +22,7 @@ public record BulkJobError(string Item, string Message);
 /// listings as they are, so one that was interrupted simply carries on.
 /// </summary>
 public class BulkJobRunner(
-    TenantDbContext db, ListingService listings, MagentoSync magento, EbaySync ebay, AmazonImport amazonImport, ILogger<BulkJobRunner> logger)
+    TenantDbContext db, ListingService listings, MagentoSync magento, EbaySync ebay, AmazonImport amazonImport, WebsiteImport websiteImport, ILogger<BulkJobRunner> logger)
 {
     /// <summary>How many items are read, done and written together.</summary>
     private const int BatchSize = 100;
@@ -37,6 +40,9 @@ public class BulkJobRunner(
 
     public static List<BulkJobError> ParseErrors(string? json) =>
         string.IsNullOrWhiteSpace(json) ? [] : JsonSerializer.Deserialize<List<BulkJobError>>(json, Json) ?? [];
+
+    public static List<BulkJobReportLine> ParseReport(string? json) =>
+        string.IsNullOrWhiteSpace(json) ? [] : JsonSerializer.Deserialize<List<BulkJobReportLine>>(json, Json) ?? [];
 
     /// <summary>Runs the next job waiting, if there is one. Returns whether it ran one.</summary>
     public async Task<bool> RunNextAsync(CancellationToken cancellationToken)
@@ -60,6 +66,13 @@ public class BulkJobRunner(
 
         try
         {
+            if (job.Type == BulkJobType.ImportFromWebsite)
+            {
+                // Work on the catalog itself: no sales channel is involved.
+                await websiteImport.RunAsync(job, cancellationToken);
+                return true;
+            }
+
             var account = await db.ChannelAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.Id == job.ChannelAccountId, cancellationToken);
             if (account is null)
             {

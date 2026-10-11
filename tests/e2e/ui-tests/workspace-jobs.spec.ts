@@ -10,7 +10,7 @@ const magento = {
 
 const job = (over: object) => ({
   id: "j-running", type: 0, status: 1, channelAccountId: "a-magento", accountName: "Magento", channel: 4,
-  total: 2500, processed: 600, succeeded: 598, failed: 2, cancelRequested: false, summary: null, lastError: null, errors: [],
+  total: 2500, processed: 600, succeeded: 598, failed: 2, cancelRequested: false, summary: null, lastError: null, errors: [], report: [],
   createdByEmail: "ada@acme.test", createdAtUtc: "2026-10-01T00:00:00Z", startedAtUtc: "2026-10-01T00:00:05Z", finishedAtUtc: null, ...over,
 });
 

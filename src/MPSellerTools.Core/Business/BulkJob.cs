@@ -31,6 +31,12 @@ public enum BulkJobType
     /// <see cref="BulkJob.ParametersJson"/>. It works on the catalog here, not on listings.
     /// </summary>
     ImportFromAmazon,
+
+    /// <summary>
+    /// Makes products out of another storefront's catalog (a Shopify or Magento store), cleaned up on the
+    /// way in, by the options kept in <see cref="BulkJob.ParametersJson"/>. It works on the catalog here.
+    /// </summary>
+    ImportFromWebsite,
 }
 
 public enum BulkJobStatus
@@ -61,8 +67,8 @@ public class BulkJob
 
     public BulkJobStatus Status { get; set; }
 
-    /// <summary>The sales channel account it works on.</summary>
-    public Guid ChannelAccountId { get; set; }
+    /// <summary>The sales channel account it works on; null for work on the catalog itself that belongs to no channel.</summary>
+    public Guid? ChannelAccountId { get; set; }
 
     /// <summary>What the job was given to work on, as JSON, for a type that needs more than its account; null otherwise.</summary>
     public string? ParametersJson { get; set; }
@@ -86,6 +92,9 @@ public class BulkJob
     /// <summary>Why it could not be carried out at all.</summary>
     [MaxLength(1000)]
     public string? LastError { get; set; }
+
+    /// <summary>What the job found, for one that reports more than counts, as JSON: [{"label","value"}]; null otherwise.</summary>
+    public string? ReportJson { get; set; }
 
     /// <summary>The first items that could not be done and why, as JSON: [{"item","message"}].</summary>
     public string? ErrorsJson { get; set; }

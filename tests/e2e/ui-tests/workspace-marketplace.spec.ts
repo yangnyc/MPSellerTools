@@ -361,7 +361,7 @@ test("Magento has its own menu, led by the connection page, where the store's ad
   // Reading the store is a background job, followed until it is done.
   const readJob = {
     id: "j-read", type: 4, status: 0, channelAccountId: "a-magento", accountName: "Magento", channel: 4, total: 0, processed: 0, succeeded: 0, failed: 0,
-    cancelRequested: false, summary: null, lastError: null, errors: [], createdByEmail: "admin@example.com", createdAtUtc: "2026-10-09T10:00:00Z", startedAtUtc: null, finishedAtUtc: null,
+    cancelRequested: false, summary: null, lastError: null, errors: [], report: [], createdByEmail: "admin@example.com", createdAtUtc: "2026-10-09T10:00:00Z", startedAtUtc: null, finishedAtUtc: null,
   };
   await mockApi(
     page,

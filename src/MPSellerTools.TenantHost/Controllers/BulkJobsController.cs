@@ -16,7 +16,8 @@ public record BulkJobResponse(
     Guid Id,
     BulkJobType Type,
     BulkJobStatus Status,
-    Guid ChannelAccountId,
+    // Null for work on the catalog itself, which belongs to no sales channel.
+    Guid? ChannelAccountId,
     string? AccountName,
     SalesChannel? Channel,
     int Total,
@@ -27,6 +28,8 @@ public record BulkJobResponse(
     string? Summary,
     string? LastError,
     IReadOnlyList<BulkJobError> Errors,
+    // What the job found, for one that reports more than counts.
+    IReadOnlyList<BulkJobReportLine> Report,
     string CreatedByEmail,
     DateTime CreatedAtUtc,
     DateTime? StartedAtUtc,
@@ -148,9 +151,9 @@ public class BulkJobsController(TenantDbContext db, AuditLogger audit) : Control
         {
             return Problem("This job has not finished yet.", statusCode: StatusCodes.Status409Conflict);
         }
-        if (job.ParametersJson is null)
+        if (job.ParametersJson is null && job.ChannelAccountId is { } accountId)
         {
-            return await Start(new StartBulkJobRequest(job.Type, job.ChannelAccountId), cancellationToken);
+            return await Start(new StartBulkJobRequest(job.Type, accountId), cancellationToken);
         }
 
         // A job with a list of its own is queued again with the same list.
@@ -201,10 +204,10 @@ public class BulkJobsController(TenantDbContext db, AuditLogger audit) : Control
 
     private static BulkJobResponse ToResponse(BulkJob job, IReadOnlyDictionary<Guid, (string Name, SalesChannel Channel)> accounts)
     {
-        (string Name, SalesChannel Channel)? account = accounts.TryGetValue(job.ChannelAccountId, out var found) ? found : null;
+        (string Name, SalesChannel Channel)? account = job.ChannelAccountId is { } id && accounts.TryGetValue(id, out var found) ? found : null;
         return new BulkJobResponse(
             job.Id, job.Type, job.Status, job.ChannelAccountId, account?.Name, account?.Channel,
             job.Total, job.Processed, job.Succeeded, job.Failed, job.CancelRequested, job.Summary, job.LastError,
-            BulkJobRunner.ParseErrors(job.ErrorsJson), job.CreatedByEmail, job.CreatedAtUtc, job.StartedAtUtc, job.FinishedAtUtc);
+            BulkJobRunner.ParseErrors(job.ErrorsJson), BulkJobRunner.ParseReport(job.ReportJson), job.CreatedByEmail, job.CreatedAtUtc, job.StartedAtUtc, job.FinishedAtUtc);
     }
 }

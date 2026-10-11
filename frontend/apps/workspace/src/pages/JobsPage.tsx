@@ -176,7 +176,7 @@ export default function JobsPage() {
         Cell: ({ row }: CellProps) => (
           <Box sx={{ lineHeight: 1.35 }}>
             <Box sx={{ fontWeight: 500, color: c.text }}>{BULK_JOB_TYPES[row.original.type].label}</Box>
-            <Box sx={{ fontSize: "0.75rem", color: c.muted }}>{row.original.accountName ?? "Sales channel removed"}</Box>
+            <Box sx={{ fontSize: "0.75rem", color: c.muted }}>{row.original.accountName ?? (row.original.channelAccountId ? "Sales channel removed" : "Your catalog")}</Box>
           </Box>
         ),
       },
@@ -409,6 +409,12 @@ export default function JobsPage() {
               ]}
             />
             {detail.summary && <InlineAlert tone={detail.status === 3 ? "warning" : "info"}>{detail.summary}</InlineAlert>}
+            {detail.report.length > 0 && (
+              <Box>
+                <Box sx={{ mb: 1, fontSize: "0.8125rem", fontWeight: 700, color: c.text }}>What it found</Box>
+                <DetailList items={detail.report.map((line) => ({ label: line.label, value: line.value }))} />
+              </Box>
+            )}
             {detail.lastError && <InlineAlert tone="error">{detail.lastError}</InlineAlert>}
             {detail.errors.length > 0 && (
               <Box>

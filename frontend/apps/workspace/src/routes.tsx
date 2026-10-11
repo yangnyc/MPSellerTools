@@ -16,6 +16,14 @@ import MagentoCategoriesPage from "./pages/marketplace/MagentoCategoriesPage";
 import InventoryPage from "./pages/InventoryPage";
 import AmazonImportItemPage from "./pages/import/AmazonImportItemPage";
 import AmazonImportBulkPage from "./pages/import/AmazonImportBulkPage";
+import WebsiteImportPage from "./pages/import/WebsiteImportPage";
+import CatalogCleanPage from "./pages/import/CatalogCleanPage";
+import SalesReportPage from "./pages/reports/SalesReportPage";
+import InventoryReportPage from "./pages/reports/InventoryReportPage";
+import ListingsReportPage from "./pages/reports/ListingsReportPage";
+import ShipQueuePage from "./pages/shipping/ShipQueuePage";
+import PickListPage from "./pages/shipping/PickListPage";
+import ShippedPage from "./pages/shipping/ShippedPage";
 import { AMAZON, EBAY, MAGENTO, WALMART, settingsPath, type Marketplace } from "./api/channels";
 import AuditPage from "./pages/AuditPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -147,14 +155,23 @@ const routes: AppRoute[] = [
       },
     ],
   },
-  // Bringing products in from outside: looked up in a marketplace's catalog and made products here.
+  // Bringing products in from outside, and keeping the catalog they land in clean.
   {
     type: "collapse",
-    name: "Import",
+    name: "Import & management",
     key: "import",
     icon: <Icon fontSize="small">download</Icon>,
     roles: ["TenantAdmin"],
     collapse: [
+      {
+        type: "collapse",
+        name: "From a website",
+        key: "import-website",
+        icon: <Icon fontSize="small">travel_explore</Icon>,
+        route: "/import/website",
+        component: <WebsiteImportPage />,
+        roles: ["TenantAdmin"],
+      },
       {
         type: "collapse",
         name: "From Amazon: one item",
@@ -171,6 +188,15 @@ const routes: AppRoute[] = [
         icon: <Icon fontSize="small">playlist_add</Icon>,
         route: "/import/amazon/bulk",
         component: <AmazonImportBulkPage />,
+        roles: ["TenantAdmin"],
+      },
+      {
+        type: "collapse",
+        name: "Clean catalog",
+        key: "import-clean",
+        icon: <Icon fontSize="small">cleaning_services</Icon>,
+        route: "/import/clean",
+        component: <CatalogCleanPage />,
         roles: ["TenantAdmin"],
       },
     ],
@@ -209,6 +235,80 @@ const routes: AppRoute[] = [
     icon: <Icon fontSize="small">receipt_long</Icon>,
     route: "/orders",
     component: <OrdersPage />,
+  },
+  // Getting the orders out of the door.
+  {
+    type: "collapse",
+    name: "Shipping",
+    key: "shipping",
+    icon: <Icon fontSize="small">local_shipping</Icon>,
+    roles: ["TenantAdmin"],
+    collapse: [
+      {
+        type: "collapse",
+        name: "Ready to ship",
+        key: "shipping-queue",
+        icon: <Icon fontSize="small">inbox</Icon>,
+        route: "/shipping",
+        component: <ShipQueuePage />,
+        roles: ["TenantAdmin"],
+      },
+      {
+        type: "collapse",
+        name: "Pick list",
+        key: "shipping-pick-list",
+        icon: <Icon fontSize="small">checklist</Icon>,
+        route: "/shipping/pick-list",
+        component: <PickListPage />,
+        roles: ["TenantAdmin"],
+      },
+      {
+        type: "collapse",
+        name: "Shipped",
+        key: "shipping-shipped",
+        icon: <Icon fontSize="small">inventory</Icon>,
+        route: "/shipping/shipped",
+        component: <ShippedPage />,
+        roles: ["TenantAdmin"],
+      },
+    ],
+  },
+  // The company's figures over a span of time.
+  {
+    type: "collapse",
+    name: "Reports",
+    key: "reports",
+    icon: <Icon fontSize="small">insights</Icon>,
+    roles: ["TenantAdmin"],
+    collapse: [
+      {
+        type: "collapse",
+        name: "Sales",
+        key: "reports-sales",
+        icon: <Icon fontSize="small">payments</Icon>,
+        route: "/reports/sales",
+        component: <SalesReportPage />,
+        roles: ["TenantAdmin"],
+      },
+      {
+        type: "collapse",
+        name: "Inventory",
+        key: "reports-inventory",
+        icon: <Icon fontSize="small">warehouse</Icon>,
+        route: "/reports/inventory",
+        component: <InventoryReportPage />,
+        roles: ["TenantAdmin"],
+      },
+      {
+        type: "collapse",
+        name: "Listings",
+        key: "reports-listings",
+        icon: <Icon fontSize="small">sell</Icon>,
+        route: "/reports/listings",
+        component: <ListingsReportPage />,
+        roles: ["TenantAdmin"],
+      },
+    ],
   },
   {
     type: "collapse",

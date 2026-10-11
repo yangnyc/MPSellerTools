@@ -34,6 +34,17 @@ public class Order
     /// </summary>
     public decimal Total { get; set; }
 
+    /// <summary>Who carried the parcel, as entered when the order was shipped from here; null when not recorded.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(64)]
+    public string? ShippingCarrier { get; set; }
+
+    /// <summary>The carrier's tracking number, as entered when the order was shipped; null when not recorded.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(100)]
+    public string? TrackingNumber { get; set; }
+
+    /// <summary>When the order was marked shipped from the Shipping pages; null for one completed another way.</summary>
+    public DateTime? ShippedAtUtc { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
 
     public DateTime UpdatedAtUtc { get; set; }

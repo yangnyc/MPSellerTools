@@ -196,6 +196,11 @@ builder.Services.AddScoped<IChannelAdapter, WebsiteChannelAdapter>();
 builder.Services.AddScoped<IChannelAdapter, MagentoChannelAdapter>();
 builder.Services.AddScoped<MagentoSync>();
 builder.Services.AddScoped<AmazonImport>();
+// Another store's public catalog, read for importing. A redirect is not followed: where it leads has not been checked.
+builder.Services.AddHttpClient(WebsiteImport.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(60))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<WebsiteImport>();
+builder.Services.AddScoped<CatalogCleaner>();
 // For what is asked of a store only to report on it (the alerts), so it is not asked on every page.
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<InventoryService>();
