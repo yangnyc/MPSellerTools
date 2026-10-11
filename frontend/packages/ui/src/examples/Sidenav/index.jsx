@@ -139,7 +139,10 @@ function Sidenav({ color: _color = "info", brand = "", brandName, routes, pinned
           onKeyDown={(event) => event.stopPropagation()}
           onChange={(event) => setGroupPinned(key, event.target.checked)}
           slotProps={{ input: { "aria-label": `Keep ${name} open` } }}
-          sx={{ p: 0.25 }}
+          // A pin, not a tick: stuck in upright when the menu is pinned open, lying loose and faint when it is not.
+          icon={<Icon sx={{ fontSize: "1.05rem !important", transform: "rotate(45deg)", opacity: 0.45 }}>push_pin</Icon>}
+          checkedIcon={<Icon sx={{ fontSize: "1.05rem !important" }}>push_pin</Icon>}
+          sx={{ p: 0.25, color: "inherit", "&.Mui-checked": { color: "inherit" } }}
         />
       );
 

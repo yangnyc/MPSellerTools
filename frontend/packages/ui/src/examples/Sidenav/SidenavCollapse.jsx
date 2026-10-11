@@ -113,7 +113,10 @@ function SidenavCollapse({
           <MDBox
             sx={(theme) => ({
               display: "flex",
+              flexShrink: 0,
               marginLeft: "auto",
+              // The control takes the row's own colour, light on a dark sidenav and dark on a white one.
+              color: "inherit",
               [theme.breakpoints.up("xl")]: { display: miniSidenav ? "none" : "flex" },
             })}
           >
@@ -124,6 +127,7 @@ function SidenavCollapse({
         {expandIcon && (
           <Icon
             sx={(theme) => ({
+              flexShrink: 0,
               marginLeft: trailing ? theme.functions.pxToRem(4) : "auto",
               fontSize: `${theme.functions.pxToRem(18)} !important`,
               opacity: inert ? 0.5 : 1,

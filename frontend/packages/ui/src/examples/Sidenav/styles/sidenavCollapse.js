@@ -124,10 +124,14 @@ function collapseText(theme, ownerState) {
       }),
     },
 
+    // Room to shrink, so a long name wraps onto a second line instead of running under the pin and the arrow.
+    minWidth: 0,
+
     "& span": {
       fontWeight: active ? fontWeightRegular : fontWeightLight,
       fontSize: size.sm,
-      lineHeight: 0,
+      lineHeight: 1.25,
+      whiteSpace: "normal",
     },
   };
 }
